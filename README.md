@@ -68,12 +68,15 @@ That's it. Node.js and MongoDB do not need to be installed on your machine.
 cp .env.example server/.env
 ```
 
-Open `server/.env` and fill in these three values:
+Open `server/.env` and fill in these values:
 
 ```
 GOOGLE_CLIENT_ID=        ← from Google Cloud Console (see Step 2)
 GOOGLE_CLIENT_SECRET=    ← from Google Cloud Console (see Step 2)
 JWT_SECRET=              ← any long random string (run: openssl rand -hex 32)
+SERVER_URL=              ← public URL of the backend (e.g. https://your-app.run.app)
+                           Used to build the Google OAuth callback URL.
+                           Leave as http://localhost:5000 for local dev.
 ```
 
 Leave `MONGO_URI`, `PORT`, and `CLIENT_URL` as they are.
