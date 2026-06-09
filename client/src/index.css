@@ -1,0 +1,60 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 140 30% 98%;
+    --foreground: 160 30% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 160 30% 12%;
+
+    --primary: 152 56% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 150 25% 94%;
+    --secondary-foreground: 160 30% 18%;
+
+    --muted: 150 20% 95%;
+    --muted-foreground: 155 12% 42%;
+
+    --accent: 152 45% 92%;
+    --accent-foreground: 160 40% 18%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 150 18% 88%;
+    --input: 150 18% 88%;
+    --ring: 152 56% 38%;
+
+    --radius: 0.85rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+}
+
+/* App background: soft green gradient wash */
+.app-bg {
+  background:
+    radial-gradient(1200px 600px at 100% -10%, hsl(152 56% 92%) 0%, transparent 55%),
+    radial-gradient(1000px 500px at -10% 110%, hsl(152 56% 90%) 0%, transparent 50%),
+    hsl(var(--background));
+  min-height: 100vh;
+}
+
+/* Tabular numbers for animated stat counters so they don't jitter */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
