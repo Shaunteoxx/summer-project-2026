@@ -19,3 +19,6 @@ npm-debug.log*
 .DS_Store
 .vscode/
 .idea/
+
+# Local session handoff (not for the repo)
+HANDOFF.md

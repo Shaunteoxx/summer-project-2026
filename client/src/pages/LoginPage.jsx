@@ -20,26 +20,26 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="app-bg flex min-h-screen items-center justify-center px-4">
+    <div className="app-bg flex min-h-[100dvh] flex-col items-center justify-center px-5 pb-safe pt-safe">
       <motion.div
         initial={{ opacity: 0, y: 30, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.6, ease: EASE }}
-        className="w-full max-w-md"
+        className="w-full max-w-app"
       >
-        <Card className="border-border/70 shadow-xl">
-          <CardContent className="flex flex-col items-center gap-6 p-10 text-center">
+        <Card className="border-border/70 shadow-2xl">
+          <CardContent className="flex flex-col items-center gap-6 p-8 text-center">
             <motion.div
               initial={{ scale: 0, rotate: -20 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 14 }}
-              className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg"
+              className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30"
             >
               <Wallet className="h-8 w-8" />
             </motion.div>
 
             <div className="space-y-2">
-              <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
+              <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
                 Broke No More
               </h1>
               <p className="mx-auto max-w-xs text-sm leading-relaxed text-muted-foreground">
@@ -54,7 +54,7 @@ export default function LoginPage() {
             </Button>
 
             <p className="text-xs text-muted-foreground">
-              Local development build · Your data stays on your machine
+              Track spending · Hit savings goals · Compare with friends
             </p>
           </CardContent>
         </Card>

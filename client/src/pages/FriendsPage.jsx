@@ -21,6 +21,7 @@ import {
   acceptFriendRequest,
   declineFriendRequest,
 } from "@/api/endpoints";
+import { useToast } from "@/hooks/useToast";
 import { monthName } from "@/lib/utils";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
 
@@ -36,6 +37,7 @@ function Avatar({ src, name, className = "h-10 w-10" }) {
 }
 
 export default function FriendsPage() {
+  const toast = useToast();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -55,28 +57,50 @@ export default function FriendsPage() {
     if (!query.trim()) return;
     setSearching(true);
     try {
-      setResults(await searchUsers(query.trim()));
+      const found = await searchUsers(query.trim());
+      setResults(found);
+      if (found.length === 0) toast.info(`No users found for “${query.trim()}”`);
+    } catch {
+      toast.error("Search failed. Please try again.");
     } finally {
       setSearching(false);
     }
   };
 
   const handleSend = async (id) => {
-    await sendFriendRequest(id);
-    setResults((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, status: "pending" } : u))
-    );
+    const username = results.find((u) => u.id === id)?.username;
+    try {
+      await sendFriendRequest(id);
+      setResults((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, status: "pending" } : u))
+      );
+      toast.success(username ? `Request sent to ${username}` : "Friend request sent");
+    } catch {
+      toast.error("Couldn't send request. Please try again.");
+    }
   };
 
   const handleAccept = async (id) => {
-    await acceptFriendRequest(id);
-    setRequests((prev) => prev.filter((r) => r.id !== id));
-    loadComparison();
+    const username = requests.find((r) => r.id === id)?.username;
+    try {
+      await acceptFriendRequest(id);
+      setRequests((prev) => prev.filter((r) => r.id !== id));
+      loadComparison();
+      toast.success(username ? `You're now friends with ${username}` : "Friend request accepted");
+    } catch {
+      toast.error("Couldn't accept request. Please try again.");
+    }
   };
 
   const handleDecline = async (id) => {
-    await declineFriendRequest(id);
-    setRequests((prev) => prev.filter((r) => r.id !== id));
+    const username = requests.find((r) => r.id === id)?.username;
+    try {
+      await declineFriendRequest(id);
+      setRequests((prev) => prev.filter((r) => r.id !== id));
+      toast.info(username ? `Declined ${username}'s request` : "Request declined");
+    } catch {
+      toast.error("Couldn't decline request. Please try again.");
+    }
   };
 
   const maxPercent = Math.max(
@@ -86,19 +110,19 @@ export default function FriendsPage() {
 
   return (
     <PageWrapper>
-      <motion.div variants={fadeUp} initial="initial" animate="animate" className="mb-8">
-        <h1 className="text-3xl font-extrabold tracking-tight">Friends</h1>
-        <p className="mt-1 text-muted-foreground">
+      <motion.div variants={fadeUp} initial="initial" animate="animate">
+        <h1 className="text-2xl font-extrabold tracking-tight">Friends</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
           Find friends and compare your savings.
         </p>
       </motion.div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.3fr]">
-        <div className="space-y-6">
+      <div className="mt-5 space-y-4">
+        <div className="space-y-4">
           {/* Search */}
           <motion.div variants={fadeUp} initial="initial" animate="animate">
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-5">
                 <h2 className="mb-4 flex items-center gap-2 font-semibold">
                   <Search className="h-4 w-4 text-primary" /> Find people
                 </h2>
@@ -151,7 +175,7 @@ export default function FriendsPage() {
           {/* Incoming requests */}
           <motion.div variants={fadeUp} initial="initial" animate="animate">
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-5">
                 <h2 className="mb-4 font-semibold">
                   Friend requests
                   {requests.length > 0 && (
@@ -204,7 +228,7 @@ export default function FriendsPage() {
         {/* Comparison leaderboard */}
         <motion.div variants={fadeUp} initial="initial" animate="animate">
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-5">
               <div className="mb-1 flex items-center gap-2">
                 <Trophy className="h-5 w-5 text-primary" />
                 <h2 className="font-semibold">Savings Leaderboard</h2>

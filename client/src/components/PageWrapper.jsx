@@ -1,7 +1,10 @@
 import { motion } from "framer-motion";
 import { pageVariants } from "@/animations/variants";
 
-/** Wraps a page with the fade + slide-up transition. */
+/**
+ * Wraps a page with the fade + slide-up transition.
+ * Bottom padding clears the fixed bottom tab bar (plus the home indicator).
+ */
 export default function PageWrapper({ children, className = "" }) {
   return (
     <motion.div
@@ -9,7 +12,7 @@ export default function PageWrapper({ children, className = "" }) {
       initial="initial"
       animate="animate"
       exit="exit"
-      className={`mx-auto w-full max-w-5xl px-4 py-8 ${className}`}
+      className={`w-full px-4 pt-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] ${className}`}
     >
       {children}
     </motion.div>

@@ -24,9 +24,9 @@ function daysInCurrentMonth() {
 export default function CalculatorPage() {
   return (
     <PageWrapper>
-      <motion.div variants={fadeUp} initial="initial" animate="animate" className="mb-8">
-        <h1 className="text-3xl font-extrabold tracking-tight">Calculator</h1>
-        <p className="mt-1 text-muted-foreground">
+      <motion.div variants={fadeUp} initial="initial" animate="animate">
+        <h1 className="text-2xl font-extrabold tracking-tight">Calculator</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
           Plan your spending and savings two ways.
         </p>
       </motion.div>
@@ -35,7 +35,7 @@ export default function CalculatorPage() {
         variants={staggerContainer(0.12, 0.1)}
         initial="initial"
         animate="animate"
-        className="grid gap-6 md:grid-cols-2"
+        className="mt-5 grid gap-4"
       >
         <DailySpendCalculator />
         <SavingsGoalCalculator />

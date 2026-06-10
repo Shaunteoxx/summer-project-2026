@@ -5,12 +5,16 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── Light theme ──────────────────────────────────────── */
   :root {
-    --background: 140 30% 98%;
-    --foreground: 160 30% 12%;
+    --background: 150 30% 98%;
+    --foreground: 160 32% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 160 30% 12%;
+    --card-foreground: 160 32% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 32% 12%;
 
     --primary: 152 56% 38%;
     --primary-foreground: 0 0% 100%;
@@ -19,19 +23,63 @@
     --secondary-foreground: 160 30% 18%;
 
     --muted: 150 20% 95%;
-    --muted-foreground: 155 12% 42%;
+    --muted-foreground: 155 10% 40%;
 
     --accent: 152 45% 92%;
     --accent-foreground: 160 40% 18%;
 
-    --destructive: 0 72% 51%;
+    --success: 152 56% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --destructive: 352 70% 50%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 150 18% 88%;
     --input: 150 18% 88%;
     --ring: 152 56% 38%;
 
-    --radius: 0.85rem;
+    /* Decorative gradient glows for the app background */
+    --glow-1: 152 56% 88%;
+    --glow-2: 152 56% 90%;
+
+    --radius: 1rem;
+  }
+
+  /* ── Dark theme (OLED-friendly, emerald accent) ──────── */
+  .dark {
+    --background: 222 32% 7%;
+    --foreground: 210 24% 95%;
+
+    --card: 222 26% 11%;
+    --card-foreground: 210 24% 95%;
+
+    --popover: 222 28% 10%;
+    --popover-foreground: 210 24% 95%;
+
+    --primary: 152 62% 46%;
+    --primary-foreground: 160 60% 6%;
+
+    --secondary: 222 20% 16%;
+    --secondary-foreground: 210 20% 92%;
+
+    --muted: 222 20% 15%;
+    --muted-foreground: 215 14% 62%;
+
+    --accent: 222 24% 18%;
+    --accent-foreground: 152 60% 70%;
+
+    --success: 152 62% 48%;
+    --success-foreground: 160 60% 6%;
+
+    --destructive: 352 75% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 18% 20%;
+    --input: 220 16% 22%;
+    --ring: 152 62% 50%;
+
+    --glow-1: 152 70% 24%;
+    --glow-2: 200 70% 20%;
   }
 }
 
@@ -39,22 +87,63 @@
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+    /* Prevent iOS text-size auto-inflation on rotate */
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv11", "ss01";
+    /* Avoid pull-to-refresh / rubber-band fighting the bottom nav */
+    overscroll-behavior-y: none;
+  }
+
+  /* Respect users who prefer less motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
-/* App background: soft green gradient wash */
-.app-bg {
-  background:
-    radial-gradient(1200px 600px at 100% -10%, hsl(152 56% 92%) 0%, transparent 55%),
-    radial-gradient(1000px 500px at -10% 110%, hsl(152 56% 90%) 0%, transparent 50%),
-    hsl(var(--background));
-  min-height: 100vh;
+@layer components {
+  /* App background: soft emerald gradient wash, adapts to theme */
+  .app-bg {
+    background:
+      radial-gradient(1100px 540px at 100% -8%, hsl(var(--glow-1) / 0.55) 0%, transparent 55%),
+      radial-gradient(900px 480px at -10% 108%, hsl(var(--glow-2) / 0.5) 0%, transparent 52%),
+      hsl(var(--background));
+    background-attachment: fixed;
+  }
+
+  /* Frosted surface used by the top bar and bottom nav */
+  .surface-blur {
+    @apply bg-background/80 backdrop-blur-xl backdrop-saturate-150;
+  }
 }
 
-/* Tabular numbers for animated stat counters so they don't jitter */
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
+@layer utilities {
+  /* Tabular numbers for animated counters so they don't jitter */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Safe-area helpers for notched / home-indicator devices */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .h-safe-bottom {
+    height: env(safe-area-inset-bottom);
+  }
 }
