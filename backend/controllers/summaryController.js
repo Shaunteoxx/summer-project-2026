@@ -11,7 +11,7 @@ export async function recomputeSummary(userId, month, year) {
   let totalIncome = 0;
   let totalExpenses = 0;
   for (const t of transactions) {
-    if (t.category === "income") totalIncome += t.amount;
+    if (t.type === "income") totalIncome += t.amount;
     else totalExpenses += t.amount;
   }
 

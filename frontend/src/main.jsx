@@ -1,22 +1,28 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
+import { MotionConfig } from "framer-motion";
 import App from "./App.jsx";
 import { AuthProvider } from "./hooks/useAuth.jsx";
+import { CategoriesProvider } from "./hooks/useCategories.jsx";
 import { ThemeProvider } from "./hooks/useTheme.jsx";
 import { ToastProvider } from "./hooks/useToast.jsx";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <ToastProvider>
-        <BrowserRouter>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </BrowserRouter>
-      </ToastProvider>
-    </ThemeProvider>
+    <MotionConfig reducedMotion="user">
+      <ThemeProvider>
+        <ToastProvider>
+          <BrowserRouter>
+            <AuthProvider>
+              <CategoriesProvider>
+                <App />
+              </CategoriesProvider>
+            </AuthProvider>
+          </BrowserRouter>
+        </ToastProvider>
+      </ThemeProvider>
+    </MotionConfig>
   </React.StrictMode>
 );

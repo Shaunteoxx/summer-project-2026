@@ -10,6 +10,7 @@ import authRoutes from "./routes/auth.js";
 import transactionRoutes from "./routes/transactions.js";
 import summaryRoutes from "./routes/summary.js";
 import friendRoutes from "./routes/friends.js";
+import streakRoutes from "./routes/streak.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,6 +33,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/summary", summaryRoutes);
 app.use("/api/friends", friendRoutes);
+app.use("/api/streak", streakRoutes);
 
 // --- 404 + error handlers ---
 app.use((req, res) => res.status(404).json({ message: "Not found" }));

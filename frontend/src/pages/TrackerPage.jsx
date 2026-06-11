@@ -8,20 +8,29 @@ import PageWrapper from "@/components/PageWrapper";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { fetchSummary } from "@/api/endpoints";
+import { Skeleton } from "@/components/ui/skeleton";
+import { fetchSummary, fetchTransactions } from "@/api/endpoints";
 import { monthName, formatMoney } from "@/lib/utils";
+import { useCategories } from "@/hooks/useCategories";
 import { useChartColors } from "@/hooks/useChartColors";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
+
+const OTHER_COLOR = "#94A3B8";
 
 export default function TrackerPage() {
   const navigate = useNavigate();
   const colors = useChartColors();
+  const { getCategory } = useCategories();
   const [summary, setSummary] = useState(null);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchSummary()
-      .then(setSummary)
+    Promise.all([fetchSummary(), fetchTransactions()])
+      .then(([s, txns]) => {
+        setSummary(s);
+        setTransactions(txns);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -39,6 +48,24 @@ export default function TrackerPage() {
     { name: "Spent", value: spent },
   ];
 
+  // Expenses grouped by category, largest first. Keep the donut to <=6 slices
+  // (top 5 + a neutral "Other") so it stays readable as categories grow.
+  const byCategory = (() => {
+    const map = new Map();
+    for (const t of transactions) {
+      if (t.type !== "expense") continue;
+      map.set(t.category, (map.get(t.category) ?? 0) + t.amount);
+    }
+    let arr = [...map.entries()]
+      .map(([name, value]) => ({ name, value, color: getCategory(name).color }))
+      .sort((a, b) => b.value - a.value);
+    if (arr.length > 6) {
+      const other = arr.slice(5).reduce((s, x) => s + x.value, 0);
+      arr = [...arr.slice(0, 5), { name: "Other", value: other, color: OTHER_COLOR }];
+    }
+    return arr;
+  })();
+
   return (
     <PageWrapper>
       <motion.div variants={fadeUp} initial="initial" animate="animate">
@@ -49,8 +76,33 @@ export default function TrackerPage() {
       </motion.div>
 
       {loading ? (
-        <div className="flex h-64 items-center justify-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
+        <div className="mt-5 space-y-4">
+          <Card>
+            <CardContent className="flex flex-col items-center p-5">
+              <Skeleton className="h-5 w-32 self-start" />
+              <Skeleton className="mt-5 h-44 w-44 rounded-full" />
+              <div className="mt-5 flex gap-6">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            </CardContent>
+          </Card>
+          <div className="grid grid-cols-2 gap-3">
+            <Card>
+              <CardContent className="space-y-3 p-4">
+                <Skeleton className="h-9 w-9 rounded-lg" />
+                <Skeleton className="h-6 w-20" />
+                <Skeleton className="h-3 w-16" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="space-y-3 p-4">
+                <Skeleton className="h-9 w-9 rounded-lg" />
+                <Skeleton className="h-6 w-20" />
+                <Skeleton className="h-3 w-16" />
+              </CardContent>
+            </Card>
+          </div>
         </div>
       ) : (
         <div className="mt-5 space-y-4">
@@ -122,6 +174,89 @@ export default function TrackerPage() {
                     Spent
                   </span>
                 </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Spending by category */}
+          <motion.div variants={fadeUp} initial="initial" animate="animate">
+            <Card>
+              <CardContent className="p-5">
+                <h2 className="mb-2 font-semibold">Spending by category</h2>
+                {byCategory.length > 0 ? (
+                  <>
+                    <div className="relative h-56">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={byCategory}
+                            dataKey="value"
+                            nameKey="name"
+                            innerRadius={60}
+                            outerRadius={92}
+                            paddingAngle={2}
+                            startAngle={90}
+                            endAngle={-270}
+                            isAnimationActive
+                            animationBegin={250}
+                            animationDuration={1000}
+                            stroke="none"
+                          >
+                            {byCategory.map((c) => (
+                              <Cell key={c.name} fill={c.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(v) => formatMoney(v)}
+                            contentStyle={{
+                              borderRadius: 12,
+                              border: `1px solid ${colors.tooltipBorder}`,
+                              background: colors.tooltipBg,
+                              color: colors.tooltipText,
+                            }}
+                            itemStyle={{ color: colors.tooltipText }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-xs text-muted-foreground">Spent</span>
+                        <span className="text-2xl font-extrabold">
+                          <AnimatedNumber value={spent} prefix="$" decimals={2} />
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Legend with amounts */}
+                    <div className="mt-4 space-y-2.5">
+                      {byCategory.map((c) => (
+                        <div
+                          key={c.name}
+                          className="flex items-center justify-between gap-3 text-sm"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span
+                              className="h-3 w-3 shrink-0 rounded-full"
+                              style={{ background: c.color }}
+                            />
+                            <span className="truncate">{c.name}</span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span className="font-semibold tabular-nums">
+                              {formatMoney(c.value)}
+                            </span>
+                            <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">
+                              {spent > 0 ? Math.round((c.value / spent) * 100) : 0}%
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex h-40 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+                    No expenses yet this month. Add some on the Transactions page.
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>

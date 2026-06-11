@@ -11,7 +11,7 @@ export async function searchUsers(req, res) {
     username: { $regex: q, $options: "i" },
     _id: { $ne: me._id },
   })
-    .select("username profilePicture")
+    .select("username profilePicture avatar")
     .limit(10);
 
   const result = users.map((u) => {
@@ -23,6 +23,7 @@ export async function searchUsers(req, res) {
       id: u._id,
       username: u.username,
       profilePicture: u.profilePicture,
+      avatar: u.avatar,
       status,
     };
   });
@@ -57,13 +58,14 @@ export async function sendRequest(req, res) {
 export async function getRequests(req, res) {
   const me = await User.findById(req.user._id).populate(
     "friendRequests",
-    "username profilePicture"
+    "username profilePicture avatar"
   );
   res.json(
     me.friendRequests.map((u) => ({
       id: u._id,
       username: u.username,
       profilePicture: u.profilePicture,
+      avatar: u.avatar,
     }))
   );
 }
@@ -105,13 +107,14 @@ export async function declineRequest(req, res) {
 export async function getFriends(req, res) {
   const me = await User.findById(req.user._id).populate(
     "friends",
-    "username profilePicture"
+    "username profilePicture avatar"
   );
   res.json(
     me.friends.map((u) => ({
       id: u._id,
       username: u.username,
       profilePicture: u.profilePicture,
+      avatar: u.avatar,
     }))
   );
 }
@@ -124,15 +127,16 @@ export async function getComparison(req, res) {
 
   const me = await User.findById(req.user._id).populate(
     "friends",
-    "username profilePicture"
+    "username profilePicture avatar"
   );
 
   const people = [
-    { id: me._id, username: me.username, profilePicture: me.profilePicture, isMe: true },
+    { id: me._id, username: me.username, profilePicture: me.profilePicture, avatar: me.avatar, isMe: true },
     ...me.friends.map((f) => ({
       id: f._id,
       username: f.username,
       profilePicture: f.profilePicture,
+      avatar: f.avatar,
       isMe: false,
     })),
   ];

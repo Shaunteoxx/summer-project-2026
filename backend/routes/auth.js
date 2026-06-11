@@ -6,6 +6,11 @@ import {
   googleCallback,
   getMe,
   getHomeStats,
+  addCategory,
+  removeCategory,
+  updateProfile,
+  deleteAccount,
+  setSavings,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -23,5 +28,10 @@ router.get(
 
 router.get("/me", requireAuth, asyncHandler(getMe));
 router.get("/home", requireAuth, asyncHandler(getHomeStats));
+router.post("/categories", requireAuth, asyncHandler(addCategory));
+router.delete("/categories/:id", requireAuth, asyncHandler(removeCategory));
+router.patch("/profile", requireAuth, asyncHandler(updateProfile));
+router.put("/savings", requireAuth, asyncHandler(setSavings));
+router.delete("/me", requireAuth, asyncHandler(deleteAccount));
 
 export default router;

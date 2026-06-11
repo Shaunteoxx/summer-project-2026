@@ -10,9 +10,11 @@ import {
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
+import Avatar from "@/components/Avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   searchUsers,
   fetchRequests,
@@ -24,17 +26,6 @@ import {
 import { useToast } from "@/hooks/useToast";
 import { monthName } from "@/lib/utils";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
-
-function Avatar({ src, name, className = "h-10 w-10" }) {
-  if (src) {
-    return <img src={src} alt={name} className={`${className} rounded-full border border-border`} />;
-  }
-  return (
-    <div className={`${className} flex items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-foreground`}>
-      {name?.[0]?.toUpperCase() ?? "?"}
-    </div>
-  );
-}
 
 export default function FriendsPage() {
   const toast = useToast();
@@ -151,7 +142,7 @@ export default function FriendsPage() {
                       className="flex items-center justify-between rounded-lg border border-border/70 p-3"
                     >
                       <div className="flex items-center gap-3">
-                        <Avatar src={u.profilePicture} name={u.username} className="h-9 w-9" />
+                        <Avatar user={u} className="h-9 w-9" />
                         <span className="font-medium">{u.username}</span>
                       </div>
                       {u.status === "friends" ? (
@@ -200,7 +191,7 @@ export default function FriendsPage() {
                         className="flex items-center justify-between rounded-lg border border-border/70 p-3"
                       >
                         <div className="flex items-center gap-3">
-                          <Avatar src={r.profilePicture} name={r.username} className="h-9 w-9" />
+                          <Avatar user={r} className="h-9 w-9" />
                           <span className="font-medium">{r.username}</span>
                         </div>
                         <div className="flex gap-2">
@@ -241,8 +232,19 @@ export default function FriendsPage() {
               </p>
 
               {!comparison ? (
-                <div className="flex h-40 items-center justify-center">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
+                <div className="space-y-4">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i}>
+                      <div className="mb-1 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-7 w-7 rounded-full" />
+                          <Skeleton className="h-4 w-24" />
+                        </div>
+                        <Skeleton className="h-4 w-10" />
+                      </div>
+                      <Skeleton className="h-3 w-full rounded-full" />
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <motion.div
@@ -256,11 +258,7 @@ export default function FriendsPage() {
                       <div className="mb-1 flex items-center justify-between text-sm">
                         <span className="flex items-center gap-2 font-medium">
                           {i === 0 && <Crown className="h-4 w-4 text-yellow-500" />}
-                          <Avatar
-                            src={p.profilePicture}
-                            name={p.username}
-                            className="h-7 w-7"
-                          />
+                          <Avatar user={p} className="h-7 w-7" />
                           {p.username}
                           {p.isMe && (
                             <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">

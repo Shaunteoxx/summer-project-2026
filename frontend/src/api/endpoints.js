@@ -4,6 +4,26 @@ import api from "./client";
 export const fetchMe = () => api.get("/auth/me").then((r) => r.data);
 export const fetchHomeStats = () => api.get("/auth/home").then((r) => r.data);
 
+// --- Custom categories ---
+export const addCustomCategory = (payload) =>
+  api.post("/auth/categories", payload).then((r) => r.data);
+export const removeCustomCategory = (id) =>
+  api.delete(`/auth/categories/${id}`).then((r) => r.data);
+
+// --- Profile ---
+export const updateProfile = (payload) =>
+  api.patch("/auth/profile", payload).then((r) => r.data);
+export const deleteAccount = () =>
+  api.delete("/auth/me").then((r) => r.data);
+export const setMonthlySavings = (payload) =>
+  api.put("/auth/savings", payload).then((r) => r.data);
+
+// --- Streak ---
+export const fetchStreak = (today) =>
+  api.get("/streak", { params: { today } }).then((r) => r.data);
+export const restoreStreak = (payload) =>
+  api.post("/streak/restore", payload).then((r) => r.data);
+
 // --- Transactions ---
 export const fetchTransactions = (params) =>
   api.get("/transactions", { params }).then((r) => r.data);

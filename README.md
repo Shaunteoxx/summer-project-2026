@@ -1,27 +1,36 @@
 # 💸 Broke No More
 
-A full-stack budgeting web app — *know exactly how much you can spend today and how much you need to save for tomorrow.*
+A **mobile-first** full-stack budgeting web app — *know exactly how much you can spend today and how much you need to save for tomorrow.*
 
-Built with **React + Vite**, **Node + Express**, and **MongoDB**, with Google OAuth, JWT sessions, smooth Framer Motion animations, and Recharts visualisations.
+Built with **React + Vite**, **Node + Express**, and **MongoDB**, with Google OAuth, JWT auth, smooth Framer Motion animations, and Recharts visualisations.
 
 ---
 
 ## ✨ Features
 
-- **Google OAuth** sign-in (Passport.js) with JWT sessions and protected routes
+- **Google OAuth** sign-in (Passport.js) with JWT auth and protected routes
+- **Mobile-first UI** — phone-width layout, bottom tab bar, drag-to-dismiss bottom sheets, safe-area aware
+- **Dark & light theme** — system-aware with a manual toggle (no flash on load)
 - **Homepage** — accumulated savings, what's left to spend this month, animated count-up stats
+- **Transactions**
+  - Add income / expenses from a bottom sheet (type fixed by an Income/Expense button)
+  - **Categories** — fixed set (Food & Drinks, Transport, Shopping, Entertainment, Travel · Allowance, Part-time, Gifts) plus **user-created custom categories** with their own colour
+  - **Search** by description or category, **filter** by All / Expenses / Income
+  - Optimistic delete with a **10-second undo**
 - **Calculator** — daily spend budget & savings-goal calculators with animated results
-- **Transactions** — add income/expenses, staggered slide-in list, live remaining balance
-- **Monthly Tracker** — animated donut chart of saved vs spent (arc-by-arc fill)
-- **Stats** — grouped bar chart comparing savings vs spending across every month
+- **Monthly Tracker** — donut of saved vs spent **plus a colour-coded "spending by category" donut**
+- **Stats** — months tracked + average savings rate, and a grouped bar chart across every month
 - **Friends** — search users, send/accept/decline requests, savings-rate leaderboard
-- Premium animations throughout: page transitions, count-ups, hover lifts, fade/scale-ins
+- **Profile** — editable display name, pick a cute **animal avatar** (Twemoji), and delete account
+- **Toast notifications** for key actions (add/delete, friend requests, etc.)
+- **Accessibility & polish** — skeleton loading states, focus-visible rings, and full `prefers-reduced-motion` support
+- Premium animations throughout: page transitions, count-ups, fade/scale-ins, animated charts
 
 ## 🧱 Tech Stack
 
 | Layer    | Tech |
 |----------|------|
-| Frontend | React 18, React Router v6, Tailwind CSS, shadcn-style UI, Framer Motion, Recharts, Axios |
+| Frontend | React 18, React Router v6, Tailwind CSS, shadcn-style UI, Framer Motion, Recharts, lucide-react, Axios |
 | Backend  | Node.js, Express, Passport (Google OAuth20), JWT, Mongoose |
 | Database | MongoDB 7 (via Docker) |
 | Dev setup | Docker Desktop (runs MongoDB + backend + frontend together) |
@@ -31,15 +40,16 @@ Built with **React + Vite**, **Node + Express**, and **MongoDB**, with Google OA
 ## 📁 Project Structure
 
 ```
-/client            → React frontend (Vite)
+/frontend          → React frontend (Vite)
+  /public/avatars  → Twemoji animal avatar SVGs
   /src
     /api           → Axios client + endpoint helpers
     /animations    → Shared Framer Motion variants
     /components    → Reusable UI (incl. /ui shadcn-style primitives)
-    /hooks         → Auth context, count-up hook
-    /lib           → utils (cn, formatters)
+    /hooks         → Contexts + hooks (auth, theme, toast, categories, chart colours, count-up)
+    /lib           → utils (cn, formatters), category + avatar definitions
     /pages         → One file per page
-/server            → Express backend
+/backend           → Express backend
   /config          → DB + Passport config
   /controllers     → Route logic
   /middleware      → Auth (JWT) + async wrapper
@@ -65,10 +75,10 @@ That's it. Node.js and MongoDB do not need to be installed on your machine.
 ### Step 1 — Create your `.env` file
 
 ```bash
-cp .env.example server/.env
+cp .env.example backend/.env
 ```
 
-Open `server/.env` and fill in these values:
+Open `backend/.env` and fill in these values:
 
 ```
 GOOGLE_CLIENT_ID=        ← from Google Cloud Console (see Step 2)
@@ -95,7 +105,7 @@ Leave `MONGO_URI`, `PORT`, and `CLIENT_URL` as they are.
    ```
    http://localhost:5000/api/auth/google/callback
    ```
-8. Copy the **Client ID** and **Client Secret** into `server/.env`.
+8. Copy the **Client ID** and **Client Secret** into `backend/.env`.
 
 ---
 
@@ -110,9 +120,9 @@ docker compose up --build
 Wait for all three services to start. You'll know it's ready when you see:
 
 ```
-client-1  |   ➜  Local:   http://localhost:5173/
-server-1  | ✅ MongoDB connected: mongodb://mongo:27017/brokenomore
-server-1  | 🚀 Server running on http://localhost:5000
+frontend-1  |   ➜  Local:   http://localhost:5173/
+backend-1   | ✅ MongoDB connected: mongodb://mongo:27017/brokenomore
+backend-1   | 🚀 Server running on http://localhost:5000
 ```
 
 Open **http://localhost:5173** in your browser and sign in with Google. 🎉
@@ -163,6 +173,10 @@ All routes except the OAuth start/callback require a `Bearer <JWT>` header.
 | GET | `/api/auth/google/callback` | OAuth callback → redirects with JWT |
 | GET | `/api/auth/me` | Current user |
 | GET | `/api/auth/home` | Homepage stats |
+| PATCH | `/api/auth/profile` | Update display name / avatar |
+| DELETE | `/api/auth/me` | Delete account (and all its data) |
+| POST | `/api/auth/categories` | Add a custom category |
+| DELETE | `/api/auth/categories/:id` | Delete a custom category |
 | GET | `/api/transactions` | List transactions for current month |
 | POST | `/api/transactions` | Add a transaction |
 | DELETE | `/api/transactions/:id` | Delete a transaction |
@@ -180,6 +194,8 @@ All routes except the OAuth start/callback require a `Bearer <JWT>` header.
 
 ## 🎨 Design Notes
 
-- Color theme: green & white (money/savings feel), defined as CSS variables in `client/src/index.css`.
-- Animation defaults: `easeOut` easing, durations between 0.4s–0.8s.
+- **Dark-first**, emerald-accent theme (money/savings feel) with a system-aware light mode, defined as HSL CSS variables in `frontend/src/index.css`.
+- Category colours use a **muted palette** so charts stay cohesive rather than clashing; each category pairs a colour with an icon so meaning never relies on colour alone.
+- Animation defaults: `easeOut` easing, durations between 0.4s–0.8s; all motion respects `prefers-reduced-motion`.
 - Monthly summaries are auto-recomputed whenever transactions are added or removed.
+- Animal avatars are [Twemoji](https://github.com/jdecked/twemoji) (© Twitter, **CC-BY 4.0**).

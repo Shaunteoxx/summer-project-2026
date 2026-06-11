@@ -20,15 +20,15 @@ export async function getTransactions(req, res) {
 
 /** POST /api/transactions */
 export async function createTransaction(req, res) {
-  const { description, amount, category, date } = req.body;
+  const { description, amount, type, category, date } = req.body;
 
-  if (!description || amount === undefined || !category) {
-    return res
-      .status(400)
-      .json({ message: "description, amount and category are required" });
+  if (!description || amount === undefined || !type || !category) {
+    return res.status(400).json({
+      message: "description, amount, type and category are required",
+    });
   }
-  if (!["income", "expense"].includes(category)) {
-    return res.status(400).json({ message: "Invalid category" });
+  if (!["income", "expense"].includes(type)) {
+    return res.status(400).json({ message: "Invalid type" });
   }
   if (Number(amount) < 0) {
     return res.status(400).json({ message: "Amount must be positive" });
@@ -40,7 +40,8 @@ export async function createTransaction(req, res) {
     userId: req.user._id,
     description,
     amount: Number(amount),
-    category,
+    type,
+    category: String(category).trim(),
     date: when,
     month: when.getMonth(),
     year: when.getFullYear(),

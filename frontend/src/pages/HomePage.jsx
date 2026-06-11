@@ -12,7 +12,9 @@ import {
 
 import PageWrapper from "@/components/PageWrapper";
 import AnimatedNumber from "@/components/AnimatedNumber";
+import StreakCard from "@/components/StreakCard";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { fetchHomeStats } from "@/api/endpoints";
 import { monthName } from "@/lib/utils";
 import { staggerContainer, fadeUp, fadeScaleItem } from "@/animations/variants";
@@ -41,9 +43,13 @@ const quickActions = [
 export default function HomePage() {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchHomeStats().then(setStats).catch(() => setStats(null));
+    fetchHomeStats()
+      .then(setStats)
+      .catch(() => setStats(null))
+      .finally(() => setLoading(false));
   }, []);
 
   const now = new Date();
@@ -57,9 +63,13 @@ export default function HomePage() {
         <p className="text-sm font-medium text-primary">
           {monthName(month)} {year}
         </p>
-        <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight">
-          Welcome back{stats ? `, ${stats.username}` : ""}
-        </h1>
+        {loading ? (
+          <Skeleton className="mt-1.5 h-8 w-56" />
+        ) : (
+          <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight">
+            Welcome back{stats ? `, ${stats.username}` : ""}
+          </h1>
+        )}
       </motion.div>
 
       {/* Hero: left to spend */}
@@ -75,36 +85,50 @@ export default function HomePage() {
             <p className="text-sm font-medium text-muted-foreground">
               Left to spend this month
             </p>
-            <p className="mt-1 text-[2.75rem] font-extrabold leading-tight tracking-tight text-foreground">
-              <AnimatedNumber
-                value={stats?.leftToSpend ?? 0}
-                prefix="$"
-                decimals={2}
-              />
-            </p>
-            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-              <span className="flex items-center gap-1.5 text-success">
-                <TrendingUp className="h-4 w-4" />
-                <AnimatedNumber
-                  value={stats?.monthIncome ?? 0}
-                  prefix="$"
-                  decimals={2}
-                />
-                <span className="text-muted-foreground">in</span>
-              </span>
-              <span className="flex items-center gap-1.5 text-destructive">
-                <Receipt className="h-4 w-4" />
-                <AnimatedNumber
-                  value={stats?.monthExpenses ?? 0}
-                  prefix="$"
-                  decimals={2}
-                />
-                <span className="text-muted-foreground">out</span>
-              </span>
-            </div>
+            {loading ? (
+              <>
+                <Skeleton className="mt-2 h-12 w-48" />
+                <Skeleton className="mt-4 h-5 w-44" />
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-[2.75rem] font-extrabold leading-tight tracking-tight text-foreground">
+                  <AnimatedNumber
+                    value={stats?.leftToSpend ?? 0}
+                    prefix="$"
+                    decimals={2}
+                  />
+                </p>
+                <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                  <span className="flex items-center gap-1.5 text-success">
+                    <TrendingUp className="h-4 w-4" />
+                    <AnimatedNumber
+                      value={stats?.monthIncome ?? 0}
+                      prefix="$"
+                      decimals={2}
+                    />
+                    <span className="text-muted-foreground">in</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 text-destructive">
+                    <Receipt className="h-4 w-4" />
+                    <AnimatedNumber
+                      value={stats?.monthExpenses ?? 0}
+                      prefix="$"
+                      decimals={2}
+                    />
+                    <span className="text-muted-foreground">out</span>
+                  </span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Streak */}
+      <div className="mt-4">
+        <StreakCard />
+      </div>
 
       {/* Secondary stats */}
       <motion.div
@@ -119,6 +143,7 @@ export default function HomePage() {
           value={stats?.totalSavings ?? 0}
           prefix="$"
           decimals={2}
+          loading={loading}
         />
         <StatCard
           icon={TrendingUp}
@@ -126,6 +151,7 @@ export default function HomePage() {
           value={stats?.percentageSaved ?? 0}
           suffix="%"
           decimals={0}
+          loading={loading}
         />
       </motion.div>
 
@@ -164,7 +190,7 @@ export default function HomePage() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, prefix, suffix, decimals }) {
+function StatCard({ icon: Icon, label, value, prefix, suffix, decimals, loading }) {
   return (
     <motion.div variants={fadeScaleItem}>
       <Card className="h-full">
@@ -172,14 +198,18 @@ function StatCard({ icon: Icon, label, value, prefix, suffix, decimals }) {
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
             <Icon className="h-[18px] w-[18px]" />
           </span>
-          <div className="mt-1 text-2xl font-extrabold tracking-tight">
-            <AnimatedNumber
-              value={value}
-              prefix={prefix}
-              suffix={suffix}
-              decimals={decimals}
-            />
-          </div>
+          {loading ? (
+            <Skeleton className="mt-1 h-8 w-24" />
+          ) : (
+            <div className="mt-1 text-2xl font-extrabold tracking-tight">
+              <AnimatedNumber
+                value={value}
+                prefix={prefix}
+                suffix={suffix}
+                decimals={decimals}
+              />
+            </div>
+          )}
           <span className="text-xs font-medium text-muted-foreground">{label}</span>
         </CardContent>
       </Card>
