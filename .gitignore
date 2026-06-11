@@ -4,11 +4,11 @@ node_modules/
 
 # Env
 .env
-server/.env
-client/.env
+backend/.env
+frontend/.env
 
 # Build output
-client/dist/
+frontend/dist/
 dist/
 
 # Logs
