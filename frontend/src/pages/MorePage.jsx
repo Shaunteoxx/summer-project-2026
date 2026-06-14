@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
+import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { AVATARS, avatarSrc } from "@/lib/avatars";
 import { formatMoney, monthName } from "@/lib/utils";
 import { updateProfile, deleteAccount, setMonthlySavings } from "@/api/endpoints";
@@ -50,6 +51,7 @@ export default function MorePage() {
   const { user, refresh, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const toast = useToast();
+  const guard = useDemoGuard();
 
   const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState("");
@@ -71,6 +73,7 @@ export default function MorePage() {
   const [deleting, setDeleting] = useState(false);
 
   const openEdit = () => {
+    if (guard()) return;
     setName(user?.username ?? "");
     setAvatar(user?.avatar ?? "");
     setEditOpen(true);
@@ -98,6 +101,7 @@ export default function MorePage() {
   };
 
   const openSavings = () => {
+    if (guard()) return;
     setSavingsYear(now.getFullYear());
     setSavingsMonth(now.getMonth());
     loadSavingsInput(now.getFullYear(), now.getMonth());
@@ -277,7 +281,10 @@ export default function MorePage() {
             Log out
           </button>
           <button
-            onClick={() => setDeleteOpen(true)}
+            onClick={() => {
+              if (guard()) return;
+              setDeleteOpen(true);
+            }}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4 font-semibold text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <Trash2 className="h-5 w-5" />

@@ -5,6 +5,8 @@ const userSchema = new mongoose.Schema(
     googleId: { type: String, required: true, unique: true },
     username: { type: String, required: true, unique: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true },
+    // Read-only demo account used by the public "Explore the demo" button.
+    isDemo: { type: Boolean, default: false },
     profilePicture: { type: String, default: "" },
     // Chosen animal avatar id (e.g. "cat"); empty = fall back to Google photo.
     avatar: { type: String, default: "" },

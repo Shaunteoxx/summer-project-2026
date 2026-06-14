@@ -155,7 +155,13 @@ export function computeStreak(transactions, restoredDays, todayStr, savingsByMon
         within: todayWithin,
       });
     } else {
-      last7.push(entry);
+      // Normalise the field name to `date` so the client has a consistent key.
+      last7.push({
+        date: entry.ymd,
+        spent: entry.spent,
+        budget: entry.budget,
+        status: entry.status,
+      });
     }
   }
 

@@ -1,5 +1,6 @@
 import { signToken } from "../middleware/auth.js";
 import { getLifetimeSavings } from "./summaryController.js";
+import { ensureDemoUser } from "../lib/demoSeed.js";
 import MonthlySummary from "../models/MonthlySummary.js";
 import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
@@ -25,6 +26,13 @@ export function googleCallback(req, res) {
   res.redirect(`${CLIENT_URL}/auth/callback?token=${token}`);
 }
 
+/** POST /api/auth/demo -> log in as the shared read-only demo account. */
+export async function demoLogin(req, res) {
+  const user = await ensureDemoUser();
+  const token = signToken(user);
+  res.json({ token });
+}
+
 /** GET /api/auth/me -> current user profile (used by the client to bootstrap). */
 export async function getMe(req, res) {
   const user = req.user;
@@ -32,6 +40,7 @@ export async function getMe(req, res) {
     id: user._id,
     username: user.username,
     email: user.email,
+    isDemo: !!user.isDemo,
     profilePicture: user.profilePicture,
     avatar: user.avatar,
     savingsByMonth: Object.fromEntries(user.savingsByMonth || []),

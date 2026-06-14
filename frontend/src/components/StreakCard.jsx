@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import BottomSheet from "@/components/BottomSheet";
 import { fetchStreak, restoreStreak } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
+import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { formatMoney } from "@/lib/utils";
 import { fadeUp } from "@/animations/variants";
 
@@ -26,6 +27,7 @@ const dowOf = (ymd) => DOW[new Date(`${ymd}T00:00:00Z`).getUTCDay()];
 export default function StreakCard() {
   const navigate = useNavigate();
   const toast = useToast();
+  const guard = useDemoGuard();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -205,7 +207,10 @@ export default function StreakCard() {
                 size="sm"
                 variant="outline"
                 className="gap-1.5"
-                onClick={() => setConfirmOpen(true)}
+                onClick={() => {
+                  if (guard()) return;
+                  setConfirmOpen(true);
+                }}
               >
                 <Shield className="h-3.5 w-3.5" /> Restore
               </Button>

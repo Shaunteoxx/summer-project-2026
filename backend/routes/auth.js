@@ -1,9 +1,10 @@
 import express from "express";
 import passport from "passport";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, blockDemoMutations } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import {
   googleCallback,
+  demoLogin,
   getMe,
   getHomeStats,
   addCategory,
@@ -26,12 +27,16 @@ router.get(
   googleCallback
 );
 
+router.post("/demo", asyncHandler(demoLogin));
+
 router.get("/me", requireAuth, asyncHandler(getMe));
 router.get("/home", requireAuth, asyncHandler(getHomeStats));
-router.post("/categories", requireAuth, asyncHandler(addCategory));
-router.delete("/categories/:id", requireAuth, asyncHandler(removeCategory));
-router.patch("/profile", requireAuth, asyncHandler(updateProfile));
-router.put("/savings", requireAuth, asyncHandler(setSavings));
-router.delete("/me", requireAuth, asyncHandler(deleteAccount));
+
+// Writes below are blocked for the read-only demo account.
+router.post("/categories", requireAuth, blockDemoMutations, asyncHandler(addCategory));
+router.delete("/categories/:id", requireAuth, blockDemoMutations, asyncHandler(removeCategory));
+router.patch("/profile", requireAuth, blockDemoMutations, asyncHandler(updateProfile));
+router.put("/savings", requireAuth, blockDemoMutations, asyncHandler(setSavings));
+router.delete("/me", requireAuth, blockDemoMutations, asyncHandler(deleteAccount));
 
 export default router;

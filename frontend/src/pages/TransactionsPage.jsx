@@ -16,6 +16,7 @@ import {
   removeTransaction,
 } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
+import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { monthName, formatMoney } from "@/lib/utils";
 import { CUSTOM_COLOR_OPTIONS } from "@/lib/categories";
 import { useCategories } from "@/hooks/useCategories";
@@ -38,6 +39,7 @@ const FILTERS = [
 
 export default function TransactionsPage() {
   const toast = useToast();
+  const guard = useDemoGuard();
   const { categoriesByType, getCategory, addCategory, removeCategory, custom } =
     useCategories();
   const [transactions, setTransactions] = useState([]);
@@ -124,6 +126,7 @@ export default function TransactionsPage() {
   const handleAddCategory = async () => {
     const name = newCategoryName.trim();
     if (!name) return;
+    if (guard()) return;
     setSavingCategory(true);
     try {
       const created = await addCategory({
@@ -142,6 +145,7 @@ export default function TransactionsPage() {
   };
 
   const handleRemoveCategory = async (id, name) => {
+    if (guard()) return;
     try {
       await removeCategory(id);
       setForm((f) => (f.category === name ? { ...f, category: "" } : f));
@@ -154,6 +158,7 @@ export default function TransactionsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.description || !form.amount || !form.category) return;
+    if (guard()) return;
     const type = formType;
     setSubmitting(true);
     try {
@@ -184,6 +189,7 @@ export default function TransactionsPage() {
 
   // Optimistically remove, then commit the server delete after a 10s undo window.
   const handleDelete = (id) => {
+    if (guard()) return;
     const index = transactions.findIndex((t) => t._id === id);
     if (index === -1) return;
     const removed = transactions[index];

@@ -24,11 +24,13 @@ import {
   declineFriendRequest,
 } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
+import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { monthName } from "@/lib/utils";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
 
 export default function FriendsPage() {
   const toast = useToast();
+  const guard = useDemoGuard();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -59,6 +61,7 @@ export default function FriendsPage() {
   };
 
   const handleSend = async (id) => {
+    if (guard()) return;
     const username = results.find((u) => u.id === id)?.username;
     try {
       await sendFriendRequest(id);
@@ -72,6 +75,7 @@ export default function FriendsPage() {
   };
 
   const handleAccept = async (id) => {
+    if (guard()) return;
     const username = requests.find((r) => r.id === id)?.username;
     try {
       await acceptFriendRequest(id);
@@ -84,6 +88,7 @@ export default function FriendsPage() {
   };
 
   const handleDecline = async (id) => {
+    if (guard()) return;
     const username = requests.find((r) => r.id === id)?.username;
     try {
       await declineFriendRequest(id);

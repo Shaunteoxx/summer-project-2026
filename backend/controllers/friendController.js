@@ -1,14 +1,18 @@
 import User from "../models/User.js";
 import MonthlySummary from "../models/MonthlySummary.js";
 
+// Escape regex metacharacters so user input can't inject a pattern
+// (prevents ReDoS / catastrophic backtracking on the username search).
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** GET /api/friends/search?q= -> users matching username (excluding self & existing friends). */
 export async function searchUsers(req, res) {
-  const q = (req.query.q || "").trim();
+  const q = (req.query.q || "").trim().slice(0, 50);
   if (!q) return res.json([]);
 
   const me = req.user;
   const users = await User.find({
-    username: { $regex: q, $options: "i" },
+    username: { $regex: escapeRegex(q), $options: "i" },
     _id: { $ne: me._id },
   })
     .select("username profilePicture avatar")

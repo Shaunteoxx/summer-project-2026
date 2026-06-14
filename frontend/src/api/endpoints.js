@@ -1,6 +1,7 @@
 import api from "./client";
 
 // --- Auth ---
+export const demoLogin = () => api.post("/auth/demo").then((r) => r.data);
 export const fetchMe = () => api.get("/auth/me").then((r) => r.data);
 export const fetchHomeStats = () => api.get("/auth/home").then((r) => r.data);
 

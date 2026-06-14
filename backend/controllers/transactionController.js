@@ -30,18 +30,38 @@ export async function createTransaction(req, res) {
   if (!["income", "expense"].includes(type)) {
     return res.status(400).json({ message: "Invalid type" });
   }
-  if (Number(amount) < 0) {
-    return res.status(400).json({ message: "Amount must be positive" });
+
+  const desc = String(description).trim();
+  if (desc.length > 120) {
+    return res
+      .status(400)
+      .json({ message: "Description too long (max 120 characters)" });
+  }
+
+  const cat = String(category).trim();
+  if (cat.length > 40) {
+    return res.status(400).json({ message: "Category too long" });
+  }
+
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value < 0) {
+    return res.status(400).json({ message: "Amount must be a positive number" });
+  }
+  if (value > 1e9) {
+    return res.status(400).json({ message: "Amount is too large" });
   }
 
   const when = date ? new Date(date) : new Date();
+  if (Number.isNaN(when.getTime())) {
+    return res.status(400).json({ message: "Invalid date" });
+  }
 
   const transaction = await Transaction.create({
     userId: req.user._id,
-    description,
-    amount: Number(amount),
+    description: desc,
+    amount: value,
     type,
-    category: String(category).trim(),
+    category: cat,
     date: when,
     month: when.getMonth(),
     year: when.getFullYear(),

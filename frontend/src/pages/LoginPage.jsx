@@ -1,15 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Wallet } from "lucide-react";
+import { Wallet, Eye, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/useToast";
+import { setToken } from "@/api/client";
+import { demoLogin } from "@/api/endpoints";
 import { EASE } from "@/animations/variants";
 
 export default function LoginPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, refresh } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
+  const [demoLoading, setDemoLoading] = useState(false);
 
   useEffect(() => {
     if (!loading && user) navigate("/", { replace: true });
@@ -17,6 +22,19 @@ export default function LoginPage() {
 
   const handleGoogle = () => {
     window.location.href = `${import.meta.env.VITE_API_URL || ""}/api/auth/google`;
+  };
+
+  const handleDemo = async () => {
+    setDemoLoading(true);
+    try {
+      const { token } = await demoLogin();
+      setToken(token);
+      await refresh();
+      navigate("/", { replace: true });
+    } catch {
+      setDemoLoading(false);
+      toast.error("Couldn't start the demo. Please try again.");
+    }
   };
 
   return (
@@ -48,13 +66,30 @@ export default function LoginPage() {
               </p>
             </div>
 
-            <Button size="lg" className="w-full gap-3" onClick={handleGoogle}>
-              <GoogleIcon />
-              Sign in with Google
-            </Button>
+            <div className="w-full space-y-3">
+              <Button size="lg" className="w-full gap-3" onClick={handleGoogle}>
+                <GoogleIcon />
+                Sign in with Google
+              </Button>
+
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleDemo}
+                disabled={demoLoading}
+              >
+                {demoLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+                {demoLoading ? "Loading demo…" : "Explore the demo"}
+              </Button>
+            </div>
 
             <p className="text-xs text-muted-foreground">
-              Track spending · Hit savings goals · Compare with friends
+              No sign-up needed · Demo is read-only
             </p>
           </CardContent>
         </Card>
