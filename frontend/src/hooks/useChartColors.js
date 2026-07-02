@@ -10,6 +10,9 @@ export function useChartColors() {
   return {
     saved: isDark ? "hsl(152 62% 50%)" : "hsl(152 56% 38%)",
     spent: isDark ? "hsl(220 14% 42%)" : "hsl(150 12% 70%)",
+    // Emphasis (today) + over-budget signal for the daily-spending tracker.
+    primary: isDark ? "hsl(152 62% 50%)" : "hsl(152 56% 38%)",
+    over: isDark ? "hsl(0 72% 60%)" : "hsl(0 72% 48%)",
     grid: isDark ? "hsl(220 18% 22%)" : "hsl(150 18% 90%)",
     axis: isDark ? "hsl(215 14% 62%)" : "hsl(155 10% 45%)",
     cursor: isDark ? "hsl(220 20% 18% / 0.6)" : "hsl(150 20% 95%)",

@@ -224,8 +224,17 @@ export async function getHomeStats(req, res) {
 
   const totalSavings = await getLifetimeSavings(req.user._id);
 
-  // "Left to spend" = income recorded this month minus expenses recorded so far.
-  const leftToSpend = income - expenses;
+  // Reserve this month's savings target before working out what's left to spend,
+  // so the headline matches the daily-budget model (savingsByMonth keys are
+  // "YYYY-M" with a 0-based month).
+  const monthSavings = Math.max(
+    0,
+    Number(req.user.savingsByMonth?.get(`${year}-${month}`)) || 0
+  );
+
+  // "Left to spend" = income this month minus expenses so far minus the savings
+  // set aside for the month. Can go negative if you've overspent your target.
+  const leftToSpend = income - expenses - monthSavings;
 
   res.json({
     username: req.user.username,
@@ -233,6 +242,7 @@ export async function getHomeStats(req, res) {
     year,
     monthIncome: income,
     monthExpenses: expenses,
+    monthSavings,
     leftToSpend,
     totalSavings,
     percentageSaved: summary?.percentageSaved ?? 0,

@@ -6,11 +6,13 @@ import { BarChart3, PiggyBank, CreditCard } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
 import AnimatedNumber from "@/components/AnimatedNumber";
+import DailySpendingCard from "@/components/DailySpendingCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchSummary, fetchTransactions } from "@/api/endpoints";
 import { monthName, formatMoney } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 import { useCategories } from "@/hooks/useCategories";
 import { useChartColors } from "@/hooks/useChartColors";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
@@ -20,6 +22,7 @@ const OTHER_COLOR = "#94A3B8";
 export default function TrackerPage() {
   const navigate = useNavigate();
   const colors = useChartColors();
+  const { user } = useAuth();
   const { getCategory } = useCategories();
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -42,6 +45,10 @@ export default function TrackerPage() {
   const spent = summary?.totalExpenses ?? 0;
   const income = summary?.totalIncome ?? 0;
   const hasData = income > 0 || spent > 0;
+  const monthlySavings = Math.max(
+    0,
+    Number(user?.savingsByMonth?.[`${year}-${month}`]) || 0
+  );
 
   const chartData = [
     { name: "Saved", value: saved },
@@ -85,6 +92,15 @@ export default function TrackerPage() {
                 <Skeleton className="h-4 w-16" />
                 <Skeleton className="h-4 w-16" />
               </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <Skeleton className="h-5 w-28" />
+                <Skeleton className="h-5 w-20" />
+              </div>
+              <Skeleton className="mt-4 h-52 w-full rounded-xl" />
             </CardContent>
           </Card>
           <div className="grid grid-cols-2 gap-3">
@@ -177,6 +193,13 @@ export default function TrackerPage() {
               </CardContent>
             </Card>
           </motion.div>
+
+          {/* Daily spending tracker */}
+          <DailySpendingCard
+            transactions={transactions}
+            income={income}
+            monthlySavings={monthlySavings}
+          />
 
           {/* Spending by category */}
           <motion.div variants={fadeUp} initial="initial" animate="animate">

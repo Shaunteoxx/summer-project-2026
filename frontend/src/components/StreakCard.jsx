@@ -10,7 +10,7 @@ import BottomSheet from "@/components/BottomSheet";
 import { fetchStreak, restoreStreak } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { formatMoney } from "@/lib/utils";
+import { formatMoney, daysLeftInMonth } from "@/lib/utils";
 import { fadeUp } from "@/animations/variants";
 
 /** Client's local calendar date as YYYY-MM-DD (avoids server-timezone drift). */
@@ -109,6 +109,7 @@ export default function StreakCard() {
     monthlySavings,
   } = data;
   const pct = today.budget > 0 ? Math.min(today.spent / today.budget, 1) : today.spent > 0 ? 1 : 0;
+  const daysLeft = daysLeftInMonth();
 
   return (
     <motion.div variants={fadeUp} initial="initial" animate="animate">
@@ -162,12 +163,18 @@ export default function StreakCard() {
                   ? `${formatMoney(Math.max(today.remaining, 0))} left to spend today`
                   : `${formatMoney(Math.abs(today.remaining))} over today's budget`}
               </p>
-              {monthlySavings > 0 && (
-                <p className="shrink-0 text-xs text-muted-foreground">
-                  after saving {formatMoney(monthlySavings)}/mo
-                </p>
-              )}
+              <p className="shrink-0 text-xs text-muted-foreground">
+                {daysLeft} {daysLeft === 1 ? "day" : "days"} left
+              </p>
             </div>
+            {/* How the daily budget is worked out (keeps the number transparent). */}
+            <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+              {formatMoney(today.budget)}/day
+              {monthlySavings > 0
+                ? `, after setting aside ${formatMoney(monthlySavings)} to save`
+                : ""}
+              . Recalculated daily from what's left.
+            </p>
           </div>
 
           {/* Last 7 days */}

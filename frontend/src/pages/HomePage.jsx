@@ -8,6 +8,7 @@ import {
   PiggyBank,
   TrendingUp,
   ArrowRight,
+  CalendarDays,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -16,7 +17,7 @@ import StreakCard from "@/components/StreakCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchHomeStats } from "@/api/endpoints";
-import { monthName } from "@/lib/utils";
+import { monthName, daysLeftInMonth } from "@/lib/utils";
 import { staggerContainer, fadeUp, fadeScaleItem } from "@/animations/variants";
 
 const quickActions = [
@@ -55,6 +56,7 @@ export default function HomePage() {
   const now = new Date();
   const month = stats ? stats.month : now.getMonth();
   const year = stats ? stats.year : now.getFullYear();
+  const daysLeft = daysLeftInMonth();
 
   return (
     <PageWrapper>
@@ -82,9 +84,15 @@ export default function HomePage() {
         <Card className="relative overflow-hidden border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card">
           <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
           <CardContent className="relative p-6">
-            <p className="text-sm font-medium text-muted-foreground">
-              Left to spend this month
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-muted-foreground">
+                Left to spend this month
+              </p>
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                <CalendarDays className="h-3.5 w-3.5" />
+                {daysLeft} {daysLeft === 1 ? "day" : "days"} left
+              </span>
+            </div>
             {loading ? (
               <>
                 <Skeleton className="mt-2 h-12 w-48" />
@@ -118,6 +126,17 @@ export default function HomePage() {
                     />
                     <span className="text-muted-foreground">out</span>
                   </span>
+                  {stats?.monthSavings > 0 && (
+                    <span className="flex items-center gap-1.5 text-primary">
+                      <PiggyBank className="h-4 w-4" />
+                      <AnimatedNumber
+                        value={stats?.monthSavings ?? 0}
+                        prefix="$"
+                        decimals={2}
+                      />
+                      <span className="text-muted-foreground">saved</span>
+                    </span>
+                  )}
                 </div>
               </>
             )}
