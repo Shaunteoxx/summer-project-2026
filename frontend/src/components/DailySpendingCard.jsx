@@ -155,7 +155,14 @@ export default function DailySpendingCard({ transactions = [], income = 0, month
                         <Cell
                           key={d.day}
                           fill={d.amount === 0 ? "transparent" : d.over ? colors.over : colors.spent}
-                          stroke={d.isToday ? colors.primary : "none"}
+                          // Today is outlined; red when today is over the daily average, else green.
+                          stroke={
+                            d.isToday
+                              ? d.amount > avgPerDay + 1e-9
+                                ? colors.over
+                                : colors.primary
+                              : "none"
+                          }
                           strokeWidth={d.isToday ? 1.5 : 0}
                         />
                       ))}
