@@ -145,20 +145,22 @@ export async function getComparison(req, res) {
     })),
   ];
 
-  const board = await Promise.all(
-    people.map(async (p) => {
-      const summary = await MonthlySummary.findOne({
-        userId: p.id,
-        month,
-        year,
-      });
-      return {
-        ...p,
-        percentageSaved: summary?.percentageSaved ?? 0,
-        totalSaved: summary?.totalSaved ?? 0,
-      };
-    })
-  );
+  // One query for everyone's summary instead of one per person.
+  const summaries = await MonthlySummary.find({
+    userId: { $in: people.map((p) => p.id) },
+    month,
+    year,
+  }).select("userId percentageSaved totalSaved");
+  const byUser = new Map(summaries.map((s) => [String(s.userId), s]));
+
+  const board = people.map((p) => {
+    const summary = byUser.get(String(p.id));
+    return {
+      ...p,
+      percentageSaved: summary?.percentageSaved ?? 0,
+      totalSaved: summary?.totalSaved ?? 0,
+    };
+  });
 
   board.sort((a, b) => b.percentageSaved - a.percentageSaved);
 

@@ -23,7 +23,9 @@ const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 /** Passport success handler -> issue JWT and bounce back to the client. */
 export function googleCallback(req, res) {
   const token = signToken(req.user);
-  res.redirect(`${CLIENT_URL}/auth/callback?token=${token}`);
+  // Hash fragment (not query string) so the token never appears in server
+  // access logs, proxies, or browser history syncing.
+  res.redirect(`${CLIENT_URL}/auth/callback#token=${token}`);
 }
 
 /** POST /api/auth/demo -> log in as the shared read-only demo account. */
@@ -184,14 +186,17 @@ export async function setSavings(req, res) {
 export async function deleteAccount(req, res) {
   const userId = req.user._id;
 
-  await Transaction.deleteMany({ userId });
-  await MonthlySummary.deleteMany({ userId });
-
-  // Scrub references to this user from everyone else's friends / requests.
-  await User.updateMany(
-    { $or: [{ friends: userId }, { friendRequests: userId }] },
-    { $pull: { friends: userId, friendRequests: userId } }
-  );
+  // Clean up in parallel; the user doc goes last so a partial failure
+  // leaves the account intact and the delete retryable.
+  await Promise.all([
+    Transaction.deleteMany({ userId }),
+    MonthlySummary.deleteMany({ userId }),
+    // Scrub references to this user from everyone else's friends / requests.
+    User.updateMany(
+      { $or: [{ friends: userId }, { friendRequests: userId }] },
+      { $pull: { friends: userId, friendRequests: userId } }
+    ),
+  ]);
 
   await User.deleteOne({ _id: userId });
   res.json({ message: "Account deleted" });
@@ -203,11 +208,11 @@ export async function getHomeStats(req, res) {
   const month = now.getMonth();
   const year = now.getFullYear();
 
-  const monthTransactions = await Transaction.find({
-    userId: req.user._id,
-    month,
-    year,
-  });
+  const [monthTransactions, summary, totalSavings] = await Promise.all([
+    Transaction.find({ userId: req.user._id, month, year }),
+    MonthlySummary.findOne({ userId: req.user._id, month, year }),
+    getLifetimeSavings(req.user._id),
+  ]);
 
   let income = 0;
   let expenses = 0;
@@ -215,14 +220,6 @@ export async function getHomeStats(req, res) {
     if (t.type === "income") income += t.amount;
     else expenses += t.amount;
   }
-
-  const summary = await MonthlySummary.findOne({
-    userId: req.user._id,
-    month,
-    year,
-  });
-
-  const totalSavings = await getLifetimeSavings(req.user._id);
 
   // Reserve this month's savings target before working out what's left to spend,
   // so the headline matches the daily-budget model (savingsByMonth keys are

@@ -11,14 +11,14 @@ Built with **React + Vite**, **Node + Express**, and **MongoDB**, with Google OA
 - **Google OAuth** sign-in (Passport.js) with JWT auth and protected routes
 - **Mobile-first UI** — phone-width layout, bottom tab bar, drag-to-dismiss bottom sheets, safe-area aware
 - **Dark & light theme** — system-aware with a manual toggle (no flash on load)
-- **Homepage** — accumulated savings, what's left to spend this month, animated count-up stats
+- **Homepage** — what's left to spend this month (after reserving your monthly savings) with the days left in the month, accumulated savings, a daily-budget streak, and animated count-up stats
 - **Transactions**
   - Add income / expenses from a bottom sheet (type fixed by an Income/Expense button)
-  - **Categories** — fixed set (Food & Drinks, Transport, Shopping, Entertainment, Travel · Allowance, Part-time, Gifts) plus **user-created custom categories** with their own colour
+  - **Categories** — fixed set (Food & Drinks, Transport, Shopping, Entertainment, Travel · Allowance, Job, Gifts) plus **user-created custom categories** with their own colour
   - **Search** by description or category, **filter** by All / Expenses / Income
   - Optimistic delete with a **10-second undo**
 - **Calculator** — daily spend budget & savings-goal calculators with animated results
-- **Monthly Tracker** — donut of saved vs spent **plus a colour-coded "spending by category" donut**
+- **Monthly Tracker** — donut of saved vs spent, a **day-by-day spending bar chart** (today highlighted, over-budget days flagged, your daily budget marked), **plus a colour-coded "spending by category" donut**
 - **Stats** — months tracked + average savings rate, and a grouped bar chart across every month
 - **Friends** — search users, send/accept/decline requests, savings-rate leaderboard
 - **Profile** — editable display name, pick a cute **animal avatar** (Twemoji), and delete account

@@ -65,6 +65,7 @@ export default function TransactionsPage() {
   const load = () => {
     fetchTransactions()
       .then(setTransactions)
+      .catch(() => toast.error("Couldn't load transactions. Pull to refresh or try again."))
       .finally(() => setLoading(false));
   };
 

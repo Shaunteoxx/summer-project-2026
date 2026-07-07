@@ -62,6 +62,9 @@ export async function getAllSummaries(req, res) {
 
 /** Total accumulated savings since sign-up (sum of all monthly totalSaved). */
 export async function getLifetimeSavings(userId) {
-  const summaries = await MonthlySummary.find({ userId });
-  return summaries.reduce((acc, s) => acc + s.totalSaved, 0);
+  const [result] = await MonthlySummary.aggregate([
+    { $match: { userId } },
+    { $group: { _id: null, total: { $sum: "$totalSaved" } } },
+  ]);
+  return result?.total ?? 0;
 }

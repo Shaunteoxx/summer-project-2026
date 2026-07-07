@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+} from "react";
 import { Tag } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -45,29 +52,31 @@ export function CategoriesProvider({ children }) {
     setCustom((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
-  const customDisplay = custom.map(toDisplay);
-  const categoriesByType = {
-    expense: [
-      ...EXPENSE_CATEGORIES,
-      ...customDisplay.filter((c) => c.type === "expense"),
-    ],
-    income: [
-      ...INCOME_CATEGORIES,
-      ...customDisplay.filter((c) => c.type === "income"),
-    ],
-  };
+  const value = useMemo(() => {
+    const customDisplay = custom.map(toDisplay);
+    const categoriesByType = {
+      expense: [
+        ...EXPENSE_CATEGORIES,
+        ...customDisplay.filter((c) => c.type === "expense"),
+      ],
+      income: [
+        ...INCOME_CATEGORIES,
+        ...customDisplay.filter((c) => c.type === "income"),
+      ],
+    };
 
-  const byName = {};
-  for (const c of [...categoriesByType.expense, ...categoriesByType.income]) {
-    byName[c.name] = c;
-  }
-  const getCategory = (name) =>
-    byName[name] ?? { name, icon: Tag, color: FALLBACK_COLOR };
+    const byName = {};
+    for (const c of [...categoriesByType.expense, ...categoriesByType.income]) {
+      byName[c.name] = c;
+    }
+    const getCategory = (name) =>
+      byName[name] ?? { name, icon: Tag, color: FALLBACK_COLOR };
+
+    return { custom, categoriesByType, getCategory, addCategory, removeCategory };
+  }, [custom, addCategory, removeCategory]);
 
   return (
-    <CategoriesContext.Provider
-      value={{ custom, categoriesByType, getCategory, addCategory, removeCategory }}
-    >
+    <CategoriesContext.Provider value={value}>
       {children}
     </CategoriesContext.Provider>
   );

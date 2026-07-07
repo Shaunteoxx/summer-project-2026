@@ -17,6 +17,7 @@ import StreakCard from "@/components/StreakCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchHomeStats } from "@/api/endpoints";
+import { useToast } from "@/hooks/useToast";
 import { monthName, daysLeftInMonth } from "@/lib/utils";
 import { staggerContainer, fadeUp, fadeScaleItem } from "@/animations/variants";
 
@@ -43,14 +44,19 @@ const quickActions = [
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchHomeStats()
       .then(setStats)
-      .catch(() => setStats(null))
+      .catch(() => {
+        setStats(null);
+        toast.error("Couldn't load your stats. Please try again.");
+      })
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const now = new Date();

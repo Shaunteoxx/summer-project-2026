@@ -37,8 +37,11 @@ export default function FriendsPage() {
   const [requests, setRequests] = useState([]);
   const [comparison, setComparison] = useState(null);
 
-  const loadRequests = () => fetchRequests().then(setRequests);
-  const loadComparison = () => fetchComparison().then(setComparison);
+  const loadRequests = () => fetchRequests().then(setRequests).catch(() => {});
+  const loadComparison = () =>
+    fetchComparison()
+      .then(setComparison)
+      .catch(() => toast.error("Couldn't load the leaderboard."));
 
   useEffect(() => {
     loadRequests();
@@ -124,6 +127,8 @@ export default function FriendsPage() {
                 </h2>
                 <form onSubmit={handleSearch} className="flex gap-2">
                   <Input
+                    type="search"
+                    aria-label="Search users by username"
                     placeholder="Search by username"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
@@ -200,13 +205,19 @@ export default function FriendsPage() {
                           <span className="font-medium">{r.username}</span>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="icon" className="h-8 w-8" onClick={() => handleAccept(r.id)}>
+                          <Button
+                            size="icon"
+                            className="h-9 w-9"
+                            aria-label={`Accept ${r.username}'s friend request`}
+                            onClick={() => handleAccept(r.id)}
+                          >
                             <Check className="h-4 w-4" />
                           </Button>
                           <Button
                             size="icon"
                             variant="outline"
-                            className="h-8 w-8"
+                            className="h-9 w-9"
+                            aria-label={`Decline ${r.username}'s friend request`}
                             onClick={() => handleDecline(r.id)}
                           >
                             <X className="h-4 w-4" />

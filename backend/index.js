@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import compression from "compression";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -22,6 +23,7 @@ app.set("trust proxy", 1);
 
 // --- Security & parsing middleware ---
 app.use(helmet());
+app.use(compression());
 app.use(
   cors({
     origin: process.env.CLIENT_URL || "http://localhost:5173",
@@ -63,6 +65,10 @@ app.use((req, res) => res.status(404).json({ message: "Not found" }));
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
+  // Malformed ObjectIds in params/queries are client errors, not crashes.
+  if (err.name === "CastError") {
+    return res.status(400).json({ message: "Invalid id" });
+  }
   console.error("Server error:", err);
   // Don't leak internal error details to clients in production.
   const message =
