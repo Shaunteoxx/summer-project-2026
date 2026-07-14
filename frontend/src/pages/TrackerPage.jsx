@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
@@ -7,11 +7,12 @@ import { BarChart3, PiggyBank, CreditCard } from "lucide-react";
 import PageWrapper from "@/components/PageWrapper";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import DailySpendingCard from "@/components/DailySpendingCard";
+import SavingsGoalCard from "@/components/SavingsGoalCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchSummary, fetchTransactions } from "@/api/endpoints";
-import { monthName, formatMoney } from "@/lib/utils";
+import { fetchSummary, fetchTransactions, fetchStreak } from "@/api/endpoints";
+import { monthName, formatMoney, localToday } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useCategories } from "@/hooks/useCategories";
 import { useChartColors } from "@/hooks/useChartColors";
@@ -26,16 +27,28 @@ export default function TrackerPage() {
   const { getCategory } = useCategories();
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [streak, setStreak] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    Promise.all([fetchSummary(), fetchTransactions()])
-      .then(([s, txns]) => {
+  // The streak supplies each day's rolling budget; if it fails the daily views
+  // simply fall back to plain bars, so don't let it break the page.
+  const load = useCallback(
+    () =>
+      Promise.all([
+        fetchSummary(),
+        fetchTransactions(),
+        fetchStreak(localToday()).catch(() => null),
+      ]).then(([s, txns, st]) => {
         setSummary(s);
         setTransactions(txns);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+        setStreak(st);
+      }),
+    []
+  );
+
+  useEffect(() => {
+    load().finally(() => setLoading(false));
+  }, [load]);
 
   const now = new Date();
   const month = summary?.month ?? now.getMonth();
@@ -190,15 +203,32 @@ export default function TrackerPage() {
                     Spent
                   </span>
                 </div>
+                {monthlySavings > 0 && (
+                  <p className="mt-2 text-center text-xs text-muted-foreground">
+                    Goal: set aside {formatMoney(monthlySavings)} this month
+                  </p>
+                )}
               </CardContent>
             </Card>
           </motion.div>
+
+          {/* Savings goal */}
+          <SavingsGoalCard
+            target={monthlySavings}
+            income={income}
+            spent={spent}
+            month={month}
+            year={year}
+            onUpdated={load}
+          />
 
           {/* Daily spending tracker */}
           <DailySpendingCard
             transactions={transactions}
             income={income}
             monthlySavings={monthlySavings}
+            monthDays={streak?.monthDays ?? []}
+            todayBudget={streak?.today?.budget ?? 0}
           />
 
           {/* Spending by category */}

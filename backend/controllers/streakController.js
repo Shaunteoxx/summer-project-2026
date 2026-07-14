@@ -46,6 +46,7 @@ export function computeStreak(transactions, restoredDays, todayStr, savingsByMon
     savesLeftThisMonth: savesLeftInMonth(currentMonthKey),
     restore: null,
     last7: [],
+    monthDays: [],
   };
 
   if (!transactions.length) return empty;
@@ -165,6 +166,12 @@ export function computeStreak(transactions, restoredDays, todayStr, savingsByMon
     }
   }
 
+  // Current month's day-by-day picture (drives the tracker's daily views, so
+  // the tracker judges each day exactly like the streak does).
+  const monthDays = days
+    .filter((d) => monthKeyOfYmd(d.ymd) === currentMonthKey)
+    .map((d) => ({ date: d.ymd, spent: d.spent, budget: d.budget, status: d.status }));
+
   return {
     hasData: true,
     hasIncome: (incomeByMonth.get(currentMonthKey) || 0) > 0,
@@ -180,6 +187,7 @@ export function computeStreak(transactions, restoredDays, todayStr, savingsByMon
     savesLeftThisMonth: savesLeftInMonth(currentMonthKey),
     restore,
     last7,
+    monthDays,
   };
 }
 

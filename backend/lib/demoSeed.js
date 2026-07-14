@@ -48,7 +48,9 @@ function genMonth(userId, year, month, lastDay, rand) {
       category,
       description,
       amount: money(amount),
-      date: new Date(year, month, day),
+      // UTC midnight, matching how real transactions store "YYYY-MM-DD" dates
+      // (the streak keys days by UTC, so local-midnight dates shift a day).
+      date: new Date(Date.UTC(year, month, day)),
       month,
       year,
     });

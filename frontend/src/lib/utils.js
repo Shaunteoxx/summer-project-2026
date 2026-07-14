@@ -20,6 +20,14 @@ export function daysLeftInMonth(now = new Date()) {
   return total - now.getDate() + 1;
 }
 
+/** Client's local calendar date as YYYY-MM-DD (avoids server-timezone drift). */
+export function localToday() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10);
+}
+
 export function formatMoney(value, currency = "$") {
   const n = Number(value) || 0;
   return `${n < 0 ? "-" : ""}${currency}${Math.abs(n).toLocaleString(undefined, {
