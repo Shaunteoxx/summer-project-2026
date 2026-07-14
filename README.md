@@ -17,8 +17,8 @@ Built with **React + Vite**, **Node + Express**, and **MongoDB**, with Google OA
   - **Categories** — fixed set (Food & Drinks, Transport, Shopping, Entertainment, Travel · Allowance, Job, Gifts) plus **user-created custom categories** with their own colour
   - **Search** by description or category, **filter** by All / Expenses / Income
   - Optimistic delete with a **10-second undo**
-- **Calculator** — daily spend budget & savings-goal calculators with animated results
-- **Monthly Tracker** — donut of saved vs spent, a **day-by-day spending bar chart** (today highlighted, over-budget days flagged, your daily budget marked), **plus a colour-coded "spending by category" donut**
+- **Calculator** — four **live planners** driven by your real month data (so every number matches the homepage): a **dynamic daily budget** that updates the moment you log an expense, a **what-if purchase** planner, **pace & forecast** projections, and **goal ↔ daily-cap** conversion
+- **Monthly Tracker** — donut of saved vs spent, a **savings-goal card** (progress, on-track status, edit in place), and a **day-by-day spending calendar** (tap any day for its transactions; toggleable bar-chart view with each day's budget drawn as a stepped line), **plus a colour-coded "spending by category" donut**. Every day is judged against the same rolling daily budget the homepage shows
 - **Stats** — months tracked + average savings rate, and a grouped bar chart across every month
 - **Friends** — search users, send/accept/decline requests, savings-rate leaderboard
 - **Profile** — editable display name, pick a cute **animal avatar** (Twemoji), and delete account
@@ -171,9 +171,11 @@ All routes except the OAuth start/callback require a `Bearer <JWT>` header.
 |--------|----------|-------------|
 | GET | `/api/auth/google` | Start Google OAuth |
 | GET | `/api/auth/google/callback` | OAuth callback → redirects with JWT |
+| POST | `/api/auth/demo` | Log in to the shared read-only demo account |
 | GET | `/api/auth/me` | Current user |
 | GET | `/api/auth/home` | Homepage stats |
 | PATCH | `/api/auth/profile` | Update display name / avatar |
+| PUT | `/api/auth/savings` | Set a month's savings target |
 | DELETE | `/api/auth/me` | Delete account (and all its data) |
 | POST | `/api/auth/categories` | Add a custom category |
 | DELETE | `/api/auth/categories/:id` | Delete a custom category |
@@ -182,6 +184,8 @@ All routes except the OAuth start/callback require a `Bearer <JWT>` header.
 | DELETE | `/api/transactions/:id` | Delete a transaction |
 | GET | `/api/summary` | Current month summary |
 | GET | `/api/summary/all` | All monthly summaries |
+| GET | `/api/streak` | Streak, today's budget, and the month's per-day budgets |
+| POST | `/api/streak/restore` | Spend a monthly save to repair the streak |
 | GET | `/api/friends` | Friends list |
 | GET | `/api/friends/search?q=` | Search users by username |
 | GET | `/api/friends/requests` | Incoming friend requests |
@@ -198,4 +202,5 @@ All routes except the OAuth start/callback require a `Bearer <JWT>` header.
 - Category colours use a **muted palette** so charts stay cohesive rather than clashing; each category pairs a colour with an icon so meaning never relies on colour alone.
 - Animation defaults: `easeOut` easing, durations between 0.4s–0.8s; all motion respects `prefers-reduced-motion`.
 - Monthly summaries are auto-recomputed whenever transactions are added or removed.
+- **One budget model everywhere:** the rolling daily budget — (income − savings target − spent on earlier days) ÷ days left — is computed once in the streak controller and reused by the homepage, tracker, and calculator, so every surface agrees.
 - Animal avatars are [Twemoji](https://github.com/jdecked/twemoji) (© Twitter, **CC-BY 4.0**).
