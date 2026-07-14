@@ -10,16 +10,8 @@ import BottomSheet from "@/components/BottomSheet";
 import { fetchStreak, restoreStreak } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { formatMoney, daysLeftInMonth } from "@/lib/utils";
+import { formatMoney, daysLeftInMonth, localToday } from "@/lib/utils";
 import { fadeUp } from "@/animations/variants";
-
-/** Client's local calendar date as YYYY-MM-DD (avoids server-timezone drift). */
-function localToday() {
-  const d = new Date();
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 10);
-}
 
 const DOW = ["S", "M", "T", "W", "T", "F", "S"];
 const dowOf = (ymd) => DOW[new Date(`${ymd}T00:00:00Z`).getUTCDay()];
@@ -169,12 +161,15 @@ export default function StreakCard() {
             </div>
             {/* How the daily budget is worked out (keeps the number transparent). */}
             <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-              {formatMoney(today.budget)}/day
-              {monthlySavings > 0
-                ? `, after setting aside ${formatMoney(monthlySavings)} to save`
-                : ""}
-              . Recalculated daily from what's left.
+              {formatMoney(today.budget)}/day, after setting aside{" "}
+              {formatMoney(monthlySavings)}. Not including today's spending.
             </p>
+            <button
+              onClick={() => navigate("/calculator")}
+              className="mt-1 text-[11px] font-medium text-primary underline-offset-2 hover:underline"
+            >
+              Plan with today's budget →
+            </button>
           </div>
 
           {/* Last 7 days */}
