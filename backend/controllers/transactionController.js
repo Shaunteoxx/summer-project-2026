@@ -32,6 +32,9 @@ export async function createTransaction(req, res) {
   }
 
   const desc = String(description).trim();
+  if (!desc) {
+    return res.status(400).json({ message: "Description is required" });
+  }
   if (desc.length > 120) {
     return res
       .status(400)
@@ -39,13 +42,16 @@ export async function createTransaction(req, res) {
   }
 
   const cat = String(category).trim();
+  if (!cat) {
+    return res.status(400).json({ message: "Category is required" });
+  }
   if (cat.length > 40) {
     return res.status(400).json({ message: "Category too long" });
   }
 
   const value = Number(amount);
-  if (!Number.isFinite(value) || value < 0) {
-    return res.status(400).json({ message: "Amount must be a positive number" });
+  if (!Number.isFinite(value) || value <= 0) {
+    return res.status(400).json({ message: "Amount must be greater than zero" });
   }
   if (value > 1e9) {
     return res.status(400).json({ message: "Amount is too large" });

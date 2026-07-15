@@ -54,7 +54,6 @@ function DayTick({ x, y, payload, today, axis, primary }) {
 export default function DailySpendingCard({
   transactions = [],
   income = 0,
-  monthlySavings = 0,
   monthDays = [],
   todayBudget = 0,
 }) {
@@ -114,8 +113,6 @@ export default function DailySpendingCard({
   }
   const avgPerDay = todayDate > 0 ? totalSpent / todayDate : 0;
   const hasSpending = totalSpent > 0;
-  const evenPace =
-    income > 0 ? Math.max(0, income - monthlySavings) / daysInMonth : 0;
   const anyOver = days.some((d) => d.over);
 
   const switchView = (v) => {
@@ -172,6 +169,12 @@ export default function DailySpendingCard({
               </p>
             )}
           </div>
+
+          <p className="mt-2 text-xs text-muted-foreground">
+            {view === "chart"
+              ? "Tap above a bar for a summary, or tap the bar for that day's transactions."
+              : "Tap a day to see its transactions."}
+          </p>
 
           {hasSpending ? (
             <>
@@ -312,9 +315,8 @@ export default function DailySpendingCard({
               </div>
               {budgetsAvailable && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Your budget adapts each day: what's left of income after
-                  savings ÷ days remaining. Even pace would be{" "}
-                  {formatMoney(evenPace)}/day.
+                  Your budget adapts daily: remaining income after savings ÷
+                  days left.
                 </p>
               )}
             </>

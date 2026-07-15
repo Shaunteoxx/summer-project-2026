@@ -163,6 +163,7 @@ export default function TrackerPage() {
                         </Pie>
                         <Tooltip
                           formatter={(v) => formatMoney(v)}
+                          wrapperStyle={{ zIndex: 10 }}
                           contentStyle={{
                             borderRadius: 12,
                             border: `1px solid ${colors.tooltipBorder}`,
@@ -226,7 +227,6 @@ export default function TrackerPage() {
           <DailySpendingCard
             transactions={transactions}
             income={income}
-            monthlySavings={monthlySavings}
             monthDays={streak?.monthDays ?? []}
             todayBudget={streak?.today?.budget ?? 0}
           />
@@ -261,6 +261,7 @@ export default function TrackerPage() {
                           </Pie>
                           <Tooltip
                             formatter={(v) => formatMoney(v)}
+                            wrapperStyle={{ zIndex: 10 }}
                             contentStyle={{
                               borderRadius: 12,
                               border: `1px solid ${colors.tooltipBorder}`,

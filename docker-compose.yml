@@ -27,9 +27,6 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
-    volumes:
-      - ./backend:/app
-      - backend_modules:/app/node_modules
 
   # ── Vite frontend ────────────────────────────────────────
   frontend:
@@ -47,5 +44,4 @@ services:
 
 volumes:
   mongo_data:
-  backend_modules:
   frontend_modules:

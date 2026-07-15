@@ -15,6 +15,7 @@ import {
   addTransaction,
   removeTransaction,
 } from "@/api/endpoints";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { monthName, formatMoney } from "@/lib/utils";
@@ -40,11 +41,13 @@ const FILTERS = [
 export default function TransactionsPage() {
   const toast = useToast();
   const guard = useDemoGuard();
+  const { user } = useAuth();
   const { categoriesByType, getCategory, addCategory, removeCategory, custom } =
     useCategories();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
+  const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   // Which kind of entry the sheet is adding: "income" | "expense" | null (closed).
   const [formType, setFormType] = useState(null);
@@ -91,7 +94,11 @@ export default function TransactionsPage() {
     },
     { income: 0, expenses: 0 }
   );
-  const balance = totals.income - totals.expenses;
+  const monthlySavings = Math.max(
+    0,
+    Number(user?.savingsByMonth?.[`${now.getFullYear()}-${now.getMonth()}`]) || 0
+  );
+  const balance = totals.income - totals.expenses - monthlySavings;
 
   // Filter by type (pills) and a free-text query matching description or category.
   const q = query.trim().toLowerCase();
@@ -114,6 +121,7 @@ export default function TransactionsPage() {
 
   const openForm = (type) => {
     setForm(emptyForm());
+    setFormError("");
     resetNewCategory();
     setFormType(type);
   };
@@ -121,7 +129,13 @@ export default function TransactionsPage() {
   const closeForm = () => {
     setFormType(null);
     setForm(emptyForm());
+    setFormError("");
     resetNewCategory();
+  };
+
+  const updateForm = (changes) => {
+    setForm((current) => ({ ...current, ...changes }));
+    setFormError("");
   };
 
   const handleAddCategory = async () => {
@@ -158,14 +172,37 @@ export default function TransactionsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.description || !form.amount || !form.category) return;
+
+    const description = form.description.trim();
+    const amount = Number(form.amount);
+    if (!description) {
+      setFormError("Enter a description.");
+      return;
+    }
+    if (!form.category) {
+      setFormError("Choose a category.");
+      return;
+    }
+    if (form.amount === "" || !Number.isFinite(amount) || amount <= 0) {
+      setFormError("Enter an amount greater than $0.");
+      return;
+    }
+    if (amount > 1e9) {
+      setFormError("Amount must be $1,000,000,000 or less.");
+      return;
+    }
+    if (!form.date || Number.isNaN(new Date(`${form.date}T00:00:00`).getTime())) {
+      setFormError("Choose a valid date.");
+      return;
+    }
     if (guard()) return;
+
     const type = formType;
+    setFormError("");
     setSubmitting(true);
     try {
-      const amount = Number(form.amount);
       const created = await addTransaction({
-        description: form.description,
+        description,
         amount,
         type,
         category: form.category,
@@ -181,8 +218,9 @@ export default function TransactionsPage() {
       closeForm();
       const sign = type === "income" ? "+" : "−";
       toast.success(`Added ${sign}${formatMoney(amount)} · ${form.category}`);
-    } catch {
-      toast.error("Couldn't add transaction. Please try again.");
+    } catch (err) {
+      const message = err?.response?.data?.message;
+      setFormError(message || "Couldn't add transaction. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -258,7 +296,7 @@ export default function TransactionsPage() {
                 <p className="mt-1 text-3xl font-extrabold tracking-tight">
                   <AnimatedNumber value={balance} prefix="$" decimals={2} />
                 </p>
-                <div className="mt-3 flex gap-5 text-sm">
+                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
                   <span className="text-success">
                     +<AnimatedNumber value={totals.income} prefix="$" decimals={2} />
                     <span className="ml-1 text-muted-foreground">in</span>
@@ -266,6 +304,10 @@ export default function TransactionsPage() {
                   <span className="text-destructive">
                     −<AnimatedNumber value={totals.expenses} prefix="$" decimals={2} />
                     <span className="ml-1 text-muted-foreground">out</span>
+                  </span>
+                  <span className="text-primary">
+                    −<AnimatedNumber value={monthlySavings} prefix="$" decimals={2} />
+                    <span className="ml-1 text-muted-foreground">saved</span>
                   </span>
                 </div>
               </>
@@ -307,7 +349,7 @@ export default function TransactionsPage() {
                   <button
                     type="button"
                     key={c.name}
-                    onClick={() => setForm({ ...form, category: c.name })}
+                    onClick={() => updateForm({ category: c.name })}
                     aria-pressed={selected}
                     className={`relative flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border p-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
                       selected ? "border-transparent" : "border-border hover:bg-accent/50"
@@ -439,7 +481,10 @@ export default function TransactionsPage() {
               id="description"
               placeholder={formType === "income" ? "e.g. Monthly allowance" : "e.g. Lunch"}
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              required
+              maxLength={120}
+              aria-invalid={Boolean(formError) && !form.description.trim()}
+              onChange={(e) => updateForm({ description: e.target.value })}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -449,11 +494,17 @@ export default function TransactionsPage() {
                 id="amount"
                 type="number"
                 inputMode="decimal"
-                min="0"
+                min="0.01"
+                max="1000000000"
                 step="0.01"
                 placeholder="0.00"
                 value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                required
+                aria-invalid={
+                  Boolean(formError) &&
+                  (form.amount === "" || Number(form.amount) <= 0)
+                }
+                onChange={(e) => updateForm({ amount: e.target.value })}
               />
             </div>
             <div className="space-y-2">
@@ -462,15 +513,27 @@ export default function TransactionsPage() {
                 id="date"
                 type="date"
                 value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
+                required
+                aria-invalid={Boolean(formError) && !form.date}
+                onChange={(e) => updateForm({ date: e.target.value })}
               />
             </div>
           </div>
+          {formError && (
+            <p
+              id="transaction-form-error"
+              role="alert"
+              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+            >
+              {formError}
+            </p>
+          )}
           <Button
             type="submit"
             variant={formType === "income" ? "success" : "destructive"}
             className="w-full"
-            disabled={submitting || !form.category}
+            aria-describedby={formError ? "transaction-form-error" : undefined}
+            disabled={submitting}
           >
             {submitting
               ? "Adding…"
