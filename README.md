@@ -201,6 +201,38 @@ All routes except the OAuth start/callback require a `Bearer <JWT>` header.
 - **Dark-first**, emerald-accent theme (money/savings feel) with a system-aware light mode, defined as HSL CSS variables in `frontend/src/index.css`.
 - Category colours use a **muted palette** so charts stay cohesive rather than clashing; each category pairs a colour with an icon so meaning never relies on colour alone.
 - Animation defaults: `easeOut` easing, durations between 0.4s–0.8s; all motion respects `prefers-reduced-motion`.
-- Monthly summaries are auto-recomputed whenever transactions are added or removed.
+- Monthly and lifetime summaries are calculated from canonical transactions at read time, avoiding stale duplicate financial state.
 - **One budget model everywhere:** the rolling daily budget — (income − savings target − spent on earlier days) ÷ days left — is computed once in the streak controller and reused by the homepage, tracker, and calculator, so every surface agrees.
 - Animal avatars are [Twemoji](https://github.com/jdecked/twemoji) (© Twitter, **CC-BY 4.0**).
+
+## Production deployment
+
+`docker-compose.yml` is for local development only. Public deployments should run the
+backend behind HTTPS (for example, Cloud Run), use a managed MongoDB deployment, and
+serve the frontend through Vercel or another static host.
+
+Required backend environment variables in production:
+
+- `NODE_ENV=production`
+- `MONGO_URI` using a least-privilege database user
+- `JWT_SECRET` with at least 32 random characters
+- `CLIENT_URL` and `SERVER_URL` as HTTPS origins without trailing paths
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and the matching HTTPS callback URL
+
+Configure `VITE_API_URL` independently in each Vercel Production/Preview environment.
+`CLIENT_URL` must exactly match the deployed frontend origin, and Google Cloud must list the exact callback
+URL. The server refuses to start when production configuration is incomplete.
+
+Before a public release:
+
+1. Rotate any credential that has ever been copied into chat, logs, or source control.
+2. Restrict MongoDB network access, enable backups/PITR, and verify restore procedures.
+3. Configure `/healthz` as the liveness probe and `/readyz` as the readiness probe.
+4. Configure centralized logs/alerts and an external/shared rate-limit layer.
+5. Run `npm ci && npm run build` in `frontend`, build the backend image, and perform an
+   authenticated smoke test against isolated non-production data.
+6. Verify Google OAuth, direct SPA route loads, account deletion, and mobile keyboard/
+   screen-reader navigation on the deployed origins.
+
+The repository supplies frontend security headers in `frontend/vercel.json`. If the API
+moves away from `*.run.app`, update the CSP `connect-src` directive before deployment.

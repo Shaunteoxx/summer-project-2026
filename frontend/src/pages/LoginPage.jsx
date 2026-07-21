@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Wallet, Eye, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,7 +14,15 @@ export default function LoginPage() {
   const { user, loading, refresh } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [demoLoading, setDemoLoading] = useState(false);
+
+  useEffect(() => {
+    if (params.get("error") === "oauth") {
+      toast.error("Google sign-in could not be completed. Please try again.");
+      navigate("/login", { replace: true });
+    }
+  }, [navigate, params, toast]);
 
   useEffect(() => {
     if (!loading && user) navigate("/", { replace: true });

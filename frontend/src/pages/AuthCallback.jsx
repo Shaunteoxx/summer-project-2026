@@ -15,9 +15,12 @@ export default function AuthCallback() {
     // to the query string for any older redirect still in flight.
     const hashParams = new URLSearchParams(window.location.hash.slice(1));
     const token = hashParams.get("token") || params.get("token");
+    window.history.replaceState(null, "", window.location.pathname);
     if (token) {
       setToken(token);
-      refresh().then(() => navigate("/", { replace: true }));
+      refresh()
+        .then(() => navigate("/", { replace: true }))
+        .catch(() => navigate("/login", { replace: true }));
     } else {
       navigate("/login", { replace: true });
     }

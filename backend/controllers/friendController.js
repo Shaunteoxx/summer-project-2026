@@ -1,5 +1,6 @@
 import User from "../models/User.js";
-import MonthlySummary from "../models/MonthlySummary.js";
+import Transaction from "../models/Transaction.js";
+import { resolveClientToday, roundMoney } from "../lib/validation.js";
 
 // Escape regex metacharacters so user input can't inject a pattern
 // (prevents ReDoS / catastrophic backtracking on the username search).
@@ -14,15 +15,18 @@ export async function searchUsers(req, res) {
   const users = await User.find({
     username: { $regex: escapeRegex(q), $options: "i" },
     _id: { $ne: me._id },
+    isDemo: { $ne: true },
   })
-    .select("username profilePicture avatar")
+    .select("username profilePicture avatar friends friendRequests")
     .limit(10);
 
   const result = users.map((u) => {
     let status = "none";
     if (me.friends.some((f) => f.equals(u._id))) status = "friends";
     else if (me.friendRequests.some((r) => r.equals(u._id)))
-      status = "incoming"; // they already requested me
+      status = "incoming";
+    else if (u.friendRequests.some((r) => r.equals(me._id)))
+      status = "pending";
     return {
       id: u._id,
       username: u.username,
@@ -42,18 +46,21 @@ export async function sendRequest(req, res) {
     return res.status(400).json({ message: "You cannot friend yourself" });
   }
 
-  const target = await User.findById(targetId);
-  if (!target) return res.status(404).json({ message: "User not found" });
-
-  if (target.friends.some((f) => f.equals(req.user._id))) {
-    return res.status(400).json({ message: "Already friends" });
+  const target = await User.findOneAndUpdate(
+    {
+      _id: targetId,
+      isDemo: { $ne: true },
+      friends: { $ne: req.user._id },
+      friendRequests: { $ne: req.user._id },
+    },
+    { $addToSet: { friendRequests: req.user._id } },
+    { new: true }
+  );
+  if (!target) {
+    return res.status(400).json({
+      message: "User not found, already friends, or request already sent",
+    });
   }
-  if (target.friendRequests.some((r) => r.equals(req.user._id))) {
-    return res.status(400).json({ message: "Request already sent" });
-  }
-
-  target.friendRequests.push(req.user._id);
-  await target.save();
 
   res.json({ message: "Friend request sent" });
 }
@@ -125,9 +132,10 @@ export async function getFriends(req, res) {
 
 /** GET /api/friends/comparison -> savings% leaderboard (me + friends) for current month. */
 export async function getComparison(req, res) {
-  const now = new Date();
-  const month = now.getMonth();
-  const year = now.getFullYear();
+  const today = resolveClientToday(req.query.today);
+  if (!today) return res.status(400).json({ message: "Invalid today date" });
+  const month = today.getUTCMonth();
+  const year = today.getUTCFullYear();
 
   const me = await User.findById(req.user._id).populate(
     "friends",
@@ -145,20 +153,33 @@ export async function getComparison(req, res) {
     })),
   ];
 
-  // One query for everyone's summary instead of one per person.
-  const summaries = await MonthlySummary.find({
-    userId: { $in: people.map((p) => p.id) },
-    month,
-    year,
-  }).select("userId percentageSaved totalSaved");
-  const byUser = new Map(summaries.map((s) => [String(s.userId), s]));
+  // Aggregate canonical transactions in one query for the whole leaderboard.
+  const summaries = await Transaction.aggregate([
+    {
+      $match: {
+        userId: { $in: people.map((p) => p.id) },
+        month,
+        year,
+      },
+    },
+    {
+      $group: {
+        _id: "$userId",
+        income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
+        expenses: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
+      },
+    },
+  ]);
+  const byUser = new Map(summaries.map((summary) => [String(summary._id), summary]));
 
   const board = people.map((p) => {
     const summary = byUser.get(String(p.id));
+    const income = summary?.income || 0;
+    const totalSaved = roundMoney(income - (summary?.expenses || 0));
     return {
       ...p,
-      percentageSaved: summary?.percentageSaved ?? 0,
-      totalSaved: summary?.totalSaved ?? 0,
+      percentageSaved: income > 0 ? Math.round((totalSaved / income) * 100) : 0,
+      totalSaved,
     };
   });
 

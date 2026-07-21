@@ -9,6 +9,7 @@ import {
   TrendingUp,
   ArrowRight,
   CalendarDays,
+  BarChart3,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -18,7 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchHomeStats } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
-import { monthName, daysLeftInMonth } from "@/lib/utils";
+import { monthName, daysLeftInMonth, localToday } from "@/lib/utils";
 import { staggerContainer, fadeUp, fadeScaleItem } from "@/animations/variants";
 
 const quickActions = [
@@ -29,16 +30,22 @@ const quickActions = [
     icon: Receipt,
   },
   {
+    to: "/tracker",
+    label: "This month",
+    desc: "Saved vs spent",
+    icon: PieChart,
+  },
+  {
     to: "/calculator",
     label: "Daily budget",
     desc: "What can I spend today?",
     icon: Calculator,
   },
   {
-    to: "/tracker",
-    label: "This month",
-    desc: "Saved vs spent",
-    icon: PieChart,
+    to: "/stats",
+    label: "See all months",
+    desc: "Savings vs spending history",
+    icon: BarChart3,
   },
 ];
 
@@ -49,7 +56,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchHomeStats()
+    fetchHomeStats(localToday())
       .then(setStats)
       .catch(() => {
         setStats(null);

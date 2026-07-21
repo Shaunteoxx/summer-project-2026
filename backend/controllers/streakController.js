@@ -1,7 +1,8 @@
 import Transaction from "../models/Transaction.js";
+import { parseYmd, resolveClientToday } from "../lib/validation.js";
 
 const SAVES_PER_MONTH = 3;
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_STREAK_DAYS = 3660;
 
 // --- Date helpers (everything in UTC, dates are stored at UTC midnight) ---
 const ymd = (date) => date.toISOString().slice(0, 10);
@@ -26,8 +27,8 @@ const daysInMonth = (year, month) => new Date(Date.UTC(year, month + 1, 0)).getU
  */
 export function computeStreak(transactions, restoredDays, todayStr, savingsByMonth = {}) {
   const savingsFor = (mk) => Math.max(0, Number(savingsByMonth?.[mk]) || 0);
-  const restored = new Set(restoredDays || []);
-  const today = DATE_RE.test(todayStr || "") ? dayFromYmd(todayStr) : startOfUtcToday();
+  const restored = new Set((restoredDays || []).filter((date) => parseYmd(date)));
+  const today = resolveClientToday(todayStr) || startOfUtcToday();
   const todayKey = ymd(today);
 
   const savesUsedInMonth = (monthKey) =>
@@ -65,8 +66,14 @@ export function computeStreak(transactions, restoredDays, todayStr, savingsByMon
     }
   }
 
-  // Walk every calendar day from the first transaction to today.
-  const firstDay = dayFromYmd(ymd(new Date(transactions[0].date)));
+  // Bound work to ten years even if legacy data contains extremely old dates.
+  const rawFirstDay = dayFromYmd(ymd(new Date(transactions[0].date)));
+  const historyFloor = addDays(today, -(MAX_STREAK_DAYS - 1));
+  const firstDay = rawFirstDay > today
+    ? today
+    : rawFirstDay < historyFloor
+      ? historyFloor
+      : rawFirstDay;
   const days = []; // { ymd, spent, budget, status }
   let cursor = firstDay;
   let curMonthKey = null;
@@ -198,13 +205,16 @@ function startOfUtcToday() {
 
 /** GET /api/streak?today=YYYY-MM-DD */
 export async function getStreak(req, res) {
+  const today = resolveClientToday(req.query.today);
+  if (!today) return res.status(400).json({ message: "Invalid today date" });
+
   const transactions = await Transaction.find({ userId: req.user._id }).sort({
     date: 1,
   });
   const result = computeStreak(
     transactions,
     req.user.restoredDays,
-    req.query.today,
+    ymd(today),
     Object.fromEntries(req.user.savingsByMonth || [])
   );
   res.json(result);
@@ -212,18 +222,21 @@ export async function getStreak(req, res) {
 
 /** POST /api/streak/restore { date } -> spend a save to repair the breaking day. */
 export async function restoreStreak(req, res) {
-  const { date, today } = req.body;
-  if (!DATE_RE.test(date || "")) {
+  const { date, today: requestedToday } = req.body;
+  const restoreDate = parseYmd(date);
+  const today = resolveClientToday(requestedToday);
+  if (!restoreDate || !today || restoreDate > today) {
     return res.status(400).json({ message: "Invalid date" });
   }
 
   const transactions = await Transaction.find({ userId: req.user._id }).sort({
     date: 1,
   });
+  const todayKey = ymd(today);
   const result = computeStreak(
     transactions,
     req.user.restoredDays,
-    today,
+    todayKey,
     Object.fromEntries(req.user.savingsByMonth || [])
   );
 
@@ -242,7 +255,7 @@ export async function restoreStreak(req, res) {
   const updated = computeStreak(
     transactions,
     req.user.restoredDays,
-    today,
+    todayKey,
     Object.fromEntries(req.user.savingsByMonth || [])
   );
   res.json(updated);

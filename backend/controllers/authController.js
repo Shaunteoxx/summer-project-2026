@@ -1,3 +1,10 @@
+import { env } from "../config/env.js";
+import {
+  MIN_YEAR,
+  MAX_YEAR,
+  resolveClientToday,
+  roundMoney,
+} from "../lib/validation.js";
 import { signToken } from "../middleware/auth.js";
 import { getLifetimeSavings } from "./summaryController.js";
 import { ensureDemoUser } from "../lib/demoSeed.js";
@@ -18,14 +25,11 @@ const ALLOWED_AVATARS = [
   "snowman",
 ];
 
-const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
-
 /** Passport success handler -> issue JWT and bounce back to the client. */
 export function googleCallback(req, res) {
   const token = signToken(req.user);
-  // Hash fragment (not query string) so the token never appears in server
-  // access logs, proxies, or browser history syncing.
-  res.redirect(`${CLIENT_URL}/auth/callback#token=${token}`);
+  // Hash fragment keeps the bearer token out of access logs and referrers.
+  res.redirect(`${env.clientUrl}/auth/callback#token=${token}`);
 }
 
 /** POST /api/auth/demo -> log in as the shared read-only demo account. */
@@ -141,7 +145,10 @@ export async function updateProfile(req, res) {
     }
     const existing = await User.findOne({
       _id: { $ne: user._id },
-      username: { $regex: `^${name}$`, $options: "i" },
+      $or: [
+        { usernameKey: name.toLowerCase() },
+        { username: { $regex: `^${name}$`, $options: "i" } },
+      ],
     });
     if (existing) {
       return res.status(409).json({ message: "That username is taken" });
@@ -170,10 +177,15 @@ export async function setSavings(req, res) {
   if (!SAVINGS_KEY_RE.test(key || "")) {
     return res.status(400).json({ message: "Invalid month" });
   }
-  const value = Number(amount);
-  if (!Number.isFinite(value) || value < 0) {
+  const [year] = key.split("-").map(Number);
+  if (year < MIN_YEAR || year > MAX_YEAR) {
+    return res.status(400).json({ message: "Invalid month" });
+  }
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount < 0 || numericAmount > 1e9) {
     return res.status(400).json({ message: "Invalid savings amount" });
   }
+  const value = roundMoney(numericAmount);
 
   if (value === 0) user.savingsByMonth.delete(key);
   else user.savingsByMonth.set(key, value);
@@ -204,13 +216,13 @@ export async function deleteAccount(req, res) {
 
 /** GET /api/auth/home -> aggregated homepage stats for the current month. */
 export async function getHomeStats(req, res) {
-  const now = new Date();
-  const month = now.getMonth();
-  const year = now.getFullYear();
+  const today = resolveClientToday(req.query.today);
+  if (!today) return res.status(400).json({ message: "Invalid today date" });
+  const month = today.getUTCMonth();
+  const year = today.getUTCFullYear();
 
-  const [monthTransactions, summary, totalSavings] = await Promise.all([
+  const [monthTransactions, totalSavings] = await Promise.all([
     Transaction.find({ userId: req.user._id, month, year }),
-    MonthlySummary.findOne({ userId: req.user._id, month, year }),
     getLifetimeSavings(req.user._id),
   ]);
 
@@ -221,17 +233,19 @@ export async function getHomeStats(req, res) {
     else expenses += t.amount;
   }
 
+  income = roundMoney(income);
+  expenses = roundMoney(expenses);
+
   // Reserve this month's savings target before working out what's left to spend,
   // so the headline matches the daily-budget model (savingsByMonth keys are
   // "YYYY-M" with a 0-based month).
-  const monthSavings = Math.max(
-    0,
-    Number(req.user.savingsByMonth?.get(`${year}-${month}`)) || 0
+  const monthSavings = roundMoney(
+    Math.max(0, Number(req.user.savingsByMonth?.get(`${year}-${month}`)) || 0)
   );
 
   // "Left to spend" = income this month minus expenses so far minus the savings
   // set aside for the month. Can go negative if you've overspent your target.
-  const leftToSpend = income - expenses - monthSavings;
+  const leftToSpend = roundMoney(income - expenses - monthSavings);
 
   res.json({
     username: req.user.username,
@@ -242,6 +256,7 @@ export async function getHomeStats(req, res) {
     monthSavings,
     leftToSpend,
     totalSavings,
-    percentageSaved: summary?.percentageSaved ?? 0,
+    percentageSaved:
+      income > 0 ? Math.round(((income - expenses) / income) * 100) : 0,
   });
 }

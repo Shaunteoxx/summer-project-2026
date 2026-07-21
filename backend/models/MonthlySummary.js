@@ -8,8 +8,8 @@ const monthlySummarySchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    month: { type: Number, required: true }, // 0-11 (JS month)
-    year: { type: Number, required: true },
+    month: { type: Number, required: true, min: 0, max: 11 },
+    year: { type: Number, required: true, min: 2000, max: 2100 },
     totalIncome: { type: Number, default: 0 },
     totalExpenses: { type: Number, default: 0 },
     totalSaved: { type: Number, default: 0 },

@@ -45,6 +45,13 @@ export const fadeScaleItem = {
   },
 };
 
+// Horizontal shake to flag an invalid field on submit. Trigger imperatively
+// with useAnimationControls().start(SHAKE) so it can replay on each attempt.
+export const SHAKE = {
+  x: [0, -8, 8, -6, 6, -3, 3, 0],
+  transition: { duration: 0.45, ease: "easeInOut" },
+};
+
 // Generic fade-up for stat cards / sections
 export const fadeUp = {
   initial: { opacity: 0, y: 20 },

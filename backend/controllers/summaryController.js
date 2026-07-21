@@ -1,70 +1,64 @@
 import Transaction from "../models/Transaction.js";
-import MonthlySummary from "../models/MonthlySummary.js";
+import { parseMonthYear, roundMoney } from "../lib/validation.js";
 
-/**
- * Recompute (and upsert) the MonthlySummary for a given user/month/year
- * from the underlying transactions. Called whenever transactions change.
- */
-export async function recomputeSummary(userId, month, year) {
-  const transactions = await Transaction.find({ userId, month, year });
+function toSummary(row, userId, month, year) {
+  const totalIncome = roundMoney(row?.totalIncome || 0);
+  const totalExpenses = roundMoney(row?.totalExpenses || 0);
+  const totalSaved = roundMoney(totalIncome - totalExpenses);
+  return {
+    userId,
+    month: row?._id?.month ?? month,
+    year: row?._id?.year ?? year,
+    totalIncome,
+    totalExpenses,
+    totalSaved,
+    percentageSaved: totalIncome > 0 ? Math.round((totalSaved / totalIncome) * 100) : 0,
+    percentageSpent: totalIncome > 0 ? Math.round((totalExpenses / totalIncome) * 100) : 0,
+  };
+}
 
-  let totalIncome = 0;
-  let totalExpenses = 0;
-  for (const t of transactions) {
-    if (t.type === "income") totalIncome += t.amount;
-    else totalExpenses += t.amount;
-  }
-
-  const totalSaved = totalIncome - totalExpenses;
-  const percentageSaved =
-    totalIncome > 0 ? Math.round((totalSaved / totalIncome) * 100) : 0;
-  const percentageSpent =
-    totalIncome > 0 ? Math.round((totalExpenses / totalIncome) * 100) : 0;
-
-  const summary = await MonthlySummary.findOneAndUpdate(
-    { userId, month, year },
+export async function aggregateSummaries(userId, match = {}) {
+  return Transaction.aggregate([
+    { $match: { userId, ...match } },
     {
-      userId,
-      month,
-      year,
-      totalIncome,
-      totalExpenses,
-      totalSaved,
-      percentageSaved,
-      percentageSpent,
+      $group: {
+        _id: { year: "$year", month: "$month" },
+        totalIncome: {
+          $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] },
+        },
+        totalExpenses: {
+          $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] },
+        },
+      },
     },
-    { new: true, upsert: true, setDefaultsOnInsert: true }
-  );
-
-  return summary;
-}
-
-/** GET /api/summary?month=&year=  -> single month (defaults to current month) */
-export async function getMonthlySummary(req, res) {
-  const now = new Date();
-  const month =
-    req.query.month !== undefined ? Number(req.query.month) : now.getMonth();
-  const year =
-    req.query.year !== undefined ? Number(req.query.year) : now.getFullYear();
-
-  const summary = await recomputeSummary(req.user._id, month, year);
-  res.json(summary);
-}
-
-/** GET /api/summary/all -> every month with data, oldest first */
-export async function getAllSummaries(req, res) {
-  const summaries = await MonthlySummary.find({ userId: req.user._id }).sort({
-    year: 1,
-    month: 1,
-  });
-  res.json(summaries);
-}
-
-/** Total accumulated savings since sign-up (sum of all monthly totalSaved). */
-export async function getLifetimeSavings(userId) {
-  const [result] = await MonthlySummary.aggregate([
-    { $match: { userId } },
-    { $group: { _id: null, total: { $sum: "$totalSaved" } } },
+    { $sort: { "_id.year": 1, "_id.month": 1 } },
   ]);
-  return result?.total ?? 0;
+}
+
+/** Compatibility helper used by demo seeding; summaries are now computed, not cached. */
+export async function recomputeSummary(userId, month, year) {
+  const [row] = await aggregateSummaries(userId, { month, year });
+  return toSummary(row, userId, month, year);
+}
+
+/** GET /api/summary?month=&year= */
+export async function getMonthlySummary(req, res) {
+  const period = parseMonthYear(req.query);
+  if (!period) return res.status(400).json({ message: "Invalid month or year" });
+  const { month, year } = period;
+  const [row] = await aggregateSummaries(req.user._id, { month, year });
+  res.json(toSummary(row, req.user._id, month, year));
+}
+
+/** GET /api/summary/all */
+export async function getAllSummaries(req, res) {
+  const rows = await aggregateSummaries(req.user._id);
+  res.json(rows.map((row) => toSummary(row, req.user._id)));
+}
+
+export async function getLifetimeSavings(userId) {
+  const rows = await aggregateSummaries(userId);
+  return roundMoney(
+    rows.reduce((total, row) => total + row.totalIncome - row.totalExpenses, 0)
+  );
 }

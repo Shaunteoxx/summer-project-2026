@@ -1,22 +1,23 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { env } from "../config/env.js";
 
-// Resolve the signing secret once at startup. In production a missing
-// JWT_SECRET is fatal — falling back to a known string would let anyone
-// forge tokens for any account. In dev we allow a clearly-marked fallback.
-const isProd = process.env.NODE_ENV === "production";
-const JWT_SECRET = process.env.JWT_SECRET || (isProd ? null : "dev_jwt_secret");
-if (!JWT_SECRET) {
-  throw new Error(
-    "JWT_SECRET is not set. Refusing to start in production without it."
-  );
-}
+const JWT_SIGN_OPTIONS = {
+  algorithm: "HS256",
+  issuer: "broke-no-more-api",
+  audience: "broke-no-more-web",
+};
+const JWT_VERIFY_OPTIONS = {
+  algorithms: ["HS256"],
+  issuer: JWT_SIGN_OPTIONS.issuer,
+  audience: JWT_SIGN_OPTIONS.audience,
+};
 
 export function signToken(user) {
   return jwt.sign(
     { id: user._id, username: user.username },
-    JWT_SECRET,
-    { expiresIn: "7d" }
+    env.jwtSecret,
+    { ...JWT_SIGN_OPTIONS, expiresIn: "2h" }
   );
 }
 
@@ -29,7 +30,7 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, env.jwtSecret, JWT_VERIFY_OPTIONS);
     const user = await User.findById(payload.id).select("-__v");
 
     if (!user) {
@@ -38,7 +39,7 @@ export async function requireAuth(req, res, next) {
 
     req.user = user;
     next();
-  } catch (err) {
+  } catch {
     return res.status(401).json({ message: "Invalid or expired token" });
   }
 }

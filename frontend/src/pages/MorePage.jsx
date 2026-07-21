@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, useAnimationControls } from "framer-motion";
 import {
   BarChart3,
   Users,
@@ -19,6 +19,7 @@ import {
 import PageWrapper from "@/components/PageWrapper";
 import Avatar from "@/components/Avatar";
 import BottomSheet from "@/components/BottomSheet";
+import FieldError from "@/components/FieldError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +30,7 @@ import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { AVATARS, avatarSrc } from "@/lib/avatars";
 import { formatMoney, monthName } from "@/lib/utils";
 import { updateProfile, deleteAccount, setMonthlySavings } from "@/api/endpoints";
-import { staggerContainer, fadeUp, fadeScaleItem } from "@/animations/variants";
+import { staggerContainer, fadeUp, fadeScaleItem, SHAKE } from "@/animations/variants";
 
 const shortcuts = [
   {
@@ -57,10 +58,14 @@ export default function MorePage() {
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("");
   const [saving, setSaving] = useState(false);
+  const [nameError, setNameError] = useState("");
+  const nameShake = useAnimationControls();
 
   const [savingsOpen, setSavingsOpen] = useState(false);
   const [savingsInput, setSavingsInput] = useState("");
   const [savingSavings, setSavingSavings] = useState(false);
+  const [savingsError, setSavingsError] = useState("");
+  const savingsShake = useAnimationControls();
   const now = new Date();
   const [savingsYear, setSavingsYear] = useState(now.getFullYear());
   const [savingsMonth, setSavingsMonth] = useState(now.getMonth());
@@ -76,12 +81,26 @@ export default function MorePage() {
     if (guard()) return;
     setName(user?.username ?? "");
     setAvatar(user?.avatar ?? "");
+    setNameError("");
     setEditOpen(true);
   };
 
   const handleSave = async () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    // Mirror the server's username rules so problems surface inline, not as a toast.
+    let error = "";
+    if (!trimmed) error = "Enter a display name.";
+    else if (trimmed.length < 3) error = "Use at least 3 characters.";
+    else if (trimmed.length > 20) error = "Keep it to 20 characters or fewer.";
+    else if (!/^[A-Za-z0-9_]+$/.test(trimmed))
+      error = "Only letters, numbers and underscores.";
+    if (error) {
+      setNameError(error);
+      nameShake.start(SHAKE);
+      return;
+    }
+
+    setNameError("");
     setSaving(true);
     try {
       await updateProfile({ username: trimmed, avatar });
@@ -89,7 +108,8 @@ export default function MorePage() {
       setEditOpen(false);
       toast.success("Profile updated");
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Couldn't update profile.");
+      setNameError(err?.response?.data?.message || "Couldn't update profile.");
+      nameShake.start(SHAKE);
     } finally {
       setSaving(false);
     }
@@ -98,6 +118,7 @@ export default function MorePage() {
   const loadSavingsInput = (y, m) => {
     const v = savingsByMonth[keyFor(y, m)];
     setSavingsInput(v ? String(v) : "");
+    setSavingsError("");
   };
 
   const openSavings = () => {
@@ -105,6 +126,7 @@ export default function MorePage() {
     setSavingsYear(now.getFullYear());
     setSavingsMonth(now.getMonth());
     loadSavingsInput(now.getFullYear(), now.getMonth());
+    setSavingsError("");
     setSavingsOpen(true);
   };
 
@@ -124,8 +146,18 @@ export default function MorePage() {
   };
 
   const handleSaveSavings = async () => {
-    const amount = Number(savingsInput) || 0;
-    if (amount < 0) return;
+    const raw = savingsInput.trim();
+    const amount = raw === "" ? 0 : Number(raw);
+    let error = "";
+    if (!Number.isFinite(amount) || amount < 0) error = "Enter $0 or more.";
+    else if (amount > 1e9) error = "Keep it under $1,000,000,000.";
+    if (error) {
+      setSavingsError(error);
+      savingsShake.start(SHAKE);
+      return;
+    }
+
+    setSavingsError("");
     setSavingSavings(true);
     try {
       await setMonthlySavings({ key: keyFor(savingsYear, savingsMonth), amount });
@@ -133,7 +165,8 @@ export default function MorePage() {
       setSavingsOpen(false);
       toast.success(`Savings set for ${monthName(savingsMonth)}`);
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Couldn't update savings.");
+      setSavingsError(err?.response?.data?.message || "Couldn't update savings.");
+      savingsShake.start(SHAKE);
     } finally {
       setSavingSavings(false);
     }
@@ -330,25 +363,40 @@ export default function MorePage() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="display-name">Display name</Label>
+          <motion.div animate={nameShake} className="space-y-2">
+            <Label
+              htmlFor="display-name"
+              className={nameError ? "text-destructive" : undefined}
+            >
+              Display name
+            </Label>
             <Input
               id="display-name"
               value={name}
               maxLength={20}
               placeholder="Your username"
-              onChange={(e) => setName(e.target.value)}
+              aria-invalid={Boolean(nameError)}
+              aria-describedby={nameError ? "display-name-error" : undefined}
+              className={
+                nameError
+                  ? "border-destructive focus-visible:ring-destructive"
+                  : undefined
+              }
+              onChange={(e) => {
+                setName(e.target.value);
+                setNameError("");
+              }}
             />
-            <p className="text-xs text-muted-foreground">
-              3–20 letters, numbers or underscores. Friends find you by this.
-            </p>
-          </div>
+            {nameError ? (
+              <FieldError id="display-name-error">{nameError}</FieldError>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                3–20 letters, numbers or underscores. Friends find you by this.
+              </p>
+            )}
+          </motion.div>
 
-          <Button
-            onClick={handleSave}
-            disabled={saving || !name.trim()}
-            className="w-full"
-          >
+          <Button onClick={handleSave} disabled={saving} className="w-full">
             {saving ? "Saving…" : "Save changes"}
           </Button>
         </div>
@@ -384,8 +432,11 @@ export default function MorePage() {
             </button>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="monthly-savings">
+          <motion.div animate={savingsShake} className="space-y-2">
+            <Label
+              htmlFor="monthly-savings"
+              className={savingsError ? "text-destructive" : undefined}
+            >
               Amount to set aside in {monthName(savingsMonth)}
             </Label>
             <Input
@@ -396,13 +447,27 @@ export default function MorePage() {
               step="0.01"
               placeholder="0.00"
               value={savingsInput}
-              onChange={(e) => setSavingsInput(e.target.value)}
+              aria-invalid={Boolean(savingsError)}
+              aria-describedby={savingsError ? "monthly-savings-error" : undefined}
+              className={
+                savingsError
+                  ? "border-destructive focus-visible:ring-destructive"
+                  : undefined
+              }
+              onChange={(e) => {
+                setSavingsInput(e.target.value);
+                setSavingsError("");
+              }}
             />
-            <p className="text-xs text-muted-foreground">
-              Reserved from this month's income first — your daily budget is
-              what's left, spread over the days remaining.
-            </p>
-          </div>
+            {savingsError ? (
+              <FieldError id="monthly-savings-error">{savingsError}</FieldError>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Reserved from this month's income first — your daily budget is
+                what's left, spread over the days remaining.
+              </p>
+            )}
+          </motion.div>
           <Button onClick={handleSaveSavings} disabled={savingSavings} className="w-full">
             {savingSavings ? "Saving…" : `Save for ${monthName(savingsMonth)}`}
           </Button>

@@ -3,7 +3,8 @@ import api from "./client";
 // --- Auth ---
 export const demoLogin = () => api.post("/auth/demo").then((r) => r.data);
 export const fetchMe = () => api.get("/auth/me").then((r) => r.data);
-export const fetchHomeStats = () => api.get("/auth/home").then((r) => r.data);
+export const fetchHomeStats = (today) =>
+  api.get("/auth/home", { params: { today } }).then((r) => r.data);
 
 // --- Custom categories ---
 export const addCustomCategory = (payload) =>
@@ -45,8 +46,8 @@ export const searchUsers = (q) =>
 export const fetchFriends = () => api.get("/friends").then((r) => r.data);
 export const fetchRequests = () =>
   api.get("/friends/requests").then((r) => r.data);
-export const fetchComparison = () =>
-  api.get("/friends/comparison").then((r) => r.data);
+export const fetchComparison = (today) =>
+  api.get("/friends/comparison", { params: { today } }).then((r) => r.data);
 export const sendFriendRequest = (id) =>
   api.post(`/friends/request/${id}`).then((r) => r.data);
 export const acceptFriendRequest = (id) =>

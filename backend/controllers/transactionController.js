@@ -1,27 +1,36 @@
 import Transaction from "../models/Transaction.js";
-import { recomputeSummary } from "./summaryController.js";
+import {
+  parseMonthYear,
+  parseTransactionDate,
+  roundMoney,
+} from "../lib/validation.js";
 
-/** GET /api/transactions?month=&year=  (defaults to current month) */
+const FIXED_CATEGORIES = {
+  expense: new Set(["Food & Drinks", "Transport", "Shopping", "Entertainment", "Travel"]),
+  income: new Set(["Allowance", "Job", "Gifts"]),
+};
+
+function categoryAllowed(user, type, category) {
+  if (FIXED_CATEGORIES[type]?.has(category)) return true;
+  return (user.customCategories || []).some(
+    (item) => item.type === type && item.name === category
+  );
+}
+
+/** GET /api/transactions?month=&year= */
 export async function getTransactions(req, res) {
-  const now = new Date();
-  const month =
-    req.query.month !== undefined ? Number(req.query.month) : now.getMonth();
-  const year =
-    req.query.year !== undefined ? Number(req.query.year) : now.getFullYear();
-
+  const period = parseMonthYear(req.query);
+  if (!period) return res.status(400).json({ message: "Invalid month or year" });
   const transactions = await Transaction.find({
     userId: req.user._id,
-    month,
-    year,
+    ...period,
   }).sort({ date: -1, createdAt: -1 });
-
   res.json(transactions);
 }
 
 /** POST /api/transactions */
 export async function createTransaction(req, res) {
   const { description, amount, type, category, date } = req.body;
-
   if (!description || amount === undefined || !type || !category) {
     return res.status(400).json({
       message: "description, amount, type and category are required",
@@ -32,49 +41,37 @@ export async function createTransaction(req, res) {
   }
 
   const desc = String(description).trim();
-  if (!desc) {
-    return res.status(400).json({ message: "Description is required" });
-  }
+  if (!desc) return res.status(400).json({ message: "Description is required" });
   if (desc.length > 120) {
-    return res
-      .status(400)
-      .json({ message: "Description too long (max 120 characters)" });
+    return res.status(400).json({ message: "Description too long (max 120 characters)" });
   }
 
   const cat = String(category).trim();
-  if (!cat) {
-    return res.status(400).json({ message: "Category is required" });
-  }
-  if (cat.length > 40) {
-    return res.status(400).json({ message: "Category too long" });
+  if (!cat || cat.length > 40 || !categoryAllowed(req.user, type, cat)) {
+    return res.status(400).json({ message: "Choose a valid category" });
   }
 
-  const value = Number(amount);
-  if (!Number.isFinite(value) || value <= 0) {
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
     return res.status(400).json({ message: "Amount must be greater than zero" });
   }
-  if (value > 1e9) {
+  if (numericAmount > 1e9) {
     return res.status(400).json({ message: "Amount is too large" });
   }
 
-  const when = date ? new Date(date) : new Date();
-  if (Number.isNaN(when.getTime())) {
-    return res.status(400).json({ message: "Invalid date" });
-  }
+  const when = parseTransactionDate(date);
+  if (!when) return res.status(400).json({ message: "Invalid transaction date" });
 
   const transaction = await Transaction.create({
     userId: req.user._id,
     description: desc,
-    amount: value,
+    amount: roundMoney(numericAmount),
     type,
     category: cat,
     date: when,
-    month: when.getMonth(),
-    year: when.getFullYear(),
+    month: when.getUTCMonth(),
+    year: when.getUTCFullYear(),
   });
-
-  await recomputeSummary(req.user._id, transaction.month, transaction.year);
-
   res.status(201).json(transaction);
 }
 
@@ -84,12 +81,8 @@ export async function deleteTransaction(req, res) {
     _id: req.params.id,
     userId: req.user._id,
   });
-
   if (!transaction) {
     return res.status(404).json({ message: "Transaction not found" });
   }
-
-  await recomputeSummary(req.user._id, transaction.month, transaction.year);
-
   res.json({ message: "Deleted", id: transaction._id });
 }

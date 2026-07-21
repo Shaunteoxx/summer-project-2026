@@ -25,7 +25,7 @@ import {
 } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { monthName } from "@/lib/utils";
+import { monthName, localToday } from "@/lib/utils";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
 
 export default function FriendsPage() {
@@ -39,7 +39,7 @@ export default function FriendsPage() {
 
   const loadRequests = () => fetchRequests().then(setRequests).catch(() => {});
   const loadComparison = () =>
-    fetchComparison()
+    fetchComparison(localToday())
       .then(setComparison)
       .catch(() => toast.error("Couldn't load the leaderboard."));
 

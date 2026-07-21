@@ -1,25 +1,20 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import { env } from "./env.js";
 import User from "../models/User.js";
 
 export function configurePassport() {
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    console.warn(
-      "⚠️  GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set.\n" +
-        "    Copy .env.example to server/.env and add your Google OAuth credentials.\n" +
-        "    Google sign-in is disabled until they are provided."
-    );
+  if (!env.googleClientId || !env.googleClientSecret) {
+    console.warn("Google sign-in is disabled because OAuth credentials are not configured.");
     return;
   }
 
   passport.use(
     new GoogleStrategy(
       {
-        clientID: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL:
-          process.env.GOOGLE_CALLBACK_URL ||
-          `${process.env.SERVER_URL || "http://localhost:5000"}/api/auth/google/callback`,
+        clientID: env.googleClientId,
+        clientSecret: env.googleClientSecret,
+        callbackURL: env.googleCallbackUrl,
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
@@ -35,7 +30,14 @@ export function configurePassport() {
 
             let username = base;
             let suffix = 0;
-            while (await User.findOne({ username })) {
+            while (
+              await User.findOne({
+                $or: [
+                  { usernameKey: username.toLowerCase() },
+                  { username: { $regex: `^${username}$`, $options: "i" } },
+                ],
+              })
+            ) {
               suffix += 1;
               username = `${base}${suffix}`;
             }

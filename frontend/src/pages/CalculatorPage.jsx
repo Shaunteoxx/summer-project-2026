@@ -24,6 +24,7 @@ import {
   localToday,
   daysLeftInMonth,
 } from "@/lib/utils";
+import { useToast } from "@/hooks/useToast";
 import { staggerContainer, fadeUp } from "@/animations/variants";
 
 /**
@@ -32,21 +33,23 @@ import { staggerContainer, fadeUp } from "@/animations/variants";
  */
 export default function CalculatorPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [stats, setStats] = useState(null);
   const [streak, setStreak] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
-      fetchHomeStats(),
+      fetchHomeStats(localToday()),
       fetchStreak(localToday()).catch(() => null),
     ])
       .then(([s, st]) => {
         setStats(s);
         setStreak(st);
       })
-      .catch(() => {})
+      .catch(() => toast.error("Couldn't load your budget. Please try again."))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const now = new Date();

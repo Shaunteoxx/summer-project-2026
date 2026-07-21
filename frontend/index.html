@@ -19,18 +19,8 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
     />
-    <!-- Apply the saved theme before paint to avoid a flash of the wrong mode -->
-    <script>
-      (function () {
-        try {
-          var stored = localStorage.getItem("bnm_theme");
-          var prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
-          var theme = stored === "light" || stored === "dark" ? stored : prefersLight ? "light" : "dark";
-          if (theme === "dark") document.documentElement.classList.add("dark");
-          document.documentElement.style.colorScheme = theme;
-        } catch (e) {}
-      })();
-    </script>
+    <!-- Apply the saved theme before paint to avoid a flash of the wrong mode. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

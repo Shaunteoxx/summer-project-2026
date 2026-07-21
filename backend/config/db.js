@@ -1,12 +1,13 @@
 import mongoose from "mongoose";
+import { env } from "./env.js";
 
 export async function connectDB() {
-  const uri = process.env.MONGO_URI || "mongodb://localhost:27017/brokenomore";
   try {
-    await mongoose.connect(uri);
-    console.log(`✅ MongoDB connected: ${uri}`);
+    await mongoose.connect(env.mongoUri, { serverSelectionTimeoutMS: 10000 });
+    const { host, name } = mongoose.connection;
+    console.log(`MongoDB connected (${host}/${name})`);
   } catch (err) {
-    console.error("❌ MongoDB connection error:", err.message);
-    process.exit(1);
+    console.error("MongoDB connection failed:", err.message);
+    throw err;
   }
 }

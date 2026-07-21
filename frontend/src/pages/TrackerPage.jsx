@@ -16,6 +16,7 @@ import { monthName, formatMoney, localToday } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useCategories } from "@/hooks/useCategories";
 import { useChartColors } from "@/hooks/useChartColors";
+import { useToast } from "@/hooks/useToast";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
 
 const OTHER_COLOR = "#94A3B8";
@@ -23,6 +24,7 @@ const OTHER_COLOR = "#94A3B8";
 export default function TrackerPage() {
   const navigate = useNavigate();
   const colors = useChartColors();
+  const toast = useToast();
   const { user } = useAuth();
   const { getCategory } = useCategories();
   const [summary, setSummary] = useState(null);
@@ -33,21 +35,28 @@ export default function TrackerPage() {
   // The streak supplies each day's rolling budget; if it fails the daily views
   // simply fall back to plain bars, so don't let it break the page.
   const load = useCallback(
-    () =>
-      Promise.all([
-        fetchSummary(),
-        fetchTransactions(),
+    () => {
+      const now = new Date();
+      const period = { month: now.getMonth(), year: now.getFullYear() };
+      return Promise.all([
+        fetchSummary(period),
+        fetchTransactions(period),
         fetchStreak(localToday()).catch(() => null),
       ]).then(([s, txns, st]) => {
         setSummary(s);
         setTransactions(txns);
         setStreak(st);
-      }),
+      });
+    },
     []
   );
 
   useEffect(() => {
-    load().finally(() => setLoading(false));
+    load()
+      .catch(() => toast.error("Couldn't load your tracker. Please try again."))
+      .finally(() => setLoading(false));
+    // Toast methods are stable; avoid reloading when the viewport state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
   const now = new Date();

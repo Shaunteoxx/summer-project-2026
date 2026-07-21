@@ -1,6 +1,5 @@
 import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
-import { recomputeSummary } from "../controllers/summaryController.js";
 
 // Identity of the single shared, read-only demo account.
 const DEMO_GOOGLE_ID = "demo-account";
@@ -125,10 +124,6 @@ export async function reseedDemoUser() {
   user.savingsByMonth = savings;
   user.restoredDays = [];
   await user.save();
-
-  for (const { year, month } of months) {
-    await recomputeSummary(user._id, month, year);
-  }
 
   return user;
 }

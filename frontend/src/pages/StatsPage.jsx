@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -18,16 +19,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAllSummaries } from "@/api/endpoints";
 import { monthName, formatMoney } from "@/lib/utils";
 import { useChartColors } from "@/hooks/useChartColors";
+import { useToast } from "@/hooks/useToast";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
 
 export default function StatsPage() {
   const colors = useChartColors();
+  const toast = useToast();
   const [summaries, setSummaries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showAllMonths, setShowAllMonths] = useState(false);
+
+  const COLLAPSED_COUNT = 3;
 
   useEffect(() => {
     fetchAllSummaries()
       .then(setSummaries)
+      .catch(() => toast.error("Couldn't load your monthly history."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -45,6 +52,13 @@ export default function StatsPage() {
           monthsTracked
       )
     : 0;
+
+  // Summaries arrive oldest-first; show the breakdown newest-first, collapsed
+  // to the most recent few until the user asks to see all months.
+  const monthsNewestFirst = [...summaries].reverse();
+  const visibleMonths = showAllMonths
+    ? monthsNewestFirst
+    : monthsNewestFirst.slice(0, COLLAPSED_COUNT);
 
   return (
     <PageWrapper>
@@ -178,6 +192,76 @@ export default function StatsPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Per-month breakdown */}
+          <motion.div variants={fadeUp} initial="initial" animate="animate">
+            <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Monthly breakdown
+            </h2>
+            <Card>
+              <CardContent className="p-2">
+                <ul>
+                  <AnimatePresence initial={false}>
+                    {visibleMonths.map((s) => {
+                      const positive = s.totalSaved >= 0;
+                      return (
+                        <motion.li
+                          key={`${s.year}-${s.month}`}
+                          layout
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.25 }}
+                          className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-3 last:border-b-0"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-semibold">
+                              {monthName(s.month)} {s.year}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              +{formatMoney(s.totalIncome)} in · −
+                              {formatMoney(s.totalExpenses)} out
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p
+                              className={`font-bold tabular-nums ${
+                                positive ? "text-success" : "text-destructive"
+                              }`}
+                            >
+                              {positive ? "+" : "−"}
+                              {formatMoney(Math.abs(s.totalSaved))}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {s.percentageSaved}% saved
+                            </p>
+                          </div>
+                        </motion.li>
+                      );
+                    })}
+                  </AnimatePresence>
+                </ul>
+
+                {monthsNewestFirst.length > COLLAPSED_COUNT && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllMonths((v) => !v)}
+                    aria-expanded={showAllMonths}
+                    className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {showAllMonths
+                      ? "Show less"
+                      : `See all ${monthsNewestFirst.length} months`}
+                    <ChevronDown
+                      className={`h-4 w-4 transition-transform ${
+                        showAllMonths ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                )}
               </CardContent>
             </Card>
           </motion.div>

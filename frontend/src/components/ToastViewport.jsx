@@ -7,6 +7,10 @@ const VARIANTS = {
   info: { icon: Info, accent: "text-primary" },
 };
 
+// Swipe far enough, or flick fast enough, and the toast is dismissed.
+const SWIPE_OFFSET = 80; // px
+const SWIPE_VELOCITY = 500; // px/s
+
 /**
  * Renders the toast stack bottom-center, sitting just above the tab bar
  * (the standard mobile snackbar position). Newest toast appears at the bottom.
@@ -29,7 +33,20 @@ export default function ToastViewport({ toasts, onDismiss }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 12, scale: 0.96 }}
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                className="surface-blur pointer-events-auto flex items-center gap-3 rounded-xl border border-border/80 bg-card/95 p-3.5 shadow-lg"
+                drag
+                dragElastic={0.5}
+                dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+                whileDrag={{ cursor: "grabbing" }}
+                onDragEnd={(_e, info) => {
+                  const { offset, velocity } = info;
+                  const swipedSideways =
+                    Math.abs(offset.x) > SWIPE_OFFSET ||
+                    Math.abs(velocity.x) > SWIPE_VELOCITY;
+                  const swipedDown =
+                    offset.y > SWIPE_OFFSET || velocity.y > SWIPE_VELOCITY;
+                  if (swipedSideways || swipedDown) onDismiss(t.id);
+                }}
+                className="surface-blur pointer-events-auto flex touch-none items-center gap-3 rounded-xl border border-border/80 bg-card/95 p-3.5 shadow-lg"
                 role="status"
               >
                 <Icon className={`h-5 w-5 shrink-0 ${accent}`} />

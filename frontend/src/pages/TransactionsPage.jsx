@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useAnimationControls } from "framer-motion";
 import { Plus, Minus, Trash2, Check, X, Receipt, Search } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import BottomSheet from "@/components/BottomSheet";
+import FieldError from "@/components/FieldError";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,13 +19,13 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { monthName, formatMoney } from "@/lib/utils";
+import { monthName, formatMoney, localToday } from "@/lib/utils";
 import { CUSTOM_COLOR_OPTIONS } from "@/lib/categories";
 import { useCategories } from "@/hooks/useCategories";
-import { staggerContainer, slideInItem, fadeUp } from "@/animations/variants";
+import { staggerContainer, slideInItem, fadeUp, SHAKE } from "@/animations/variants";
 
 const DELETE_GRACE_MS = 10000;
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = localToday;
 const emptyForm = () => ({
   description: "",
   amount: "",
@@ -47,8 +48,19 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
+  // Per-field validation messages, keyed by field name (description/category/amount/date).
+  const [errors, setErrors] = useState({});
+  // Server-side / general failure not tied to one field.
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Imperative shake controls so an invalid field re-shakes on every submit attempt.
+  const shakeControls = {
+    description: useAnimationControls(),
+    category: useAnimationControls(),
+    amount: useAnimationControls(),
+    date: useAnimationControls(),
+  };
   // Which kind of entry the sheet is adding: "income" | "expense" | null (closed).
   const [formType, setFormType] = useState(null);
   const [filter, setFilter] = useState("all");
@@ -66,7 +78,7 @@ export default function TransactionsPage() {
   const now = new Date();
 
   const load = () => {
-    fetchTransactions()
+    fetchTransactions({ month: now.getMonth(), year: now.getFullYear() })
       .then(setTransactions)
       .catch(() => toast.error("Couldn't load transactions. Pull to refresh or try again."))
       .finally(() => setLoading(false));
@@ -121,6 +133,7 @@ export default function TransactionsPage() {
 
   const openForm = (type) => {
     setForm(emptyForm());
+    setErrors({});
     setFormError("");
     resetNewCategory();
     setFormType(type);
@@ -129,12 +142,20 @@ export default function TransactionsPage() {
   const closeForm = () => {
     setFormType(null);
     setForm(emptyForm());
+    setErrors({});
     setFormError("");
     resetNewCategory();
   };
 
+  // Merge form changes and clear the error(s) for whichever field(s) just changed,
+  // so the red state disappears the moment the user starts fixing it.
   const updateForm = (changes) => {
     setForm((current) => ({ ...current, ...changes }));
+    setErrors((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(changes)) delete next[key];
+      return next;
+    });
     setFormError("");
   };
 
@@ -150,6 +171,10 @@ export default function TransactionsPage() {
         color: newCategoryColor,
       });
       setForm((f) => ({ ...f, category: created.name }));
+      setErrors((prev) => {
+        const { category, ...rest } = prev;
+        return rest;
+      });
       resetNewCategory();
       toast.success(`Added category “${created.name}”`);
     } catch (err) {
@@ -175,29 +200,34 @@ export default function TransactionsPage() {
 
     const description = form.description.trim();
     const amount = Number(form.amount);
-    if (!description) {
-      setFormError("Enter a description.");
-      return;
-    }
-    if (!form.category) {
-      setFormError("Choose a category.");
-      return;
-    }
+
+    // Validate every field at once so all problems light up together, rather
+    // than surfacing them one refused submit at a time.
+    const nextErrors = {};
+    if (!description) nextErrors.description = "Enter a description.";
+    if (!form.category) nextErrors.category = "Choose a category.";
     if (form.amount === "" || !Number.isFinite(amount) || amount <= 0) {
-      setFormError("Enter an amount greater than $0.");
-      return;
-    }
-    if (amount > 1e9) {
-      setFormError("Amount must be $1,000,000,000 or less.");
-      return;
+      nextErrors.amount = "Enter an amount greater than $0.";
+    } else if (amount > 1e9) {
+      nextErrors.amount = "Keep it under $1,000,000,000.";
     }
     if (!form.date || Number.isNaN(new Date(`${form.date}T00:00:00`).getTime())) {
-      setFormError("Choose a valid date.");
+      nextErrors.date = "Choose a valid date.";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      setFormError("");
+      // Shake each invalid field to draw the eye to what needs fixing.
+      Object.keys(nextErrors).forEach((field) =>
+        shakeControls[field]?.start(SHAKE)
+      );
       return;
     }
     if (guard()) return;
 
     const type = formType;
+    setErrors({});
     setFormError("");
     setSubmitting(true);
     try {
@@ -210,8 +240,8 @@ export default function TransactionsPage() {
       });
       const created_d = new Date(created.date);
       if (
-        created_d.getMonth() === now.getMonth() &&
-        created_d.getFullYear() === now.getFullYear()
+        created_d.getUTCMonth() === now.getMonth() &&
+        created_d.getUTCFullYear() === now.getFullYear()
       ) {
         setTransactions((prev) => [created, ...prev]);
       }
@@ -337,11 +367,20 @@ export default function TransactionsPage() {
         onClose={closeForm}
         title={formType === "income" ? "Add income" : "Add expense"}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {/* Category picker */}
           <div className="space-y-2">
-            <Label>Category</Label>
-            <div className="grid grid-cols-3 gap-2">
+            <motion.div animate={shakeControls.category} className="space-y-2">
+              <Label className={errors.category ? "text-destructive" : undefined}>
+                Category
+              </Label>
+              <div
+                className={`grid grid-cols-3 gap-2 ${
+                  errors.category
+                    ? "rounded-xl ring-2 ring-destructive ring-offset-2 ring-offset-card"
+                    : ""
+                }`}
+              >
               {(categoriesByType[formType] ?? []).map((c) => {
                 const Icon = c.icon;
                 const selected = form.category === c.name;
@@ -397,7 +436,11 @@ export default function TransactionsPage() {
                 </span>
                 <span className="text-[11px] font-medium leading-tight">New</span>
               </button>
-            </div>
+              </div>
+              {errors.category && (
+                <FieldError id="tx-category-error">{errors.category}</FieldError>
+              )}
+            </motion.div>
 
             {/* Custom category creator + manager */}
             {showNewCategory && (
@@ -475,21 +518,40 @@ export default function TransactionsPage() {
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+          <motion.div animate={shakeControls.description} className="space-y-2">
+            <Label
+              htmlFor="description"
+              className={errors.description ? "text-destructive" : undefined}
+            >
+              Description
+            </Label>
             <Input
               id="description"
               placeholder={formType === "income" ? "e.g. Monthly allowance" : "e.g. Lunch"}
               value={form.description}
               required
               maxLength={120}
-              aria-invalid={Boolean(formError) && !form.description.trim()}
+              aria-invalid={Boolean(errors.description)}
+              aria-describedby={errors.description ? "tx-description-error" : undefined}
+              className={
+                errors.description
+                  ? "border-destructive focus-visible:ring-destructive"
+                  : undefined
+              }
               onChange={(e) => updateForm({ description: e.target.value })}
             />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="amount">Amount</Label>
+            {errors.description && (
+              <FieldError id="tx-description-error">{errors.description}</FieldError>
+            )}
+          </motion.div>
+          <div className="grid grid-cols-2 items-start gap-3">
+            <motion.div animate={shakeControls.amount} className="space-y-2">
+              <Label
+                htmlFor="amount"
+                className={errors.amount ? "text-destructive" : undefined}
+              >
+                Amount
+              </Label>
               <Input
                 id="amount"
                 type="number"
@@ -500,24 +562,44 @@ export default function TransactionsPage() {
                 placeholder="0.00"
                 value={form.amount}
                 required
-                aria-invalid={
-                  Boolean(formError) &&
-                  (form.amount === "" || Number(form.amount) <= 0)
+                aria-invalid={Boolean(errors.amount)}
+                aria-describedby={errors.amount ? "tx-amount-error" : undefined}
+                className={
+                  errors.amount
+                    ? "border-destructive focus-visible:ring-destructive"
+                    : undefined
                 }
                 onChange={(e) => updateForm({ amount: e.target.value })}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="date">Date</Label>
+              {errors.amount && (
+                <FieldError id="tx-amount-error">{errors.amount}</FieldError>
+              )}
+            </motion.div>
+            <motion.div animate={shakeControls.date} className="space-y-2">
+              <Label
+                htmlFor="date"
+                className={errors.date ? "text-destructive" : undefined}
+              >
+                Date
+              </Label>
               <Input
                 id="date"
                 type="date"
                 value={form.date}
                 required
-                aria-invalid={Boolean(formError) && !form.date}
+                aria-invalid={Boolean(errors.date)}
+                aria-describedby={errors.date ? "tx-date-error" : undefined}
+                className={
+                  errors.date
+                    ? "border-destructive focus-visible:ring-destructive"
+                    : undefined
+                }
                 onChange={(e) => updateForm({ date: e.target.value })}
               />
-            </div>
+              {errors.date && (
+                <FieldError id="tx-date-error">{errors.date}</FieldError>
+              )}
+            </motion.div>
           </div>
           {formError && (
             <p
@@ -692,6 +774,7 @@ export default function TransactionsPage() {
                               {new Date(t.date).toLocaleDateString(undefined, {
                                 month: "short",
                                 day: "numeric",
+                                timeZone: "UTC",
                               })}{" "}
                               · {t.category}
                             </p>
