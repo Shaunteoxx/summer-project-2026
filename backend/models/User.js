@@ -9,6 +9,9 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true },
     // Read-only demo account used by the public "Explore the demo" button.
     isDemo: { type: Boolean, default: false },
+    // Bumped on sign-out to invalidate every token already issued to this user.
+    // Tokens carry the version they were signed with; a mismatch fails auth.
+    tokenVersion: { type: Number, default: 0 },
     profilePicture: { type: String, default: "" },
     // Chosen animal avatar id (e.g. "cat"); empty = fall back to Google photo.
     avatar: { type: String, default: "" },

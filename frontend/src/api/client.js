@@ -6,26 +6,56 @@ const api = axios.create({
 });
 
 const TOKEN_KEY = "bnm_token";
+// Mirrors the backend's token lifetime (backend/middleware/auth.js).
+const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+// localStorage, not sessionStorage: iOS Safari discards backgrounded tabs, and
+// a sessionStorage token dies with the tab — so leaving the app and coming back
+// meant signing in again. Staying signed in relies on the sliding refresh in
+// useAuth rather than on a long-lived token.
 export function getToken() {
-  const token = sessionStorage.getItem(TOKEN_KEY);
+  const token = localStorage.getItem(TOKEN_KEY);
   if (token) return token;
-  // One-time migration from older builds that persisted seven-day tokens.
-  const legacy = localStorage.getItem(TOKEN_KEY);
+  // One-time migration from the builds that kept the token per-tab.
+  const legacy = sessionStorage.getItem(TOKEN_KEY);
   if (legacy) {
-    sessionStorage.setItem(TOKEN_KEY, legacy);
-    localStorage.removeItem(TOKEN_KEY);
+    localStorage.setItem(TOKEN_KEY, legacy);
+    sessionStorage.removeItem(TOKEN_KEY);
   }
   return legacy;
 }
 
 export function setToken(token) {
-  if (token) sessionStorage.setItem(TOKEN_KEY, token);
+  if (token) localStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearToken() {
-  sessionStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+}
+
+/** Epoch ms this token expires, or null if it carries no readable `exp`. */
+function tokenExpiry(token) {
+  try {
+    const payload = token.split(".")[1];
+    const { exp } = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof exp === "number" ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True once the stored token is past the halfway point of its lifetime, which
+ * is when it is worth swapping for a fresh one. Keeps the refresh to roughly
+ * one request every few days instead of one per app switch.
+ */
+export function tokenIsStale() {
+  const token = getToken();
+  if (!token) return false;
+  const expiry = tokenExpiry(token);
+  if (expiry === null) return true;
+  return expiry - Date.now() < TOKEN_TTL_MS / 2;
 }
 
 // Attach JWT to every request.

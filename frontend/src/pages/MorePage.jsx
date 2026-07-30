@@ -49,7 +49,7 @@ const shortcuts = [
 
 export default function MorePage() {
   const navigate = useNavigate();
-  const { user, refresh, logout } = useAuth();
+  const { user, refresh, logout, clearSession } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const toast = useToast();
   const guard = useDemoGuard();
@@ -176,7 +176,9 @@ export default function MorePage() {
     setDeleting(true);
     try {
       await deleteAccount();
-      logout(); // clears token + redirects to /login
+      // The user row is gone, so the token is already dead — skip the logout
+      // call it would 401 on and just clear locally.
+      clearSession();
     } catch {
       setDeleting(false);
       toast.error("Couldn't delete account. Please try again.");

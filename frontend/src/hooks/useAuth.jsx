@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { fetchMe } from "@/api/endpoints";
-import { getToken, clearToken } from "@/api/client";
+import { fetchMe, refreshSession, endSession } from "@/api/endpoints";
+import { getToken, setToken, clearToken, tokenIsStale } from "@/api/client";
 
 const AuthContext = createContext(null);
 
@@ -24,18 +24,53 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  useEffect(() => {
-    loadUser();
-  }, [loadUser]);
+  // Extend the session whenever the app is opened past the token's halfway
+  // point. Mobile Safari can leave the app suspended for days, so without this
+  // the token would quietly expire and drop you back on the login screen.
+  const extendSession = useCallback(async () => {
+    if (!tokenIsStale()) return;
+    try {
+      const { token } = await refreshSession();
+      setToken(token);
+    } catch {
+      // Keep the current token; a genuinely expired one is handled by the
+      // 401 interceptor in api/client.
+    }
+  }, []);
 
-  const logout = useCallback(() => {
+  useEffect(() => {
+    extendSession().finally(loadUser);
+  }, [extendSession, loadUser]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") extendSession();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [extendSession]);
+
+  /** Drop the local session only. For when the token is already dead server-side. */
+  const clearSession = useCallback(() => {
     clearToken();
     setUser(null);
     window.location.href = "/login";
   }, []);
 
+  /** Sign out for real: revoke the token server-side, then drop it locally. */
+  const logout = useCallback(async () => {
+    try {
+      await endSession();
+    } catch {
+      // Network failure shouldn't trap you in the app — still clear locally.
+    }
+    clearSession();
+  }, [clearSession]);
+
   return (
-    <AuthContext.Provider value={{ user, loading, refresh: loadUser, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, refresh: loadUser, logout, clearSession }}
+    >
       {children}
     </AuthContext.Provider>
   );

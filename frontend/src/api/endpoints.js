@@ -2,6 +2,8 @@ import api from "./client";
 
 // --- Auth ---
 export const demoLogin = () => api.post("/auth/demo").then((r) => r.data);
+export const refreshSession = () => api.post("/auth/refresh").then((r) => r.data);
+export const endSession = () => api.post("/auth/logout").then((r) => r.data);
 export const fetchMe = () => api.get("/auth/me").then((r) => r.data);
 export const fetchHomeStats = (today) =>
   api.get("/auth/home", { params: { today } }).then((r) => r.data);

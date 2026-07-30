@@ -5,7 +5,7 @@ import {
   resolveClientToday,
   roundMoney,
 } from "../lib/validation.js";
-import { signToken } from "../middleware/auth.js";
+import { signToken, sessionExhausted } from "../middleware/auth.js";
 import { getLifetimeSavings } from "./summaryController.js";
 import { ensureDemoUser } from "../lib/demoSeed.js";
 import MonthlySummary from "../models/MonthlySummary.js";
@@ -37,6 +37,33 @@ export async function demoLogin(req, res) {
   const user = await ensureDemoUser();
   const token = signToken(user);
   res.json({ token });
+}
+
+/**
+ * POST /api/auth/refresh -> swap a still-valid token for a fresh one.
+ * Keeps a session alive across app restarts, but carries the original sign-in
+ * time forward so it can only be extended up to the 30-day ceiling.
+ */
+export function refreshSession(req, res) {
+  const authAt = req.token.authAt ?? req.token.iat;
+  if (sessionExhausted(authAt)) {
+    return res.status(401).json({ message: "Session expired, please sign in again" });
+  }
+  res.json({ token: signToken(req.user, authAt) });
+}
+
+/**
+ * POST /api/auth/logout -> invalidate every token issued to this user.
+ * Bumping tokenVersion is what makes signing out real: without it, clearing the
+ * client's copy left the token usable by anyone who had captured it.
+ */
+export async function logout(req, res) {
+  // The demo account is shared, so bumping its version would sign out everyone
+  // else exploring the demo. Clearing the client's token is enough there.
+  if (!req.user.isDemo) {
+    await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
+  }
+  res.json({ message: "Signed out" });
 }
 
 /** GET /api/auth/me -> current user profile (used by the client to bootstrap). */

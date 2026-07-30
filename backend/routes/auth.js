@@ -7,6 +7,8 @@ import { asyncHandler } from "../middleware/asyncHandler.js";
 import {
   googleCallback,
   demoLogin,
+  refreshSession,
+  logout,
   getMe,
   getHomeStats,
   addCategory,
@@ -65,6 +67,10 @@ router.get(
 );
 
 router.post("/demo", asyncHandler(demoLogin));
+// No blockDemoMutations: re-issuing a token changes no state, and demo
+// sessions need to survive a reload like any other.
+router.post("/refresh", requireAuth, refreshSession);
+router.post("/logout", requireAuth, asyncHandler(logout));
 router.get("/me", requireAuth, asyncHandler(getMe));
 router.get("/home", requireAuth, asyncHandler(getHomeStats));
 router.post("/categories", requireAuth, blockDemoMutations, asyncHandler(addCategory));
