@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { MotionConfig } from "framer-motion";
 import App from "./App.jsx";
 import { AuthProvider } from "./hooks/useAuth.jsx";
+import { BudgetPeriodProvider } from "./hooks/useBudgetPeriod.jsx";
 import { CategoriesProvider } from "./hooks/useCategories.jsx";
 import { ThemeProvider } from "./hooks/useTheme.jsx";
 import { ToastProvider } from "./hooks/useToast.jsx";
@@ -16,9 +17,11 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <ToastProvider>
           <BrowserRouter>
             <AuthProvider>
-              <CategoriesProvider>
-                <App />
-              </CategoriesProvider>
+              <BudgetPeriodProvider>
+                <CategoriesProvider>
+                  <App />
+                </CategoriesProvider>
+              </BudgetPeriodProvider>
             </AuthProvider>
           </BrowserRouter>
         </ToastProvider>

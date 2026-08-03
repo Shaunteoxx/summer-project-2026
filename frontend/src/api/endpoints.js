@@ -19,8 +19,22 @@ export const updateProfile = (payload) =>
   api.patch("/auth/profile", payload).then((r) => r.data);
 export const deleteAccount = () =>
   api.delete("/auth/me").then((r) => r.data);
+// Month-mode savings target, keyed "YYYY-M". Days-mode periods carry their own
+// target and are updated through the period endpoints above.
 export const setMonthlySavings = (payload) =>
   api.put("/auth/savings", payload).then((r) => r.data);
+
+// --- Budget period ---
+export const fetchPeriod = (today) =>
+  api.get("/period", { params: { today } }).then((r) => r.data);
+export const setPeriodMode = (mode) =>
+  api.put("/period/mode", { mode }).then((r) => r.data);
+export const startPeriod = (payload) =>
+  api.post("/period", payload).then((r) => r.data);
+export const updatePeriod = (id, payload) =>
+  api.patch(`/period/${id}`, payload).then((r) => r.data);
+export const deletePeriod = (id) =>
+  api.delete(`/period/${id}`).then((r) => r.data);
 
 // --- Streak ---
 export const fetchStreak = (today) =>

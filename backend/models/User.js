@@ -17,6 +17,10 @@ const userSchema = new mongoose.Schema(
     avatar: { type: String, default: "" },
     // Days (YYYY-MM-DD) the user spent a "save" on to repair their streak.
     restoredDays: { type: [String], default: [] },
+    // How the budget window is worked out. "month" derives it from the calendar
+    // (and reads savingsByMonth below); "days" uses the BudgetPeriod rows the
+    // user starts by hand. Switching modes leaves the other mode's data intact.
+    budgetMode: { type: String, enum: ["month", "days"], default: "month" },
     // Amount the user wants to set aside per month, keyed by "YYYY-M" (M is the
     // 0-based month). Reserved before the spendable daily budget is calculated.
     savingsByMonth: {

@@ -2,8 +2,10 @@ import Transaction from "../models/Transaction.js";
 import {
   parseMonthYear,
   parseTransactionDate,
+  parseYmd,
   roundMoney,
 } from "../lib/validation.js";
+import { dayFromYmd } from "../lib/period.js";
 
 const FIXED_CATEGORIES = {
   expense: new Set(["Food & Drinks", "Transport", "Shopping", "Entertainment", "Travel"]),
@@ -17,13 +19,30 @@ function categoryAllowed(user, type, category) {
   );
 }
 
-/** GET /api/transactions?month=&year= */
+/**
+ * GET /api/transactions?start=&end=  (a budget period)
+ * GET /api/transactions?month=&year= (a calendar month, used by the history views)
+ */
 export async function getTransactions(req, res) {
-  const period = parseMonthYear(req.query);
-  if (!period) return res.status(400).json({ message: "Invalid month or year" });
+  const { start, end } = req.query;
+  let filter;
+
+  if (start !== undefined || end !== undefined) {
+    const from = parseYmd(start);
+    const to = parseYmd(end);
+    if (!from || !to || start > end) {
+      return res.status(400).json({ message: "Invalid date range" });
+    }
+    filter = { date: { $gte: dayFromYmd(start), $lte: dayFromYmd(end) } };
+  } else {
+    const period = parseMonthYear(req.query);
+    if (!period) return res.status(400).json({ message: "Invalid month or year" });
+    filter = period;
+  }
+
   const transactions = await Transaction.find({
     userId: req.user._id,
-    ...period,
+    ...filter,
   }).sort({ date: -1, createdAt: -1 });
   res.json(transactions);
 }

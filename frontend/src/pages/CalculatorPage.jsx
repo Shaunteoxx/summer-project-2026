@@ -17,23 +17,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchHomeStats, fetchStreak } from "@/api/endpoints";
-import {
-  cn,
-  monthName,
-  formatMoney,
-  localToday,
-  daysLeftInMonth,
-} from "@/lib/utils";
+import { cn, formatMoney, localToday } from "@/lib/utils";
+import { addDaysYmd, formatDay, formatPeriodLabel } from "@/lib/period";
+import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useToast } from "@/hooks/useToast";
 import { staggerContainer, fadeUp } from "@/animations/variants";
 
 /**
- * Live planners driven by this month's real numbers (home stats + the streak's
+ * Live planners driven by this period's real numbers (home stats + the streak's
  * canonical daily budget), so everything here matches the Home page exactly.
  */
 export default function CalculatorPage() {
   const navigate = useNavigate();
   const toast = useToast();
+  const budgetPeriod = useBudgetPeriod();
   const [stats, setStats] = useState(null);
   const [streak, setStreak] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -52,15 +49,18 @@ export default function CalculatorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const now = new Date();
-  const todayDate = now.getDate();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const daysLeft = daysLeftInMonth(); // incl. today
-  const daysAfterToday = daysInMonth - todayDate;
+  const period = stats?.period ?? budgetPeriod.current;
+  const noun = budgetPeriod.noun;
+  const periodDays = period?.days ?? 0;
+  const daysLeft = period?.daysLeft ?? 0; // incl. today
+  const daysAfterToday = Math.max(0, daysLeft - 1);
+  // How far into the period today is, 1-based — the equivalent of the old
+  // day-of-month, but measured against the period rather than the calendar.
+  const dayOfPeriod = periodDays - daysLeft + 1;
 
-  const income = stats?.monthIncome ?? 0;
-  const spentSoFar = stats?.monthExpenses ?? 0;
-  const savings = stats?.monthSavings ?? 0;
+  const income = stats?.periodIncome ?? 0;
+  const spentSoFar = stats?.periodExpenses ?? 0;
+  const savings = stats?.periodSavings ?? 0;
   const todayBudget = streak?.today?.budget ?? 0;
   const spentToday = streak?.today?.spent ?? 0;
   const leftToday = todayBudget - spentToday;
@@ -71,7 +71,9 @@ export default function CalculatorPage() {
       <motion.div variants={fadeUp} initial="initial" animate="animate">
         <h1 className="text-2xl font-extrabold tracking-tight">Calculator</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Live planning from your {monthName(now.getMonth())} numbers.
+          Live planning from your{" "}
+          {period ? formatPeriodLabel(period, { mode: budgetPeriod.mode }) : "budget"}{" "}
+          numbers.
         </p>
       </motion.div>
 
@@ -100,9 +102,9 @@ export default function CalculatorPage() {
               <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
                 <Receipt className="h-6 w-6" />
               </span>
-              <p className="font-semibold">No income logged this month</p>
+              <p className="font-semibold">No income logged this {noun}</p>
               <p className="text-sm text-muted-foreground">
-                Add your {monthName(now.getMonth())} income and these planners
+                Add your {noun}'s income and these planners
                 will work out what you can spend, live.
               </p>
               <Button onClick={() => navigate("/transactions")} className="mt-1">
@@ -123,6 +125,7 @@ export default function CalculatorPage() {
             savings={savings}
             spentSoFar={spentSoFar}
             daysAfterToday={daysAfterToday}
+            noun={noun}
           />
           <WhatIfCard
             leftToday={leftToday}
@@ -130,21 +133,25 @@ export default function CalculatorPage() {
             savings={savings}
             spentSoFar={spentSoFar}
             daysAfterToday={daysAfterToday}
+            noun={noun}
           />
           <PaceForecastCard
             income={income}
             savings={savings}
             spentSoFar={spentSoFar}
-            todayDate={todayDate}
-            daysInMonth={daysInMonth}
+            periodDays={periodDays}
+            dayOfPeriod={dayOfPeriod}
+            periodEndYmd={period?.end}
             daysAfterToday={daysAfterToday}
             todayBudget={todayBudget}
+            noun={noun}
           />
           <GoalDailyCard
             income={income}
             savings={savings}
             spentBeforeToday={spentBeforeToday}
             daysLeft={daysLeft}
+            noun={noun}
           />
         </motion.div>
       )}
@@ -154,7 +161,7 @@ export default function CalculatorPage() {
 
 /* ── 1. Dynamic daily budget ────────────────────────────────────────── */
 
-function DynamicDailyCard({ income, savings, spentSoFar, daysAfterToday }) {
+function DynamicDailyCard({ income, savings, spentSoFar, daysAfterToday, noun }) {
   const remaining = income - savings - spentSoFar;
   const lastDay = daysAfterToday === 0;
   // Everything spent so far — today included — is off the table; what's left
@@ -168,7 +175,11 @@ function DynamicDailyCard({ income, savings, spentSoFar, daysAfterToday }) {
         <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
         <CardContent className="relative p-6">
           <p className="text-sm font-medium text-muted-foreground">
-            {lastDay ? "Left for the rest of today" : "Dynamic daily budget"}
+            {over
+              ? `Past this ${noun}'s budget`
+              : lastDay
+                ? "Left for the rest of today"
+                : "Dynamic daily budget"}
           </p>
           <p
             className={cn(
@@ -176,13 +187,23 @@ function DynamicDailyCard({ income, savings, spentSoFar, daysAfterToday }) {
               over ? "text-destructive" : "text-foreground"
             )}
           >
-            <AnimatedNumber value={perDay} prefix="$" decimals={2} />
-            {!lastDay && (
+            <AnimatedNumber
+              value={over ? Math.abs(remaining) : perDay}
+              prefix={over ? "−$" : "$"}
+              decimals={2}
+            />
+            {!lastDay && !over && (
               <span className="text-xl font-bold text-muted-foreground">
                 /day
               </span>
             )}
           </p>
+          {over && (
+            <p className="mt-1 text-xs font-medium text-destructive">
+              You&apos;re {formatMoney(Math.abs(remaining))} past what this {noun}{" "}
+              had to spend. There&apos;s no daily budget until more income lands.
+            </p>
+          )}
           <div className="mt-3 space-y-1 text-sm">
             <div className="flex justify-between text-muted-foreground">
               <span>Income</span>
@@ -207,7 +228,7 @@ function DynamicDailyCard({ income, savings, spentSoFar, daysAfterToday }) {
             {over
               ? "You've spent past your savings goal — anything more eats into it."
               : lastDay
-                ? "Last day of the month — this is what's left after your savings goal."
+                ? `Last day of the ${noun} — this is what's left after your savings goal.`
                 : `${formatMoney(remaining)} left, spread over the ${daysAfterToday} ${
                     daysAfterToday === 1 ? "day" : "days"
                   } after today. Updates the moment you log an expense — unlike the fixed budget on Home.`}
@@ -220,7 +241,7 @@ function DynamicDailyCard({ income, savings, spentSoFar, daysAfterToday }) {
 
 /* ── 2. What-if purchase ────────────────────────────────────────────── */
 
-function WhatIfCard({ leftToday, income, savings, spentSoFar, daysAfterToday }) {
+function WhatIfCard({ leftToday, income, savings, spentSoFar, daysAfterToday, noun }) {
   const [price, setPrice] = useState("");
   const p = Number(price) || 0;
   const show = price !== "" && p > 0;
@@ -238,7 +259,7 @@ function WhatIfCard({ leftToday, income, savings, spentSoFar, daysAfterToday }) 
           </div>
           <CardTitle>What if I buy…</CardTitle>
           <CardDescription>
-            See what a purchase does to today and to the rest of the month.
+            See what a purchase does to today and to the rest of the {noun}.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -291,7 +312,7 @@ function WhatIfCard({ leftToday, income, savings, spentSoFar, daysAfterToday }) 
               )}
               {(newDaily !== null ? newDaily < 0 : afterToday < 0) ? (
                 <p className="pt-1 text-xs text-destructive">
-                  This would put the month over budget.
+                  This would put the {noun} over budget.
                 </p>
               ) : (
                 afterToday < 0 && (
@@ -314,19 +335,27 @@ function PaceForecastCard({
   income,
   savings,
   spentSoFar,
-  todayDate,
-  daysInMonth,
+  periodDays,
+  dayOfPeriod,
+  periodEndYmd,
   daysAfterToday,
   todayBudget,
+  noun,
 }) {
-  const now = new Date();
-  const avgDaily = todayDate > 0 ? spentSoFar / todayDate : 0;
+  // Everything here is measured in days into the period, so it works the same
+  // whether that period is a calendar month or an arbitrary span.
+  const avgDaily = dayOfPeriod > 0 ? spentSoFar / dayOfPeriod : 0;
   const spendable = income - savings;
   const runwayDay =
-    avgDaily > 0 ? todayDate + (spendable - spentSoFar) / avgDaily : Infinity;
+    avgDaily > 0 ? dayOfPeriod + (spendable - spentSoFar) / avgDaily : Infinity;
   const projectedSaved = income - (spentSoFar + avgDaily * daysAfterToday);
-  const lastsAllMonth = !isFinite(runwayDay) || runwayDay >= daysInMonth;
+  const lastsAllPeriod = !isFinite(runwayDay) || runwayDay >= periodDays;
   const meetsGoal = projectedSaved >= savings - 1e-9;
+  // Turn "day N of the period" back into a real date for the runway label.
+  const runwayYmd =
+    periodEndYmd && isFinite(runwayDay)
+      ? addDaysYmd(periodEndYmd, Math.floor(runwayDay) - periodDays)
+      : null;
 
   const Row = ({ label, value, tone }) => (
     <div className="flex items-baseline justify-between gap-3 text-sm">
@@ -344,7 +373,7 @@ function PaceForecastCard({
           </div>
           <CardTitle>Pace &amp; forecast</CardTitle>
           <CardDescription>
-            Where this month is heading if you keep spending like this.
+            Where this {noun} is heading if you keep spending like this.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2.5">
@@ -352,16 +381,16 @@ function PaceForecastCard({
           <Row
             label="Budget runs out"
             value={
-              lastsAllMonth
-                ? "Lasts all month"
-                : runwayDay < todayDate
+              lastsAllPeriod
+                ? `Lasts all ${noun}`
+                : runwayDay < dayOfPeriod
                   ? "Already over"
-                  : `≈ ${monthName(now.getMonth()).slice(0, 3)} ${Math.floor(runwayDay)}`
+                  : `≈ ${runwayYmd ? formatDay(runwayYmd) : `day ${Math.floor(runwayDay)}`}`
             }
-            tone={lastsAllMonth ? "text-success" : "text-destructive"}
+            tone={lastsAllPeriod ? "text-success" : "text-destructive"}
           />
           <Row
-            label="Projected saved by month end"
+            label={`Projected saved by ${noun} end`}
             value={formatMoney(projectedSaved)}
             tone={meetsGoal ? "text-success" : "text-destructive"}
           />
@@ -382,7 +411,7 @@ function PaceForecastCard({
 
 /* ── 4. Goal ↔ daily ────────────────────────────────────────────────── */
 
-function GoalDailyCard({ income, savings, spentBeforeToday, daysLeft }) {
+function GoalDailyCard({ income, savings, spentBeforeToday, daysLeft, noun }) {
   const [target, setTarget] = useState("");
   const [daily, setDaily] = useState("");
 
@@ -408,7 +437,7 @@ function GoalDailyCard({ income, savings, spentBeforeToday, daysLeft }) {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="goal-target">If I save this much by month end</Label>
+            <Label htmlFor="goal-target">If I save this much by the end</Label>
             <Input
               id="goal-target"
               type="number"
@@ -457,7 +486,7 @@ function GoalDailyCard({ income, savings, spentBeforeToday, daysLeft }) {
             {showDaily && (
               <p className="text-sm">
                 <span className="text-muted-foreground">
-                  You'd end the month with{" "}
+                  You'd end the {noun} with{" "}
                 </span>
                 <span
                   className={cn(

@@ -11,9 +11,10 @@ import SavingsGoalCard from "@/components/SavingsGoalCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchSummary, fetchTransactions, fetchStreak } from "@/api/endpoints";
-import { monthName, formatMoney, localToday } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
+import { fetchTransactions, fetchStreak } from "@/api/endpoints";
+import { formatMoney, localToday } from "@/lib/utils";
+import { formatPeriodLabel } from "@/lib/period";
+import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useToast } from "@/hooks/useToast";
@@ -25,52 +26,58 @@ export default function TrackerPage() {
   const navigate = useNavigate();
   const colors = useChartColors();
   const toast = useToast();
-  const { user } = useAuth();
+  const budgetPeriod = useBudgetPeriod();
   const { getCategory } = useCategories();
-  const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [streak, setStreak] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const current = budgetPeriod.current;
+
+  // Totals come from the period's own transactions rather than /api/summary,
+  // which is still keyed by calendar month for the history views on /stats.
   // The streak supplies each day's rolling budget; if it fails the daily views
   // simply fall back to plain bars, so don't let it break the page.
-  const load = useCallback(
-    () => {
-      const now = new Date();
-      const period = { month: now.getMonth(), year: now.getFullYear() };
-      return Promise.all([
-        fetchSummary(period),
-        fetchTransactions(period),
-        fetchStreak(localToday()).catch(() => null),
-      ]).then(([s, txns, st]) => {
-        setSummary(s);
-        setTransactions(txns);
-        setStreak(st);
-      });
-    },
-    []
-  );
+  const load = useCallback(() => {
+    if (!current) return Promise.resolve();
+    return Promise.all([
+      fetchTransactions({ start: current.start, end: current.end }),
+      fetchStreak(localToday()).catch(() => null),
+    ]).then(([txns, st]) => {
+      setTransactions(txns);
+      setStreak(st);
+    });
+  }, [current]);
 
   useEffect(() => {
+    if (budgetPeriod.loading) return;
+    if (!current) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     load()
       .catch(() => toast.error("Couldn't load your tracker. Please try again."))
       .finally(() => setLoading(false));
     // Toast methods are stable; avoid reloading when the viewport state changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load]);
+  }, [load, budgetPeriod.loading, current]);
 
-  const now = new Date();
-  const month = summary?.month ?? now.getMonth();
-  const year = summary?.year ?? now.getFullYear();
-
-  const saved = Math.max(summary?.totalSaved ?? 0, 0);
-  const spent = summary?.totalExpenses ?? 0;
-  const income = summary?.totalIncome ?? 0;
-  const hasData = income > 0 || spent > 0;
-  const monthlySavings = Math.max(
-    0,
-    Number(user?.savingsByMonth?.[`${year}-${month}`]) || 0
+  const totals = transactions.reduce(
+    (acc, t) => {
+      if (t.type === "income") acc.income += t.amount;
+      else acc.spent += t.amount;
+      return acc;
+    },
+    { income: 0, spent: 0 }
   );
+  const income = totals.income;
+  const spent = totals.spent;
+  const saved = Math.max(income - spent, 0);
+  const hasData = income > 0 || spent > 0;
+  const periodSavings = current?.savings ?? 0;
+  const percentageSaved = income > 0 ? Math.round(((income - spent) / income) * 100) : 0;
+  const percentageSpent = income > 0 ? Math.round((spent / income) * 100) : 0;
 
   const chartData = [
     { name: "Saved", value: saved },
@@ -98,13 +105,31 @@ export default function TrackerPage() {
   return (
     <PageWrapper>
       <motion.div variants={fadeUp} initial="initial" animate="animate">
-        <h1 className="text-2xl font-extrabold tracking-tight">Monthly Tracker</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight">
+          {budgetPeriod.mode === "month" ? "Monthly Tracker" : "Period Tracker"}
+        </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {monthName(month)} {year}
+          {current
+            ? formatPeriodLabel(current, { mode: budgetPeriod.mode })
+            : "No budget period running"}
         </p>
       </motion.div>
 
-      {loading ? (
+      {!budgetPeriod.loading && !current ? (
+        <Card className="mt-5">
+          <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
+            <p className="font-semibold">Nothing to track yet</p>
+            <p className="text-sm text-muted-foreground">
+              {budgetPeriod.status === "lapsed"
+                ? "Your last budget period has ended. Start the next one to pick tracking back up."
+                : "Set up a budget period to start tracking what you've saved and spent."}
+            </p>
+            <Button onClick={() => navigate("/more")}>
+              {budgetPeriod.status === "lapsed" ? "Start next period" : "Set up a period"}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : loading ? (
         <div className="mt-5 space-y-4">
           <Card>
             <CardContent className="flex flex-col items-center p-5">
@@ -213,9 +238,10 @@ export default function TrackerPage() {
                     Spent
                   </span>
                 </div>
-                {monthlySavings > 0 && (
+                {periodSavings > 0 && (
                   <p className="mt-2 text-center text-xs text-muted-foreground">
-                    Goal: set aside {formatMoney(monthlySavings)} this month
+                    Goal: set aside {formatMoney(periodSavings)} this{" "}
+                    {budgetPeriod.noun}
                   </p>
                 )}
               </CardContent>
@@ -224,11 +250,10 @@ export default function TrackerPage() {
 
           {/* Savings goal */}
           <SavingsGoalCard
-            target={monthlySavings}
+            target={periodSavings}
             income={income}
             spent={spent}
-            month={month}
-            year={year}
+            period={current}
             onUpdated={load}
           />
 
@@ -236,7 +261,8 @@ export default function TrackerPage() {
           <DailySpendingCard
             transactions={transactions}
             income={income}
-            monthDays={streak?.monthDays ?? []}
+            period={current}
+            periodDays={streak?.periodDays ?? []}
             todayBudget={streak?.today?.budget ?? 0}
           />
 
@@ -317,7 +343,8 @@ export default function TrackerPage() {
                   </>
                 ) : (
                   <div className="flex h-40 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-                    No expenses yet this month. Add some on the Transactions page.
+                    No expenses yet this {budgetPeriod.noun}. Add some on the
+                    Transactions page.
                   </div>
                 )}
               </CardContent>
@@ -334,16 +361,16 @@ export default function TrackerPage() {
             <BreakdownCard
               icon={PiggyBank}
               label="Total saved"
-              amount={summary?.totalSaved ?? 0}
-              percent={summary?.percentageSaved ?? 0}
+              amount={income - spent}
+              percent={percentageSaved}
               color="text-success"
               accent
             />
             <BreakdownCard
               icon={CreditCard}
               label="Total spent"
-              amount={summary?.totalExpenses ?? 0}
-              percent={summary?.percentageSpent ?? 0}
+              amount={spent}
+              percent={percentageSpent}
               color="text-destructive"
             />
           </motion.div>

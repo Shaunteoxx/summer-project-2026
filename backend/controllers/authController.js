@@ -4,10 +4,14 @@ import {
   MAX_YEAR,
   resolveClientToday,
   roundMoney,
+  ymd,
 } from "../lib/validation.js";
+import { dayFromYmd, daysLeftInPeriod } from "../lib/period.js";
+import { loadPeriodContext } from "../lib/periodContext.js";
 import { signToken, sessionExhausted } from "../middleware/auth.js";
 import { getLifetimeSavings } from "./summaryController.js";
 import { ensureDemoUser } from "../lib/demoSeed.js";
+import BudgetPeriod from "../models/BudgetPeriod.js";
 import MonthlySummary from "../models/MonthlySummary.js";
 import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
@@ -76,6 +80,7 @@ export async function getMe(req, res) {
     isDemo: !!user.isDemo,
     profilePicture: user.profilePicture,
     avatar: user.avatar,
+    budgetMode: user.budgetMode || "month",
     savingsByMonth: Object.fromEntries(user.savingsByMonth || []),
     friends: user.friends,
     friendRequests: user.friendRequests,
@@ -230,6 +235,7 @@ export async function deleteAccount(req, res) {
   await Promise.all([
     Transaction.deleteMany({ userId }),
     MonthlySummary.deleteMany({ userId }),
+    BudgetPeriod.deleteMany({ userId }),
     // Scrub references to this user from everyone else's friends / requests.
     User.updateMany(
       { $or: [{ friends: userId }, { friendRequests: userId }] },
@@ -241,21 +247,31 @@ export async function deleteAccount(req, res) {
   res.json({ message: "Account deleted" });
 }
 
-/** GET /api/auth/home -> aggregated homepage stats for the current month. */
+/** GET /api/auth/home -> aggregated homepage stats for the active period. */
 export async function getHomeStats(req, res) {
   const today = resolveClientToday(req.query.today);
   if (!today) return res.status(400).json({ message: "Invalid today date" });
-  const month = today.getUTCMonth();
-  const year = today.getUTCFullYear();
+  const todayKey = ymd(today);
 
-  const [monthTransactions, totalSavings] = await Promise.all([
-    Transaction.find({ userId: req.user._id, month, year }),
+  const context = await loadPeriodContext(req.user, todayKey);
+  const active = context.active;
+
+  // In days mode there may be no period running — between two of them, or
+  // before the first is started. There's nothing to budget, so the client gets
+  // a null period and shows a "start a period" prompt instead of numbers.
+  const [periodTransactions, totalSavings] = await Promise.all([
+    active
+      ? Transaction.find({
+          userId: req.user._id,
+          date: { $gte: dayFromYmd(active.start), $lte: dayFromYmd(active.end) },
+        })
+      : [],
     getLifetimeSavings(req.user._id),
   ]);
 
   let income = 0;
   let expenses = 0;
-  for (const t of monthTransactions) {
+  for (const t of periodTransactions) {
     if (t.type === "income") income += t.amount;
     else expenses += t.amount;
   }
@@ -263,24 +279,30 @@ export async function getHomeStats(req, res) {
   income = roundMoney(income);
   expenses = roundMoney(expenses);
 
-  // Reserve this month's savings target before working out what's left to spend,
-  // so the headline matches the daily-budget model (savingsByMonth keys are
-  // "YYYY-M" with a 0-based month).
-  const monthSavings = roundMoney(
-    Math.max(0, Number(req.user.savingsByMonth?.get(`${year}-${month}`)) || 0)
-  );
+  // Reserve the period's savings target before working out what's left to
+  // spend, so the headline matches the daily-budget model.
+  const periodSavings = roundMoney(active?.savings ?? 0);
 
-  // "Left to spend" = income this month minus expenses so far minus the savings
-  // set aside for the month. Can go negative if you've overspent your target.
-  const leftToSpend = roundMoney(income - expenses - monthSavings);
+  // "Left to spend" = income this period minus expenses so far minus the
+  // savings set aside. Can go negative if you've overspent your target.
+  const leftToSpend = roundMoney(income - expenses - periodSavings);
 
   res.json({
     username: req.user.username,
-    month,
-    year,
-    monthIncome: income,
-    monthExpenses: expenses,
-    monthSavings,
+    mode: context.mode,
+    status: context.status,
+    period: active
+      ? {
+          id: active.id,
+          start: active.start,
+          end: active.end,
+          days: active.days,
+          daysLeft: daysLeftInPeriod(todayKey, active),
+        }
+      : null,
+    periodIncome: income,
+    periodExpenses: expenses,
+    periodSavings,
     leftToSpend,
     totalSavings,
     percentageSaved:

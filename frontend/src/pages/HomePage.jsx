@@ -10,16 +10,20 @@ import {
   ArrowRight,
   CalendarDays,
   BarChart3,
+  AlertTriangle,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import StreakCard from "@/components/StreakCard";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchHomeStats } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
-import { monthName, daysLeftInMonth, localToday } from "@/lib/utils";
+import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
+import { formatMoney, localToday } from "@/lib/utils";
+import { formatPeriodLabel } from "@/lib/period";
 import { staggerContainer, fadeUp, fadeScaleItem } from "@/animations/variants";
 
 const quickActions = [
@@ -31,7 +35,7 @@ const quickActions = [
   },
   {
     to: "/tracker",
-    label: "This month",
+    label: "This period",
     desc: "Saved vs spent",
     icon: PieChart,
   },
@@ -52,6 +56,7 @@ const quickActions = [
 export default function HomePage() {
   const navigate = useNavigate();
   const toast = useToast();
+  const period = useBudgetPeriod();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -66,17 +71,24 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const now = new Date();
-  const month = stats ? stats.month : now.getMonth();
-  const year = stats ? stats.year : now.getFullYear();
-  const daysLeft = daysLeftInMonth();
+  // The server resolves which period is active; a null one means days mode
+  // with nothing running, and the hero becomes a prompt to start the next.
+  const activePeriod = stats?.period ?? period.current;
+  const noPeriod = !activePeriod;
+  const daysLeft = activePeriod?.daysLeft ?? 0;
+  const noun = period.noun;
+  // Negative "left to spend" means the period's income minus its savings target
+  // is already gone — call it out rather than showing a quiet red number.
+  const overspent = (stats?.leftToSpend ?? 0) < 0;
 
   return (
     <PageWrapper>
       {/* Greeting */}
       <motion.div variants={fadeUp} initial="initial" animate="animate">
         <p className="text-sm font-medium text-primary">
-          {monthName(month)} {year}
+          {activePeriod
+            ? formatPeriodLabel(activePeriod, { mode: period.mode })
+            : "No budget period running"}
         </p>
         {loading ? (
           <Skeleton className="mt-1.5 h-8 w-56" />
@@ -99,32 +111,56 @@ export default function HomePage() {
           <CardContent className="relative p-6">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-medium text-muted-foreground">
-                Left to spend this month
+                {noPeriod ? "Nothing budgeted right now" : `Left to spend this ${noun}`}
               </p>
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                <CalendarDays className="h-3.5 w-3.5" />
-                {daysLeft} {daysLeft === 1 ? "day" : "days"} left
-              </span>
+              {!noPeriod && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  {daysLeft} {daysLeft === 1 ? "day" : "days"} left
+                </span>
+              )}
             </div>
-            {loading ? (
+            {!loading && noPeriod ? (
+              <>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {period.status === "lapsed"
+                    ? "Your last budget period has ended. Start the next one to get your daily budget back."
+                    : "Set up a budget period to start tracking a daily budget."}
+                </p>
+                <Button className="mt-4 w-full" onClick={() => navigate("/more")}>
+                  {period.status === "lapsed" ? "Start next period" : "Set up a period"}
+                </Button>
+              </>
+            ) : loading ? (
               <>
                 <Skeleton className="mt-2 h-12 w-48" />
                 <Skeleton className="mt-4 h-5 w-44" />
               </>
             ) : (
               <>
-                <p className="mt-1 text-[2.75rem] font-extrabold leading-tight tracking-tight text-foreground">
+                <p
+                  className={`mt-1 text-[2.75rem] font-extrabold leading-tight tracking-tight ${
+                    overspent ? "text-destructive" : "text-foreground"
+                  }`}
+                >
                   <AnimatedNumber
                     value={stats?.leftToSpend ?? 0}
                     prefix="$"
                     decimals={2}
                   />
                 </p>
+                {overspent && (
+                  <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {formatMoney(Math.abs(stats.leftToSpend))} past this {noun}&apos;s
+                    budget — no daily budget until more income lands.
+                  </p>
+                )}
                 <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
                   <span className="flex items-center gap-1.5 text-success">
                     <TrendingUp className="h-4 w-4" />
                     <AnimatedNumber
-                      value={stats?.monthIncome ?? 0}
+                      value={stats?.periodIncome ?? 0}
                       prefix="$"
                       decimals={2}
                     />
@@ -133,17 +169,17 @@ export default function HomePage() {
                   <span className="flex items-center gap-1.5 text-destructive">
                     <Receipt className="h-4 w-4" />
                     <AnimatedNumber
-                      value={stats?.monthExpenses ?? 0}
+                      value={stats?.periodExpenses ?? 0}
                       prefix="$"
                       decimals={2}
                     />
                     <span className="text-muted-foreground">out</span>
                   </span>
-                  {stats?.monthSavings > 0 && (
+                  {stats?.periodSavings > 0 && (
                     <span className="flex items-center gap-1.5 text-primary">
                       <PiggyBank className="h-4 w-4" />
                       <AnimatedNumber
-                        value={stats?.monthSavings ?? 0}
+                        value={stats?.periodSavings ?? 0}
                         prefix="$"
                         decimals={2}
                       />
@@ -179,7 +215,7 @@ export default function HomePage() {
         />
         <StatCard
           icon={TrendingUp}
-          label="Saved this month"
+          label={`Saved this ${noun}`}
           value={stats?.percentageSaved ?? 0}
           suffix="%"
           decimals={0}

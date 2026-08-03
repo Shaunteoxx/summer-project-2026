@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, useAnimationControls } from "framer-motion";
 import { Plus, Minus, Trash2, Check, X, Receipt, Search } from "lucide-react";
 
@@ -19,7 +19,9 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { monthName, formatMoney, localToday } from "@/lib/utils";
+import { formatMoney, localToday } from "@/lib/utils";
+import { formatPeriodLabel } from "@/lib/period";
+import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { CUSTOM_COLOR_OPTIONS } from "@/lib/categories";
 import { useCategories } from "@/hooks/useCategories";
 import { staggerContainer, slideInItem, fadeUp, SHAKE } from "@/animations/variants";
@@ -76,15 +78,26 @@ export default function TransactionsPage() {
   const pendingDeletes = useRef(new Map());
 
   const now = new Date();
+  const budgetPeriod = useBudgetPeriod();
+  const current = budgetPeriod.current;
 
-  const load = () => {
-    fetchTransactions({ month: now.getMonth(), year: now.getFullYear() })
+  // The ledger lists the active budget period. With no period running there's
+  // no window to list, so it falls back to the calendar month.
+  const load = useCallback(() => {
+    const params = current
+      ? { start: current.start, end: current.end }
+      : { month: now.getMonth(), year: now.getFullYear() };
+    fetchTransactions(params)
       .then(setTransactions)
       .catch(() => toast.error("Couldn't load transactions. Pull to refresh or try again."))
       .finally(() => setLoading(false));
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current]);
 
-  useEffect(load, []);
+  useEffect(() => {
+    if (budgetPeriod.loading) return;
+    load();
+  }, [load, budgetPeriod.loading]);
 
   // On unmount, commit any deletes still in their undo window so they aren't lost.
   useEffect(() => {
@@ -106,11 +119,17 @@ export default function TransactionsPage() {
     },
     { income: 0, expenses: 0 }
   );
-  const monthlySavings = Math.max(
-    0,
-    Number(user?.savingsByMonth?.[`${now.getFullYear()}-${now.getMonth()}`]) || 0
-  );
-  const balance = totals.income - totals.expenses - monthlySavings;
+  // In days mode the target lives on the period; in month mode it's still the
+  // savingsByMonth entry for the calendar month the period covers.
+  const savingsTarget = current
+    ? budgetPeriod.mode === "days"
+      ? current.savings
+      : Math.max(
+          0,
+          Number(user?.savingsByMonth?.[`${now.getFullYear()}-${now.getMonth()}`]) || 0
+        )
+    : 0;
+  const balance = totals.income - totals.expenses - savingsTarget;
 
   // Filter by type (pills) and a free-text query matching description or category.
   const q = query.trim().toLowerCase();
@@ -238,13 +257,13 @@ export default function TransactionsPage() {
         category: form.category,
         date: form.date,
       });
-      const created_d = new Date(created.date);
-      if (
-        created_d.getUTCMonth() === now.getMonth() &&
-        created_d.getUTCFullYear() === now.getFullYear()
-      ) {
-        setTransactions((prev) => [created, ...prev]);
-      }
+      // Only show it here if it lands inside the window being listed.
+      const createdYmd = String(created.date).slice(0, 10);
+      const inView = current
+        ? createdYmd >= current.start && createdYmd <= current.end
+        : new Date(created.date).getUTCMonth() === now.getMonth() &&
+          new Date(created.date).getUTCFullYear() === now.getFullYear();
+      if (inView) setTransactions((prev) => [created, ...prev]);
       closeForm();
       const sign = type === "income" ? "+" : "−";
       toast.success(`Added ${sign}${formatMoney(amount)} · ${form.category}`);
@@ -305,7 +324,9 @@ export default function TransactionsPage() {
       <motion.div variants={fadeUp} initial="initial" animate="animate">
         <h1 className="text-2xl font-extrabold tracking-tight">Transactions</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {monthName(now.getMonth())} {now.getFullYear()}
+          {current
+            ? formatPeriodLabel(current, { mode: budgetPeriod.mode })
+            : "No budget period running"}
         </p>
       </motion.div>
 
@@ -336,7 +357,7 @@ export default function TransactionsPage() {
                     <span className="ml-1 text-muted-foreground">out</span>
                   </span>
                   <span className="text-primary">
-                    −<AnimatedNumber value={monthlySavings} prefix="$" decimals={2} />
+                    −<AnimatedNumber value={savingsTarget} prefix="$" decimals={2} />
                     <span className="ml-1 text-muted-foreground">saved</span>
                   </span>
                 </div>
@@ -702,7 +723,7 @@ export default function TransactionsPage() {
                 <Receipt className="h-6 w-6" />
               </span>
               <p className="text-sm text-muted-foreground">
-                Nothing logged yet this month.
+                Nothing logged yet this {budgetPeriod.noun}.
                 <br />
                 Add income or an expense above.
               </p>
@@ -721,7 +742,7 @@ export default function TransactionsPage() {
                   <>
                     No{" "}
                     {FILTERS.find((f) => f.value === filter)?.label.toLowerCase()}{" "}
-                    this month.
+                    this {budgetPeriod.noun}.
                   </>
                 )}
               </p>

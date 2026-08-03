@@ -17,6 +17,7 @@ import transactionRoutes from "./routes/transactions.js";
 import summaryRoutes from "./routes/summary.js";
 import friendRoutes from "./routes/friends.js";
 import streakRoutes from "./routes/streak.js";
+import periodRoutes from "./routes/period.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -76,6 +77,7 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/summary", summaryRoutes);
 app.use("/api/friends", friendRoutes);
 app.use("/api/streak", streakRoutes);
+app.use("/api/period", periodRoutes);
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 
 app.use((err, req, res, next) => {

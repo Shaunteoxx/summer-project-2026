@@ -25,12 +25,15 @@ import {
 } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { monthName, localToday } from "@/lib/utils";
+import { localToday } from "@/lib/utils";
+import { formatPeriodLabel } from "@/lib/period";
+import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
 
 export default function FriendsPage() {
   const toast = useToast();
   const guard = useDemoGuard();
+  const budgetPeriod = useBudgetPeriod();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -240,11 +243,15 @@ export default function FriendsPage() {
                 <Trophy className="h-5 w-5 text-primary" />
                 <h2 className="font-semibold">Savings Leaderboard</h2>
               </div>
+              {/* Everyone is scored on their own budget period, so the header
+                  names yours and each row carries its own dates. */}
               <p className="mb-5 text-sm text-muted-foreground">
                 Savings rate ·{" "}
-                {comparison
-                  ? `${monthName(comparison.month)} ${comparison.year}`
-                  : ""}
+                {comparison?.period
+                  ? formatPeriodLabel(comparison.period, { mode: budgetPeriod.mode })
+                  : comparison
+                    ? "no period running"
+                    : ""}
               </p>
 
               {!comparison ? (

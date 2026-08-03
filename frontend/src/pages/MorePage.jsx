@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   PiggyBank,
   ChevronLeft,
+  CalendarRange,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -24,12 +25,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
+import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { AVATARS, avatarSrc } from "@/lib/avatars";
-import { formatMoney, monthName } from "@/lib/utils";
-import { updateProfile, deleteAccount, setMonthlySavings } from "@/api/endpoints";
+import { formatMoney, monthName, localToday } from "@/lib/utils";
+import {
+  MAX_PERIOD_DAYS,
+  MIN_PERIOD_DAYS,
+  addDaysYmd,
+  formatDay,
+  formatPeriodLabel,
+  periodEnd,
+} from "@/lib/period";
+import {
+  updateProfile,
+  deleteAccount,
+  setMonthlySavings,
+  setPeriodMode,
+  startPeriod,
+  updatePeriod,
+  deletePeriod,
+} from "@/api/endpoints";
 import { staggerContainer, fadeUp, fadeScaleItem, SHAKE } from "@/animations/variants";
 
 const shortcuts = [
@@ -50,9 +68,16 @@ const shortcuts = [
 export default function MorePage() {
   const navigate = useNavigate();
   const { user, refresh, logout, clearSession } = useAuth();
+  const period = useBudgetPeriod();
   const { isDark, toggleTheme } = useTheme();
   const toast = useToast();
   const guard = useDemoGuard();
+  const isDays = period.mode === "days";
+  // `history` from the API is every period; the running one is rendered
+  // separately above, so keep it out of the "Past periods" list.
+  const pastPeriods = (period.history ?? []).filter(
+    (p) => p.id !== period.current?.id
+  );
 
   const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState("");
@@ -73,6 +98,19 @@ export default function MorePage() {
   const savingsByMonth = user?.savingsByMonth ?? {};
   const keyFor = (y, m) => `${y}-${m}`;
   const currentMonthSavings = savingsByMonth[keyFor(now.getFullYear(), now.getMonth())] ?? 0;
+  // In days mode the target belongs to the running period, not the calendar.
+  const currentSavings = isDays ? (period.current?.savings ?? 0) : currentMonthSavings;
+
+  // Budget period sheet: mode toggle plus the form for starting the next one.
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const [periodStart, setPeriodStart] = useState(localToday());
+  const [periodLength, setPeriodLength] = useState("15");
+  const [periodTarget, setPeriodTarget] = useState("");
+  const [periodError, setPeriodError] = useState("");
+  const [savingPeriod, setSavingPeriod] = useState(false);
+  // Id of the period awaiting an inline "really delete?" confirmation.
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const periodShake = useAnimationControls();
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -123,11 +161,132 @@ export default function MorePage() {
 
   const openSavings = () => {
     if (guard()) return;
+    if (isDays) {
+      // Days mode edits the running period's own target — there's no month to
+      // step through, and nothing to edit while no period is running.
+      if (!period.current) {
+        toast.error("Start a budget period first.");
+        return;
+      }
+      setSavingsInput(period.current.savings ? String(period.current.savings) : "");
+      setSavingsError("");
+      setSavingsOpen(true);
+      return;
+    }
     setSavingsYear(now.getFullYear());
     setSavingsMonth(now.getMonth());
     loadSavingsInput(now.getFullYear(), now.getMonth());
     setSavingsError("");
     setSavingsOpen(true);
+  };
+
+  const openPeriod = () => {
+    if (guard()) return;
+    // Default the next period to start the day after the last one ended, so
+    // the common case is one tap.
+    const suggested = period.previous ? addDaysYmd(period.previous.end, 1) : localToday();
+    setPeriodStart(
+      period.current
+        ? period.current.start
+        : suggested > localToday()
+          ? localToday()
+          : suggested
+    );
+    setPeriodLength(String(period.current?.days ?? period.previous?.days ?? 15));
+    setPeriodTarget("");
+    setPeriodError("");
+    setConfirmDeleteId(null);
+    setPeriodOpen(true);
+  };
+
+  const switchMode = async (mode) => {
+    if (mode === period.mode) return;
+    setPeriodError("");
+    setSavingPeriod(true);
+    try {
+      await setPeriodMode(mode);
+      await Promise.all([refresh(), period.refresh()]);
+      toast.success(
+        mode === "month" ? "Budgeting by calendar month" : "Budgeting by custom days"
+      );
+    } catch (err) {
+      setPeriodError(err?.response?.data?.message || "Couldn't change the mode.");
+      periodShake.start(SHAKE);
+    } finally {
+      setSavingPeriod(false);
+    }
+  };
+
+  const handleStartPeriod = async () => {
+    const length = Number(periodLength);
+    let error = "";
+    if (!periodStart) error = "Pick a start date.";
+    else if (!Number.isInteger(length) || length < MIN_PERIOD_DAYS || length > MAX_PERIOD_DAYS)
+      error = `Enter a whole number of days between ${MIN_PERIOD_DAYS} and ${MAX_PERIOD_DAYS}.`;
+    const target = periodTarget.trim() === "" ? 0 : Number(periodTarget);
+    if (!error && (!Number.isFinite(target) || target < 0)) error = "Enter $0 or more.";
+    if (error) {
+      setPeriodError(error);
+      periodShake.start(SHAKE);
+      return;
+    }
+
+    setPeriodError("");
+    setSavingPeriod(true);
+    try {
+      await startPeriod({ start: periodStart, length, savingsTarget: target });
+      await Promise.all([refresh(), period.refresh()]);
+      setPeriodOpen(false);
+      toast.success(`Period started — ${length} days`);
+    } catch (err) {
+      setPeriodError(err?.response?.data?.message || "Couldn't start the period.");
+      periodShake.start(SHAKE);
+    } finally {
+      setSavingPeriod(false);
+    }
+  };
+
+  const handleUpdatePeriod = async () => {
+    const length = Number(periodLength);
+    let error = "";
+    if (!periodStart) error = "Pick a start date.";
+    else if (periodStart > localToday()) error = "Start date can't be in the future.";
+    else if (!Number.isInteger(length) || length < MIN_PERIOD_DAYS || length > MAX_PERIOD_DAYS)
+      error = `Enter a whole number of days between ${MIN_PERIOD_DAYS} and ${MAX_PERIOD_DAYS}.`;
+    if (error) {
+      setPeriodError(error);
+      periodShake.start(SHAKE);
+      return;
+    }
+    setPeriodError("");
+    setSavingPeriod(true);
+    try {
+      await updatePeriod(period.current.id, { start: periodStart, length });
+      await period.refresh();
+      setPeriodOpen(false);
+      toast.success("Period updated");
+    } catch (err) {
+      setPeriodError(err?.response?.data?.message || "Couldn't update the period.");
+      periodShake.start(SHAKE);
+    } finally {
+      setSavingPeriod(false);
+    }
+  };
+
+  const handleDeletePeriod = async (id) => {
+    setPeriodError("");
+    setSavingPeriod(true);
+    try {
+      await deletePeriod(id);
+      await period.refresh();
+      setConfirmDeleteId(null);
+      toast.success("Period removed — its transactions were kept");
+    } catch (err) {
+      setPeriodError(err?.response?.data?.message || "Couldn't remove the period.");
+      periodShake.start(SHAKE);
+    } finally {
+      setSavingPeriod(false);
+    }
   };
 
   const stepSavingsMonth = (delta) => {
@@ -160,6 +319,13 @@ export default function MorePage() {
     setSavingsError("");
     setSavingSavings(true);
     try {
+      if (isDays) {
+        await updatePeriod(period.current.id, { savingsTarget: amount });
+        await period.refresh();
+        setSavingsOpen(false);
+        toast.success("Savings target updated");
+        return;
+      }
       await setMonthlySavings({ key: keyFor(savingsYear, savingsMonth), amount });
       await refresh();
       setSavingsOpen(false);
@@ -243,7 +409,34 @@ export default function MorePage() {
         <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Budget
         </h2>
-        <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
+        <div className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
+          <button
+            onClick={openPeriod}
+            className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+              <CalendarRange className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">Budget period</span>
+              <span className="block text-sm text-muted-foreground">
+                {!isDays
+                  ? "Calendar month"
+                  : period.current
+                    ? `${period.current.days} days · ${formatPeriodLabel(period.current)}`
+                    : period.status === "lapsed"
+                      ? "Ended — start the next one"
+                      : "Not set up yet"}
+              </span>
+            </span>
+            {isDays && period.status !== "active" && (
+              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                Action needed
+              </span>
+            )}
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+          </button>
+
           <button
             onClick={openSavings}
             className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -252,13 +445,17 @@ export default function MorePage() {
               <PiggyBank className="h-5 w-5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-semibold">Monthly savings</span>
+              <span className="block font-semibold">Savings target</span>
               <span className="block text-sm text-muted-foreground">
-                {monthName(now.getMonth())}, reserved before your budget
+                {isDays
+                  ? period.current
+                    ? `${formatPeriodLabel(period.current)}, reserved before your budget`
+                    : "Start a period to set one"
+                  : `${monthName(now.getMonth())}, reserved before your budget`}
               </span>
             </span>
             <span className="shrink-0 font-semibold tabular-nums">
-              {formatMoney(currentMonthSavings)}
+              {formatMoney(currentSavings)}
             </span>
             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
           </button>
@@ -404,15 +601,20 @@ export default function MorePage() {
         </div>
       </BottomSheet>
 
-      {/* Monthly savings sheet */}
+      {/* Savings target sheet */}
       <BottomSheet
         open={savingsOpen}
         onClose={() => !savingSavings && setSavingsOpen(false)}
-        title="Monthly savings"
+        title="Savings target"
       >
         <div className="space-y-4">
-          {/* Month stepper */}
-          <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 p-1">
+          {/* Month stepper — days mode edits the running period instead, so
+              there's nothing to step through. */}
+          <div
+            className={`flex items-center justify-between rounded-xl border border-border bg-muted/40 p-1 ${
+              isDays ? "hidden" : ""
+            }`}
+          >
             <button
               type="button"
               onClick={() => stepSavingsMonth(-1)}
@@ -439,7 +641,8 @@ export default function MorePage() {
               htmlFor="monthly-savings"
               className={savingsError ? "text-destructive" : undefined}
             >
-              Amount to set aside in {monthName(savingsMonth)}
+              Amount to set aside in{" "}
+              {isDays ? formatPeriodLabel(period.current) : monthName(savingsMonth)}
             </Label>
             <Input
               id="monthly-savings"
@@ -465,15 +668,335 @@ export default function MorePage() {
               <FieldError id="monthly-savings-error">{savingsError}</FieldError>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Reserved from this month's income first — your daily budget is
-                what's left, spread over the days remaining.
+                Reserved from this {isDays ? "period" : "month"}'s income first —
+                your daily budget is what's left, spread over the days remaining.
               </p>
             )}
           </motion.div>
           <Button onClick={handleSaveSavings} disabled={savingSavings} className="w-full">
-            {savingSavings ? "Saving…" : `Save for ${monthName(savingsMonth)}`}
+            {savingSavings
+              ? "Saving…"
+              : `Save for ${isDays ? formatPeriodLabel(period.current) : monthName(savingsMonth)}`}
           </Button>
         </div>
+      </BottomSheet>
+
+      {/* Budget period sheet */}
+      <BottomSheet
+        open={periodOpen}
+        onClose={() => !savingPeriod && setPeriodOpen(false)}
+        title="Budget period"
+      >
+        <motion.div animate={periodShake} className="space-y-5">
+          {/* Mode toggle */}
+          <div
+            className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1"
+            role="group"
+            aria-label="Budget period mode"
+          >
+            <ModeTab
+              active={!isDays}
+              disabled={savingPeriod}
+              onClick={() => switchMode("month")}
+              label="Month"
+              hint="Calendar"
+            />
+            <ModeTab
+              active={isDays}
+              disabled={savingPeriod}
+              onClick={() => switchMode("days")}
+              label="Days"
+              hint="Custom length"
+            />
+          </div>
+
+          {!isDays ? (
+            <p className="text-sm text-muted-foreground">
+              Your budget runs from the 1st to the last day of each calendar
+              month, and your daily budget is what's left spread over the days
+              remaining. Switch to <strong>Days</strong> if your allowance covers
+              something other than a month — a fortnight, or five weeks.
+            </p>
+          ) : (
+            <>
+              {period.current ? (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Running now
+                    </p>
+                    <p className="mt-1 font-semibold">
+                      {formatPeriodLabel(period.current)}
+                    </p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                      {period.current.days} days ·{" "}
+                      {period.current.daysLeft === 0
+                        ? "ends today"
+                        : `${period.current.daysLeft} left`}{" "}
+                      · {period.current.savesTotal} restore
+                      {period.current.savesTotal === 1 ? "" : "s"}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="period-edit-start">Start date</Label>
+                    <Input
+                      id="period-edit-start"
+                      type="date"
+                      value={periodStart}
+                      max={localToday()}
+                      onChange={(e) => {
+                        setPeriodStart(e.target.value);
+                        setPeriodError("");
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="period-length">Length in days</Label>
+                    <Input
+                      id="period-length"
+                      type="number"
+                      inputMode="numeric"
+                      min={MIN_PERIOD_DAYS}
+                      max={MAX_PERIOD_DAYS}
+                      value={periodLength}
+                      onChange={(e) => {
+                        setPeriodLength(e.target.value);
+                        setPeriodError("");
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Runs to{" "}
+                      <strong>
+                        {periodStart && Number(periodLength) >= MIN_PERIOD_DAYS
+                          ? formatDay(periodEnd(periodStart, Number(periodLength)), {
+                              withYear: true,
+                            })
+                          : "—"}
+                      </strong>
+                      . Your daily budget is recalculated from what's left.
+                    </p>
+                  </div>
+
+                  {periodError && <FieldError>{periodError}</FieldError>}
+
+                  <Button
+                    onClick={handleUpdatePeriod}
+                    disabled={savingPeriod}
+                    className="w-full"
+                  >
+                    {savingPeriod ? "Saving…" : "Save changes"}
+                  </Button>
+
+                  {/* Removing the running period — the escape hatch for one
+                      started by mistake. */}
+                  {confirmDeleteId === period.current.id ? (
+                    <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+                      <p className="text-xs text-muted-foreground">
+                        Remove <strong>{formatPeriodLabel(period.current)}</strong>?
+                        Its days stop being budgeted and drop out of your streak.
+                        <strong> Your transactions are kept</strong> and still
+                        count on Stats.
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          disabled={savingPeriod}
+                          onClick={() => setConfirmDeleteId(null)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="flex-1"
+                          disabled={savingPeriod}
+                          onClick={() => handleDeletePeriod(period.current.id)}
+                        >
+                          {savingPeriod ? "Removing…" : "Remove period"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(period.current.id)}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Remove this period
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {period.status === "lapsed" && period.previous && (
+                    <div className="rounded-xl border border-border bg-muted/40 p-4">
+                      <p className="text-sm text-muted-foreground">
+                        Your last period ran{" "}
+                        <strong className="text-foreground">
+                          {formatPeriodLabel(period.previous)}
+                        </strong>{" "}
+                        and has ended. Days since then aren't tracked until you
+                        start the next one.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="period-start">Start date</Label>
+                    <Input
+                      id="period-start"
+                      type="date"
+                      value={periodStart}
+                      max={localToday()}
+                      onChange={(e) => {
+                        setPeriodStart(e.target.value);
+                        setPeriodError("");
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="period-new-length">Length in days</Label>
+                    <Input
+                      id="period-new-length"
+                      type="number"
+                      inputMode="numeric"
+                      min={MIN_PERIOD_DAYS}
+                      max={MAX_PERIOD_DAYS}
+                      value={periodLength}
+                      onChange={(e) => {
+                        setPeriodLength(e.target.value);
+                        setPeriodError("");
+                      }}
+                    />
+                    <div className="flex flex-wrap gap-1.5">
+                      {[7, 14, 15, 30].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => {
+                            setPeriodLength(String(n));
+                            setPeriodError("");
+                          }}
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                            Number(periodLength) === n
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border text-muted-foreground hover:bg-accent"
+                          }`}
+                        >
+                          {n} days
+                        </button>
+                      ))}
+                    </div>
+                    {periodStart && Number(periodLength) >= MIN_PERIOD_DAYS && (
+                      <p className="text-xs text-muted-foreground">
+                        Runs until{" "}
+                        <strong>
+                          {formatDay(periodEnd(periodStart, Number(periodLength)), {
+                            withYear: true,
+                          })}
+                        </strong>
+                        .
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="period-target">Savings target (optional)</Label>
+                    <Input
+                      id="period-target"
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={periodTarget}
+                      onChange={(e) => {
+                        setPeriodTarget(e.target.value);
+                        setPeriodError("");
+                      }}
+                    />
+                  </div>
+
+                  {periodError && <FieldError>{periodError}</FieldError>}
+
+                  <Button
+                    onClick={handleStartPeriod}
+                    disabled={savingPeriod}
+                    className="w-full"
+                  >
+                    {savingPeriod ? "Starting…" : "Start period"}
+                  </Button>
+                </div>
+              )}
+
+              {pastPeriods.length > 0 && (
+                <div className="space-y-2 border-t border-border/60 pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Past periods
+                  </p>
+                  <ul className="space-y-1.5">
+                    {pastPeriods.slice(0, 5).map((p) => (
+                      <li key={p.id}>
+                        {confirmDeleteId === p.id ? (
+                          <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2.5">
+                            <p className="text-xs text-muted-foreground">
+                              Remove <strong>{formatPeriodLabel(p)}</strong>? Its
+                              days stop being budgeted.{" "}
+                              <strong>Transactions are kept.</strong>
+                            </p>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 flex-1 text-xs"
+                                disabled={savingPeriod}
+                                onClick={() => setConfirmDeleteId(null)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="h-7 flex-1 text-xs"
+                                disabled={savingPeriod}
+                                onClick={() => handleDeletePeriod(p.id)}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="min-w-0 flex-1 truncate">
+                              {formatPeriodLabel(p)}
+                            </span>
+                            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                              {p.days} days
+                              {p.savings > 0 ? ` · ${formatMoney(p.savings)}` : ""}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(p.id)}
+                              aria-label={`Remove ${formatPeriodLabel(p)}`}
+                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </motion.div>
       </BottomSheet>
 
       {/* Delete account confirmation */}
@@ -511,6 +1034,25 @@ export default function MorePage() {
         </div>
       </BottomSheet>
     </PageWrapper>
+  );
+}
+
+function ModeTab({ active, disabled, onClick, label, hint }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={active}
+      className={`rounded-lg px-3 py-2 text-center transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        active
+          ? "bg-card font-semibold shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      <span className="block text-sm">{label}</span>
+      <span className="block text-[11px] text-muted-foreground">{hint}</span>
+    </button>
   );
 }
 

@@ -1,6 +1,8 @@
 import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
-import { resolveClientToday, roundMoney } from "../lib/validation.js";
+import { resolveClientToday, roundMoney, ymd } from "../lib/validation.js";
+import { dayFromYmd } from "../lib/period.js";
+import { loadPeriodContext } from "../lib/periodContext.js";
 
 // Escape regex metacharacters so user input can't inject a pattern
 // (prevents ReDoS / catastrophic backtracking on the username search).
@@ -130,54 +132,78 @@ export async function getFriends(req, res) {
   );
 }
 
-/** GET /api/friends/comparison -> savings% leaderboard (me + friends) for current month. */
+/**
+ * GET /api/friends/comparison -> savings% leaderboard (me + friends).
+ *
+ * Everyone is scored on their own active budget period, so each person's
+ * number is the one they see on their own home screen. Savings % is a ratio,
+ * so it stays comparable even when two people run different length periods.
+ * Anyone with no period running right now simply scores 0.
+ */
 export async function getComparison(req, res) {
   const today = resolveClientToday(req.query.today);
   if (!today) return res.status(400).json({ message: "Invalid today date" });
-  const month = today.getUTCMonth();
-  const year = today.getUTCFullYear();
+  const todayKey = ymd(today);
 
   const me = await User.findById(req.user._id).populate(
     "friends",
-    "username profilePicture avatar"
+    "username profilePicture avatar budgetMode savingsByMonth"
   );
 
   const people = [
-    { id: me._id, username: me.username, profilePicture: me.profilePicture, avatar: me.avatar, isMe: true },
-    ...me.friends.map((f) => ({
-      id: f._id,
-      username: f.username,
-      profilePicture: f.profilePicture,
-      avatar: f.avatar,
-      isMe: false,
-    })),
+    { user: me, isMe: true },
+    ...me.friends.map((f) => ({ user: f, isMe: false })),
   ];
 
-  // Aggregate canonical transactions in one query for the whole leaderboard.
-  const summaries = await Transaction.aggregate([
-    {
-      $match: {
-        userId: { $in: people.map((p) => p.id) },
-        month,
-        year,
-      },
-    },
-    {
-      $group: {
-        _id: "$userId",
-        income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
-        expenses: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
-      },
-    },
-  ]);
-  const byUser = new Map(summaries.map((summary) => [String(summary._id), summary]));
+  // Each person's window differs, so resolve them first and then fetch all the
+  // transactions in one query bounded by the widest span on the board.
+  const entries = await Promise.all(
+    people.map(async ({ user, isMe }) => ({
+      user,
+      isMe,
+      period: (await loadPeriodContext(user, todayKey)).active,
+    }))
+  );
 
-  const board = people.map((p) => {
-    const summary = byUser.get(String(p.id));
+  const active = entries.filter((e) => e.period);
+  const totals = new Map();
+
+  if (active.length > 0) {
+    const from = active.reduce((min, e) => (e.period.start < min ? e.period.start : min), active[0].period.start);
+    const to = active.reduce((max, e) => (e.period.end > max ? e.period.end : max), active[0].period.end);
+
+    const rows = await Transaction.find({
+      userId: { $in: active.map((e) => e.user._id) },
+      date: { $gte: dayFromYmd(from), $lte: dayFromYmd(to) },
+    })
+      .select("userId type amount date")
+      .lean();
+
+    // Bucket per user against that user's own period bounds.
+    const boundsFor = new Map(active.map((e) => [String(e.user._id), e.period]));
+    for (const row of rows) {
+      const key = String(row.userId);
+      const period = boundsFor.get(key);
+      const day = ymd(new Date(row.date));
+      if (!period || day < period.start || day > period.end) continue;
+      const totalsFor = totals.get(key) ?? { income: 0, expenses: 0 };
+      if (row.type === "income") totalsFor.income += row.amount;
+      else totalsFor.expenses += row.amount;
+      totals.set(key, totalsFor);
+    }
+  }
+
+  const board = entries.map(({ user, isMe, period }) => {
+    const summary = totals.get(String(user._id));
     const income = summary?.income || 0;
     const totalSaved = roundMoney(income - (summary?.expenses || 0));
     return {
-      ...p,
+      id: user._id,
+      username: user.username,
+      profilePicture: user.profilePicture,
+      avatar: user.avatar,
+      isMe,
+      period: period ? { start: period.start, end: period.end, days: period.days } : null,
       percentageSaved: income > 0 ? Math.round((totalSaved / income) * 100) : 0,
       totalSaved,
     };
@@ -185,5 +211,9 @@ export async function getComparison(req, res) {
 
   board.sort((a, b) => b.percentageSaved - a.percentageSaved);
 
-  res.json({ month, year, leaderboard: board });
+  const mine = entries.find((e) => e.isMe)?.period ?? null;
+  res.json({
+    period: mine ? { start: mine.start, end: mine.end, days: mine.days } : null,
+    leaderboard: board,
+  });
 }

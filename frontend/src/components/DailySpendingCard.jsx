@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { BarChart3, CalendarDays } from "lucide-react";
+import { BarChart3, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   ComposedChart,
   Bar,
@@ -18,18 +18,57 @@ import BottomSheet from "@/components/BottomSheet";
 import SpendingCalendar from "@/components/SpendingCalendar";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useCategories } from "@/hooks/useCategories";
-import { cn, monthName, formatMoney, localToday } from "@/lib/utils";
+import { cn, formatMoney, localToday } from "@/lib/utils";
+import {
+  formatDay,
+  formatMonthLabel,
+  formatPeriodLabel,
+  periodDayList,
+} from "@/lib/period";
 import { fadeUp } from "@/animations/variants";
 
 const VIEW_KEY = "spendingView";
+// Beyond this, a single grid gets unwieldy (a 100-day period is 15 rows), so
+// the calendar splits into one page per calendar month.
+const PAGE_ABOVE_DAYS = 45;
 
-/** Custom X tick: label days 1, every 5th, and today (today bold + accented). */
-function DayTick({ x, y, payload, today, axis, primary }) {
-  const day = payload.value;
-  if (!(day === 1 || day % 5 === 0 || day === today)) return null;
-  const isToday = day === today;
+/**
+ * Split a period's days into calendar pages. Short periods stay on one page —
+ * including ones that straddle a month boundary, which read fine in a single
+ * grid and keep the whole period visible at a glance.
+ */
+function buildCalendarPages(days) {
+  if (days.length <= PAGE_ABOVE_DAYS) {
+    return [{ key: "all", label: null, days }];
+  }
+  const byMonth = new Map();
+  for (const d of days) {
+    const key = d.ymd.slice(0, 7);
+    if (!byMonth.has(key)) byMonth.set(key, []);
+    byMonth.get(key).push(d);
+  }
+  return [...byMonth.entries()].map(([key, monthDays]) => ({
+    key,
+    label: formatMonthLabel(monthDays[0].ymd),
+    days: monthDays,
+  }));
+}
+
+/**
+ * Custom X tick. A period can span two calendar months, so ticks are placed by
+ * position in the period (first, every 5th, today) and labelled with the day
+ * of the month.
+ */
+function DayTick({ x, y, payload, days, today, axis, primary }) {
+  const entry = days.find((d) => d.ymd === payload.value);
+  if (!entry) return null;
+  const index = entry.index;
+  const todayIndex = days.find((d) => d.ymd === today)?.index ?? -1;
+  const day = entry.day;
+  if (!(index === 0 || index % 5 === 0 || index === todayIndex)) return null;
+  const isToday = index === todayIndex;
   // Today's label wins when a regular label would collide with it.
-  if (!isToday && Math.abs(day - today) <= 1) return null;
+  if (!isToday && todayIndex >= 0 && Math.abs(index - todayIndex) <= 1) return null;
   return (
     <text
       x={x}
@@ -45,16 +84,20 @@ function DayTick({ x, y, payload, today, axis, primary }) {
 }
 
 /**
- * Daily spending tracker for the current month, as a calendar (default) or a
- * bar chart. Each day is judged against its own rolling budget from the streak
- * — (income − savings target − spent so far) ÷ days left — so a red day here
- * always matches a broken day in the streak, and today's budget is the same
- * number the home page shows.
+ * Daily spending tracker for the active budget period, as a calendar (default)
+ * or a bar chart. Each day is judged against its own rolling budget from the
+ * streak — (income − savings target − spent so far) ÷ days left — so a red day
+ * here always matches a broken day in the streak, and today's budget is the
+ * same number the home page shows.
+ *
+ * The period can be any length and can straddle a month boundary, so the grid
+ * is built from the period's own date span rather than a calendar month.
  */
 export default function DailySpendingCard({
   transactions = [],
   income = 0,
-  monthDays = [],
+  period,
+  periodDays = [],
   todayBudget = 0,
 }) {
   const colors = useChartColors();
@@ -64,12 +107,9 @@ export default function DailySpendingCard({
     () => localStorage.getItem(VIEW_KEY) || "calendar"
   );
   const [selected, setSelected] = useState(null);
+  const [page, setPage] = useState(null);
 
   const todayYmd = localToday();
-  const [year, monthNum, todayDate] = todayYmd.split("-").map(Number);
-  const monthIdx = monthNum - 1;
-  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
-  const pad = (n) => String(n).padStart(2, "0");
 
   // Expenses grouped by UTC calendar day — transaction dates are stored at UTC
   // midnight, so the ISO prefix matches the streak's day keys exactly.
@@ -84,36 +124,56 @@ export default function DailySpendingCard({
     return map;
   }, [transactions]);
 
-  const budgetByDay = new Map(monthDays.map((d) => [d.date, d]));
-  const budgetsAvailable = income > 0 && monthDays.length > 0;
+  const budgetByDay = new Map(periodDays.map((d) => [d.date, d]));
+  const budgetsAvailable = income > 0 && periodDays.length > 0;
 
   const days = [];
   let totalSpent = 0;
-  for (let day = 1; day <= daysInMonth; day++) {
-    const key = `${year}-${pad(monthNum)}-${pad(day)}`;
+  let elapsed = 0;
+  periodDayList(period).forEach((key, index) => {
     const entry = budgetByDay.get(key);
     const txns = txnsByDay.get(key) ?? [];
     const amount = entry
       ? entry.spent
       : txns.reduce((sum, t) => sum + t.amount, 0);
     totalSpent += amount;
-    const isFuture = day > todayDate;
-    // Clamp negative budgets (overspent months) to 0: any spend is then over.
+    const isFuture = key > todayYmd;
+    if (!isFuture) elapsed += 1;
+    const date = new Date(`${key}T00:00:00.000Z`);
+    // Clamp negative budgets (overspent periods) to 0: any spend is then over.
     const budget =
       budgetsAvailable && entry && !isFuture ? Math.max(0, entry.budget) : null;
     days.push({
-      day,
+      ymd: key,
+      index,
+      day: date.getUTCDate(),
+      monthIdx: date.getUTCMonth(),
+      // First day of a month inside the period — the grid labels these so a
+      // period spanning two months stays readable.
+      startsMonth: date.getUTCDate() === 1,
       amount,
       budget,
       over: budget !== null && amount > budget + 1e-9,
-      isToday: day === todayDate,
+      isToday: key === todayYmd,
       isFuture,
       txns,
     });
-  }
-  const avgPerDay = todayDate > 0 ? totalSpent / todayDate : 0;
+  });
+  const avgPerDay = elapsed > 0 ? totalSpent / elapsed : 0;
   const hasSpending = totalSpent > 0;
   const anyOver = days.some((d) => d.over);
+
+  // Calendar paging. `page` stays null until the user moves, so the view
+  // follows today by default and survives the period changing underneath it.
+  const pages = buildCalendarPages(days);
+  const paginated = pages.length > 1;
+  const todayPage = Math.max(
+    0,
+    pages.findIndex((p) => p.days.some((d) => d.isToday))
+  );
+  const activePage = Math.min(page ?? todayPage, pages.length - 1);
+  const shownDays = pages[activePage]?.days ?? [];
+  const pageSpent = shownDays.reduce((sum, d) => sum + d.amount, 0);
 
   const switchView = (v) => {
     setView(v);
@@ -128,7 +188,7 @@ export default function DailySpendingCard({
             <div>
               <h2 className="font-semibold">Daily spending</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {monthName(monthIdx)} {year}
+                {formatPeriodLabel(period)}
               </p>
             </div>
             <div className="text-right">
@@ -180,11 +240,42 @@ export default function DailySpendingCard({
             <>
               {view === "calendar" ? (
                 <div className="mt-4">
+                  {paginated && (
+                    <div className="mb-2.5 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPage(Math.max(0, activePage - 1))}
+                        disabled={activePage === 0}
+                        aria-label="Previous month"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold leading-none">
+                          {pages[activePage]?.label}
+                        </p>
+                        <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+                          {formatMoney(pageSpent)} · {activePage + 1} of {pages.length}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPage(Math.min(pages.length - 1, activePage + 1))
+                        }
+                        disabled={activePage === pages.length - 1}
+                        aria-label="Next month"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                   <SpendingCalendar
-                    days={days}
-                    year={year}
-                    monthIdx={monthIdx}
+                    days={shownDays}
                     budgetsAvailable={budgetsAvailable}
+                    showMonthTags={!paginated}
                     onSelectDay={setSelected}
                   />
                 </div>
@@ -201,13 +292,14 @@ export default function DailySpendingCard({
                         stroke={colors.grid}
                       />
                       <XAxis
-                        dataKey="day"
+                        dataKey="ymd"
                         interval={0}
                         tickLine={false}
                         axisLine={false}
                         tick={
                           <DayTick
-                            today={todayDate}
+                            days={days}
+                            today={todayYmd}
                             axis={colors.axis}
                             primary={colors.primary}
                           />
@@ -224,9 +316,7 @@ export default function DailySpendingCard({
                       <Tooltip
                         cursor={{ fill: colors.cursor }}
                         formatter={(v, name) => [formatMoney(v), name]}
-                        labelFormatter={(day) =>
-                          `${monthName(monthIdx).slice(0, 3)} ${day}`
-                        }
+                        labelFormatter={(key) => formatDay(key)}
                         contentStyle={{
                           borderRadius: 12,
                           border: `1px solid ${colors.tooltipBorder}`,
@@ -247,7 +337,7 @@ export default function DailySpendingCard({
                       >
                         {days.map((d) => (
                           <Cell
-                            key={d.day}
+                            key={d.ymd}
                             fill={
                               d.amount === 0
                                 ? "transparent"
@@ -322,7 +412,7 @@ export default function DailySpendingCard({
             </>
           ) : (
             <div className="flex h-40 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              No spending logged yet this month. Add an expense on the
+              No spending logged yet this period. Add an expense on the
               Transactions page to see your daily pattern.
             </div>
           )}
@@ -333,7 +423,7 @@ export default function DailySpendingCard({
       <BottomSheet
         open={!!selected}
         onClose={() => setSelected(null)}
-        title={selected ? `${monthName(monthIdx)} ${selected.day}` : ""}
+        title={selected ? formatDay(selected.ymd, { withYear: true }) : ""}
       >
         {selected && (
           <div className="pb-2">
