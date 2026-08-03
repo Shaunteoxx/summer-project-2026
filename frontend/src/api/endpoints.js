@@ -51,8 +51,6 @@ export const removeTransaction = (id) =>
   api.delete(`/transactions/${id}`).then((r) => r.data);
 
 // --- Summary ---
-export const fetchSummary = (params) =>
-  api.get("/summary", { params }).then((r) => r.data);
 export const fetchAllSummaries = () =>
   api.get("/summary/all").then((r) => r.data);
 

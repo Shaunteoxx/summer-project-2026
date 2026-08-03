@@ -89,19 +89,9 @@ export function formatPeriodLabel(period, { mode = "days" } = {}) {
   return `${formatDay(period.start, { withYear: crossesYear })} – ${formatDay(period.end, { withYear: crossesYear })}`;
 }
 
-/** Short form for tight spots: "August" or "1–15 Aug". */
-export function formatPeriodShort(period, { mode = "days" } = {}) {
-  if (!period) return "";
-  const label = formatPeriodLabel(period, { mode });
-  return label.replace(/ (\d{4})$/, "");
-}
-
 /** "August 2026" for the calendar month a day falls in. */
 export function formatMonthLabel(value) {
   if (!value) return "";
   const d = dayFromYmd(value);
   return `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
-
-/** "this month" vs "this period" — used throughout the copy. */
-export const periodNoun = (mode) => (mode === "month" ? "month" : "period");

@@ -55,20 +55,19 @@ function buildCalendarPages(days) {
 }
 
 /**
- * Custom X tick. A period can span two calendar months, so ticks are placed by
- * position in the period (first, every 5th, today) and labelled with the day
- * of the month.
+ * Custom X tick. Ticks are placed by position within whatever slice of the
+ * period is on screen — first, every 5th, and today — and labelled with the
+ * day of the month, since a period can span more than one calendar month.
  */
 function DayTick({ x, y, payload, days, today, axis, primary }) {
-  const entry = days.find((d) => d.ymd === payload.value);
-  if (!entry) return null;
-  const index = entry.index;
-  const todayIndex = days.find((d) => d.ymd === today)?.index ?? -1;
-  const day = entry.day;
-  if (!(index === 0 || index % 5 === 0 || index === todayIndex)) return null;
-  const isToday = index === todayIndex;
+  const i = days.findIndex((d) => d.ymd === payload.value);
+  if (i === -1) return null;
+  const todayIndex = days.findIndex((d) => d.ymd === today);
+  const day = days[i].day;
+  if (!(i === 0 || i % 5 === 0 || i === todayIndex)) return null;
+  const isToday = i === todayIndex;
   // Today's label wins when a regular label would collide with it.
-  if (!isToday && todayIndex >= 0 && Math.abs(index - todayIndex) <= 1) return null;
+  if (!isToday && todayIndex >= 0 && Math.abs(i - todayIndex) <= 1) return null;
   return (
     <text
       x={x}
@@ -238,40 +237,18 @@ export default function DailySpendingCard({
 
           {hasSpending ? (
             <>
+              {/* One pager for both views, so switching keeps your place. */}
+              {paginated && (
+                <PagePicker
+                  label={pages[activePage]?.label}
+                  spent={pageSpent}
+                  index={activePage}
+                  count={pages.length}
+                  onChange={setPage}
+                />
+              )}
               {view === "calendar" ? (
-                <div className="mt-4">
-                  {paginated && (
-                    <div className="mb-2.5 flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPage(Math.max(0, activePage - 1))}
-                        disabled={activePage === 0}
-                        aria-label="Previous month"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </button>
-                      <div className="text-center">
-                        <p className="text-sm font-semibold leading-none">
-                          {pages[activePage]?.label}
-                        </p>
-                        <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
-                          {formatMoney(pageSpent)} · {activePage + 1} of {pages.length}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPage(Math.min(pages.length - 1, activePage + 1))
-                        }
-                        disabled={activePage === pages.length - 1}
-                        aria-label="Next month"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    </div>
-                  )}
+                <div className={paginated ? "mt-2.5" : "mt-4"}>
                   <SpendingCalendar
                     days={shownDays}
                     budgetsAvailable={budgetsAvailable}
@@ -280,10 +257,10 @@ export default function DailySpendingCard({
                   />
                 </div>
               ) : (
-                <div className="mt-4 h-52">
+                <div className={paginated ? "mt-2.5 h-52" : "mt-4 h-52"}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
-                      data={days}
+                      data={shownDays}
                       margin={{ top: 6, right: 4, left: 0, bottom: 0 }}
                     >
                       <CartesianGrid
@@ -298,7 +275,7 @@ export default function DailySpendingCard({
                         axisLine={false}
                         tick={
                           <DayTick
-                            days={days}
+                            days={shownDays}
                             today={todayYmd}
                             axis={colors.axis}
                             primary={colors.primary}
@@ -332,10 +309,10 @@ export default function DailySpendingCard({
                         radius={[4, 4, 0, 0]}
                         isAnimationActive={!reduce}
                         animationDuration={800}
-                        onClick={(_, index) => setSelected(days[index])}
+                        onClick={(_, index) => setSelected(shownDays[index])}
                         cursor="pointer"
                       >
-                        {days.map((d) => (
+                        {shownDays.map((d) => (
                           <Cell
                             key={d.ymd}
                             fill={
@@ -504,6 +481,38 @@ export default function DailySpendingCard({
         )}
       </BottomSheet>
     </motion.div>
+  );
+}
+
+function PagePicker({ label, spent, index, count, onChange }) {
+  const step = (delta) => onChange(Math.min(count - 1, Math.max(0, index + delta)));
+  return (
+    <div className="mt-4 flex items-center justify-between gap-2">
+      <button
+        type="button"
+        onClick={() => step(-1)}
+        disabled={index === 0}
+        aria-label="Previous month"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <div className="text-center">
+        <p className="text-sm font-semibold leading-none">{label}</p>
+        <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+          {formatMoney(spent)} · {index + 1} of {count}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => step(1)}
+        disabled={index === count - 1}
+        aria-label="Next month"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
   );
 }
 

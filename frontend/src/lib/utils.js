@@ -14,12 +14,6 @@ export function monthName(month) {
   return MONTH_NAMES[month] ?? "";
 }
 
-/** Days remaining in the current month, counting today (e.g. Jul 2 -> 30). */
-export function daysLeftInMonth(now = new Date()) {
-  const total = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  return total - now.getDate() + 1;
-}
-
 /** Client's local calendar date as YYYY-MM-DD (avoids server-timezone drift). */
 export function localToday() {
   const d = new Date();
