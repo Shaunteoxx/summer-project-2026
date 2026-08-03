@@ -1,5 +1,6 @@
 import "dotenv/config";
 import crypto from "node:crypto";
+import { pathToFileURL } from "node:url";
 import express from "express";
 import compression from "compression";
 import cors from "cors";
@@ -99,6 +100,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Internal server error", requestId: req.id });
 });
 
+// Exported so tests can mount the real app on their own port and database.
+export { app };
+
 let server;
 async function start() {
   await connectDB();
@@ -111,13 +115,17 @@ async function shutdown(signal) {
   await mongoose.disconnect();
 }
 
-for (const signal of ["SIGTERM", "SIGINT"]) {
-  process.once(signal, () => {
-    shutdown(signal).then(() => process.exit(0)).catch(() => process.exit(1));
+// Only boot when run directly (`node index.js`, incl. npm start and Docker).
+// Importing this file — as the tests do — just yields the configured app.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  for (const signal of ["SIGTERM", "SIGINT"]) {
+    process.once(signal, () => {
+      shutdown(signal).then(() => process.exit(0)).catch(() => process.exit(1));
+    });
+  }
+
+  start().catch((err) => {
+    console.error("Server startup failed", { message: err.message });
+    process.exit(1);
   });
 }
-
-start().catch((err) => {
-  console.error("Server startup failed", { message: err.message });
-  process.exit(1);
-});

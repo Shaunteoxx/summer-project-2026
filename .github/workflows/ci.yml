@@ -38,6 +38,14 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: npm audit --omit=dev
+      # mongodb-memory-server downloads a mongod binary on first use; cache it
+      # so the auth tests don't re-fetch it on every run.
+      - name: Cache mongodb binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}
+      - run: npm test
       - name: Verify backend modules
         run: >-
           node -e "Promise.all([
