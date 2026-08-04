@@ -7,7 +7,13 @@ import { X } from "lucide-react";
  * and can be dismissed by dragging the handle down, tapping the backdrop,
  * or pressing Escape. Constrained to the phone-width app column.
  */
-export default function BottomSheet({ open, onClose, title, children }) {
+export default function BottomSheet({
+  open,
+  onClose,
+  title,
+  children,
+  closeLabel = "Close dialog",
+}) {
   const sheetRef = useRef(null);
   const previousFocusRef = useRef(null);
   const titleId = useId();
@@ -107,7 +113,7 @@ export default function BottomSheet({ open, onClose, title, children }) {
                 <button
                   type="button"
                   onClick={onClose}
-                  aria-label="Close dialog"
+                  aria-label={closeLabel}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-5 w-5" />
