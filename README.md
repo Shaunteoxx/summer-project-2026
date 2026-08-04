@@ -11,17 +11,19 @@ Built with **React + Vite**, **Node + Express**, and **MongoDB**, with Google OA
 - **Google OAuth** sign-in (Passport.js) with JWT auth and protected routes
 - **Mobile-first UI** — phone-width layout, bottom tab bar, drag-to-dismiss bottom sheets, safe-area aware
 - **Dark & light theme** — system-aware with a manual toggle (no flash on load)
-- **Homepage** — what's left to spend this month (after reserving your monthly savings) with the days left in the month, accumulated savings, a daily-budget streak, and animated count-up stats
+- **Budget periods** — budget by **calendar month** (the default) or by a **custom number of days**, for allowances that don't run monthly (a fortnight, five weeks, half a month). You start each custom period yourself and start the next when it ends; days in between simply aren't budgeted, and never count against your streak
+- **Homepage** — what's left to spend this period (after reserving your savings target) with the days left, accumulated savings, a daily-budget streak, and animated count-up stats
 - **Transactions**
   - Add income / expenses from a bottom sheet (type fixed by an Income/Expense button)
   - **Categories** — fixed set (Food & Drinks, Transport, Shopping, Entertainment, Travel · Allowance, Job, Gifts) plus **user-created custom categories** with their own colour
   - **Search** by description or category, **filter** by All / Expenses / Income
   - Optimistic delete with a **10-second undo**
 - **Calculator** — four **live planners** driven by your real month data (so every number matches the homepage): a **dynamic daily budget** that updates the moment you log an expense, a **what-if purchase** planner, **pace & forecast** projections, and **goal ↔ daily-cap** conversion
-- **Monthly Tracker** — donut of saved vs spent, a **savings-goal card** (progress, on-track status, edit in place), and a **day-by-day spending calendar** (tap any day for its transactions; toggleable bar-chart view with each day's budget drawn as a stepped line), **plus a colour-coded "spending by category" donut**. Every day is judged against the same rolling daily budget the homepage shows
-- **Stats** — months tracked + average savings rate, and a grouped bar chart across every month
+- **Tracker** — donut of saved vs spent, a **savings-goal card** (progress, on-track status, edit in place), and a **day-by-day spending calendar** covering the whole budget period (tap any day for its transactions; toggleable bar-chart view with each day's budget drawn as a stepped line). Periods longer than 45 days page by calendar month so the grid stays readable. **Plus a colour-coded "spending by category" donut**. Every day is judged against the same rolling daily budget the homepage shows
+- **Stats** — months tracked + average savings rate, and a grouped bar chart across every month. Deliberately **always calendar months**, whatever your budget period is, so long-term history stays stable and covers every day
 - **Friends** — search users, send/accept/decline requests, savings-rate leaderboard
 - **Profile** — editable display name, pick a cute **animal avatar** (Twemoji), and delete account
+- **Overspend warning** — go past a period's income-minus-savings and the app says how far past you are, instead of quietly showing a $0/day budget
 - **Toast notifications** for key actions (add/delete, friend requests, etc.)
 - **Accessibility & polish** — skeleton loading states, focus-visible rings, and full `prefers-reduced-motion` support
 - Premium animations throughout: page transitions, count-ups, fade/scale-ins, animated charts
@@ -47,14 +49,17 @@ Built with **React + Vite**, **Node + Express**, and **MongoDB**, with Google OA
     /animations    → Shared Framer Motion variants
     /components    → Reusable UI (incl. /ui shadcn-style primitives)
     /hooks         → Contexts + hooks (auth, theme, toast, categories, chart colours, count-up)
-    /lib           → utils (cn, formatters), category + avatar definitions
+    /lib           → utils (cn, formatters), budget-period helpers, category + avatar definitions
     /pages         → One file per page
+    /test          → Vitest setup (jsdom + Testing Library)
 /backend           → Express backend
   /config          → DB + Passport config
   /controllers     → Route logic
   /middleware      → Auth (JWT) + async wrapper
   /models          → Mongoose schemas
   /routes          → Express routers
+  /lib             → Budget-period resolution, validation, demo seed
+  /test            → node:test suites (in-memory MongoDB)
 docker-compose.yml → Runs all three services with one command
 .env.example       → Environment variable template
 ```
@@ -163,6 +168,21 @@ docker compose down -v
 
 ---
 
+## 🧪 Tests
+
+```bash
+cd backend  && npm test    # node:test + in-memory MongoDB
+cd frontend && npm test    # Vitest + Testing Library (jsdom)
+```
+
+Both suites run in CI on every push. The backend suite includes an
+**equivalence check**: budgeting by calendar month must produce byte-identical
+results to the implementation that predated budget periods, which is kept
+verbatim in `backend/test/fixtures/legacyStreak.js`. If you change the
+month-mode budget maths, that suite is meant to fail.
+
+---
+
 ## 🔌 API Overview
 
 All routes except the OAuth start/callback require a `Bearer <JWT>` header.
@@ -175,17 +195,21 @@ All routes except the OAuth start/callback require a `Bearer <JWT>` header.
 | GET | `/api/auth/me` | Current user |
 | GET | `/api/auth/home` | Homepage stats |
 | PATCH | `/api/auth/profile` | Update display name / avatar |
-| PUT | `/api/auth/savings` | Set a month's savings target |
+| PUT | `/api/auth/savings` | Set a calendar month's savings target |
 | DELETE | `/api/auth/me` | Delete account (and all its data) |
 | POST | `/api/auth/categories` | Add a custom category |
 | DELETE | `/api/auth/categories/:id` | Delete a custom category |
-| GET | `/api/transactions` | List transactions for current month |
+| GET | `/api/period` | Budget mode, the active period, and past periods |
+| PUT | `/api/period/mode` | Switch between calendar months and custom days |
+| POST | `/api/period` | Start a budget period |
+| PATCH | `/api/period/:id` | Change a period's start date, length or savings target |
+| DELETE | `/api/period/:id` | Remove a period (its transactions are kept) |
+| GET | `/api/transactions` | List transactions by `?start=&end=` or `?month=&year=` |
 | POST | `/api/transactions` | Add a transaction |
 | DELETE | `/api/transactions/:id` | Delete a transaction |
-| GET | `/api/summary` | Current month summary |
-| GET | `/api/summary/all` | All monthly summaries |
-| GET | `/api/streak` | Streak, today's budget, and the month's per-day budgets |
-| POST | `/api/streak/restore` | Spend a monthly save to repair the streak |
+| GET | `/api/summary/all` | All monthly summaries (drives Stats) |
+| GET | `/api/streak` | Streak, today's budget, and the period's per-day budgets |
+| POST | `/api/streak/restore` | Spend a save to repair the streak |
 | GET | `/api/friends` | Friends list |
 | GET | `/api/friends/search?q=` | Search users by username |
 | GET | `/api/friends/requests` | Incoming friend requests |
@@ -202,7 +226,10 @@ All routes except the OAuth start/callback require a `Bearer <JWT>` header.
 - Category colours use a **muted palette** so charts stay cohesive rather than clashing; each category pairs a colour with an icon so meaning never relies on colour alone.
 - Animation defaults: `easeOut` easing, durations between 0.4s–0.8s; all motion respects `prefers-reduced-motion`.
 - Monthly and lifetime summaries are calculated from canonical transactions at read time, avoiding stale duplicate financial state.
-- **One budget model everywhere:** the rolling daily budget — (income − savings target − spent on earlier days) ÷ days left — is computed once in the streak controller and reused by the homepage, tracker, and calculator, so every surface agrees.
+- **One budget model everywhere:** the rolling daily budget — (income − savings target − spent on earlier days in the period) ÷ days left in the period — is computed once in the streak controller and reused by the homepage, tracker, and calculator, so every surface agrees.
+- **Budget periods have two shapes.** In month mode the period is *derived* from the calendar and nothing is stored; in days mode it is a stored row the user starts by hand. A single resolver (`backend/lib/period.js`) hides the difference behind `(date) → period | null`, so nothing downstream branches on the mode. A `null` result means the day falls outside every period: it has no budget, so the streak skips it rather than counting it as a loss.
+- **Restores scale with length** — roughly three per thirty days — so a short period isn't trivially forgiving and a long one isn't punishing.
+- **Stats stays on calendar months by design.** Periods drive the live budget, streak and tracker only. Keeping history monthly means it always covers every day, stays stable when you change your period length, and still answers "what did I spend in July?".
 - Animal avatars are [Twemoji](https://github.com/jdecked/twemoji) (© Twitter, **CC-BY 4.0**).
 
 ## Production deployment
