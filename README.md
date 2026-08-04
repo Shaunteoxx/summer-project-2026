@@ -181,6 +181,38 @@ results to the implementation that predated budget periods, which is kept
 verbatim in `backend/test/fixtures/legacyStreak.js`. If you change the
 month-mode budget maths, that suite is meant to fail.
 
+### Design harness (visual checks without the backend)
+
+`frontend/harness.html` mounts a single component at phone size, in either
+theme, with no server, database or login involved — for looking at UI work
+rather than asserting on it.
+
+```bash
+cd frontend
+npm run dev                    # then open /harness.html
+npm run shots                  # screenshots every state to frontend/.shots/
+```
+
+`npm run shots` drives the Chrome already on your machine — no Playwright
+install. Three traps it handles for you, all of which fail *silently* otherwise:
+
+1. Headless Chrome clamps its window to a **500px minimum** width, so a 375px
+   phone viewport is unreachable via `--window-size`. The harness takes
+   `?width=375` and pins the sheet's `max-w-app` cap instead.
+2. `--window-size` height includes ~87px of browser chrome.
+3. Under `--virtual-time-budget`, **every framer-motion spring spends virtual
+   time**. Enough scripted key presses will exhaust the budget mid-sequence and
+   the screenshot captures a half-entered state that looks entirely plausible.
+   The harness therefore disables motion unless you pass `?motion=on`.
+
+Every shot asserts both the viewport *and* the rendered state it captured
+(`expect` in `SHOTS`), so none of the above can pass unnoticed.
+
+Add states by editing `SHOTS` in `frontend/scripts/shots.mjs`; `?press=1,2,+,8`
+clicks keys after mount so a shot can capture a mid-expression display. The
+harness is dev-only — `vite build` has a single `index.html` entry, so it never
+reaches `dist/`.
+
 ---
 
 ## 🔌 API Overview
