@@ -49,8 +49,14 @@ const SCALE = 2;
 const MIN_WINDOW_WIDTH = 500;
 const WINDOW_CHROME_PX = 87;
 
-// `expect` is asserted against the rendered Use button, so a shot that captured
-// a half-entered expression fails instead of looking plausible.
+// `expect` is asserted against the rendered state, so a shot that captured a
+// half-entered expression (or a toggle that didn't take) fails instead of
+// looking plausible. `probe` says where to read that state from; it defaults to
+// the calculator's Use button.
+const USE_BUTTON = /Use (?:\$[\d,.]+|amount)/;
+const SWITCH_STATE = /role="switch"[^>]*aria-checked="(?:true|false)"/;
+const LENS_STATE = /aria-pressed="true"/;
+
 const SHOTS = [
   { name: "expense-dark", theme: "dark", tone: "destructive", press: "1,2,.,5,0,+,8", expect: "Use $20.50" },
   { name: "expense-light", theme: "light", tone: "destructive", press: "1,2,.,5,0,+,8", expect: "Use $20.50" },
@@ -58,6 +64,18 @@ const SHOTS = [
   { name: "income-light", theme: "light", tone: "success", press: "4,8", expect: "Use $48.00" },
   { name: "empty-dark", theme: "dark", tone: "destructive", expect: "Use amount" },
   { name: "empty-light", theme: "light", tone: "destructive", expect: "Use amount" },
+
+  // The savings sheet, to check the repeat toggle in both states and themes.
+  { name: "repeat-on-dark", view: "savings", theme: "dark", repeat: "1", probe: SWITCH_STATE, expect: 'role="switch" aria-checked="true"' },
+  { name: "repeat-on-light", view: "savings", theme: "light", repeat: "1", probe: SWITCH_STATE, expect: 'role="switch" aria-checked="true"' },
+  { name: "repeat-off-dark", view: "savings", theme: "dark", probe: SWITCH_STATE, expect: 'role="switch" aria-checked="false"' },
+  { name: "repeat-off-light", view: "savings", theme: "light", probe: SWITCH_STATE, expect: 'role="switch" aria-checked="false"' },
+
+  // The stats headline block: four tiles all-time, two per-month.
+  { name: "stats-all-dark", view: "stats", theme: "dark", probe: LENS_STATE, expect: 'aria-pressed="true"' },
+  { name: "stats-all-light", view: "stats", theme: "light", probe: LENS_STATE, expect: 'aria-pressed="true"' },
+  { name: "stats-months-light", view: "stats", theme: "light", lens: "months", probe: LENS_STATE, expect: 'aria-pressed="true"' },
+  { name: "stats-big-light", view: "stats", theme: "light", big: "1", probe: LENS_STATE, expect: 'aria-pressed="true"' },
 ];
 
 await mkdir(OUT, { recursive: true });
@@ -77,7 +95,7 @@ const flags = (extra) => [
 
 let failed = 0;
 
-for (const { name, expect, ...query } of SHOTS) {
+for (const { name, expect, probe = USE_BUTTON, ...query } of SHOTS) {
   const url = `${BASE}?${new URLSearchParams({ ...query, width: PHONE_WIDTH })}`;
   const file = `${OUT}${name}.png`;
 
@@ -89,7 +107,7 @@ for (const { name, expect, ...query } of SHOTS) {
     maxBuffer: 1 << 28,
   });
   const viewport = stdout.match(/data-viewport="([^"]*)"/)?.[1];
-  const state = stdout.match(/Use (?:\$[\d,.]+|amount)/)?.[0];
+  const state = stdout.match(probe)?.[0];
 
   const problems = [];
   if (viewport !== EXPECTED_VIEWPORT) {
