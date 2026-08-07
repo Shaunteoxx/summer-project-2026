@@ -37,8 +37,16 @@ const SHOPPING = ["New hoodie", "Stationery", "Phone case", "Sneakers", "Skincar
 const FUN = ["Movie night", "Concert ticket", "Arcade", "Spotify", "Game on Steam"];
 const TRAVEL = ["Weekend trip", "Bus to JB", "Flight deposit"];
 
-// Build one month of realistic student transactions up to `lastDay`.
-function genMonth(userId, year, month, lastDay, rand) {
+/**
+ * Build one month of realistic student transactions up to `lastDay`.
+ *
+ * `spendScale` multiplies expenses only. At 1 the pattern spends about a third
+ * of the month's income, which reads as an implausibly good month and — more
+ * to the point — leaves every day comfortably inside its budget, so a seeded
+ * account shows an unbroken streak and a calendar with no red in it. Scaling up
+ * is how a longer seed gets days worth looking at.
+ */
+function genMonth(userId, year, month, lastDay, rand, spendScale = 1) {
   const docs = [];
   const add = (type, category, description, amount, day) =>
     docs.push({
@@ -46,7 +54,7 @@ function genMonth(userId, year, month, lastDay, rand) {
       type,
       category,
       description,
-      amount: money(amount),
+      amount: money(type === "expense" ? amount * spendScale : amount),
       // UTC midnight, matching how real transactions store "YYYY-MM-DD" dates
       // (the streak keys days by UTC, so local-midnight dates shift a day).
       date: new Date(Date.UTC(year, month, day)),
@@ -81,6 +89,46 @@ function genMonth(userId, year, month, lastDay, rand) {
 }
 
 /**
+ * Replace `user`'s transaction history with `months` of generated data, ending
+ * with the current month up to today, and set a savings target on each month.
+ *
+ * Destructive: every existing transaction for the user is deleted first, so
+ * callers seeding a real account must confirm that themselves.
+ */
+export async function seedHistoryFor(
+  user,
+  { months = 3, monthlySavings = MONTHLY_SAVINGS, seed = 20260614, spendScale = 1 } = {}
+) {
+  await Transaction.deleteMany({ userId: user._id });
+
+  const now = new Date();
+  const rand = mulberry32(seed);
+  // Oldest first, ending on the current month.
+  const window = Array.from({ length: months }, (_, i) => months - 1 - i).map(
+    (back) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
+      return { year: d.getFullYear(), month: d.getMonth() };
+    }
+  );
+
+  const docs = [];
+  const savings = {};
+  for (const { year, month } of window) {
+    const isCurrent = year === now.getFullYear() && month === now.getMonth();
+    const lastDay = isCurrent ? now.getDate() : new Date(year, month + 1, 0).getDate();
+    savings[`${year}-${month}`] = monthlySavings;
+    docs.push(...genMonth(user._id, year, month, lastDay, rand, spendScale));
+  }
+
+  await Transaction.insertMany(docs);
+  user.savingsByMonth = savings;
+  user.restoredDays = [];
+  await user.save();
+
+  return { user, transactions: docs.length, months: window.length };
+}
+
+/**
  * Create (or rebuild) the demo account and its data, then return the user.
  * Idempotent: wipes any existing demo transactions before reseeding.
  */
@@ -101,30 +149,8 @@ export async function reseedDemoUser() {
     }
   }
 
-  await Transaction.deleteMany({ userId: user._id });
-
-  const now = new Date();
-  const rand = mulberry32(20260614);
-  // Current month plus the two before it, oldest first.
-  const months = [2, 1, 0].map((back) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
-    return { year: d.getFullYear(), month: d.getMonth() };
-  });
-
-  const docs = [];
-  const savings = {};
-  for (const { year, month } of months) {
-    const isCurrent = year === now.getFullYear() && month === now.getMonth();
-    const lastDay = isCurrent ? now.getDate() : new Date(year, month + 1, 0).getDate();
-    savings[`${year}-${month}`] = MONTHLY_SAVINGS;
-    docs.push(...genMonth(user._id, year, month, lastDay, rand));
-  }
-
-  await Transaction.insertMany(docs);
-  user.savingsByMonth = savings;
-  user.restoredDays = [];
-  await user.save();
-
+  // The current month plus the two before it.
+  await seedHistoryFor(user, { months: 3 });
   return user;
 }
 
