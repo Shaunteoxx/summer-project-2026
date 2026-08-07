@@ -70,13 +70,16 @@ export default function TransactionsPage() {
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Imperative shake controls so an invalid field re-shakes on every submit attempt.
+  // Imperative shake controls so an invalid field re-shakes on every submit
+  // attempt. Description isn't here — it can't be invalid now that it's
+  // optional and capped by maxLength.
   const shakeControls = {
-    description: useAnimationControls(),
     category: useAnimationControls(),
     amount: useAnimationControls(),
     date: useAnimationControls(),
   };
+  // Focus target for the category -> description hand-off.
+  const descriptionRef = useRef(null);
   // Which kind of entry the sheet is adding: "income" | "expense" | null (closed).
   const [formType, setFormType] = useState(null);
   // When true the sheet shows the amount keypad instead of the form. The sheet
@@ -216,6 +219,38 @@ export default function TransactionsPage() {
     setFormError("");
   };
 
+  /**
+   * Selecting a category hands over to the description, so the common path is
+   * one run down the sheet instead of a tap per field. Only when the
+   * description is still empty: going back to fix a mis-tapped category must
+   * not yank focus out of something already typed.
+   */
+  const selectCategory = (name) => {
+    updateForm({ category: name });
+    if (form.description.trim()) return;
+    // Synchronously, inside the tap: iOS Safari only raises the keyboard for a
+    // focus() call that happens within the user gesture, so deferring this to
+    // a frame later would move the cursor without opening anything to type on.
+    descriptionRef.current?.focus({ preventScroll: true });
+  };
+
+  /**
+   * The description's return key hands over to the amount rather than
+   * submitting a form that has no amount in it yet.
+   */
+  const handleDescriptionKeyDown = (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (!touchFirst) {
+      document.getElementById("amount")?.focus();
+      return;
+    }
+    // Drop the OS keyboard before the in-app keypad slides in, or the two
+    // stack and the pad opens underneath it.
+    e.currentTarget.blur();
+    setCalcOpen(true);
+  };
+
   const handleAddCategory = async () => {
     const name = newCategoryName.trim();
     if (!name) return;
@@ -227,11 +262,9 @@ export default function TransactionsPage() {
         type: formType,
         color: newCategoryColor,
       });
-      setForm((f) => ({ ...f, category: created.name }));
-      setErrors((prev) => {
-        const { category, ...rest } = prev;
-        return rest;
-      });
+      // Same hand-off as tapping an existing tile — you've just chosen a
+      // category either way.
+      selectCategory(created.name);
       resetNewCategory();
       toast.success(`Added category “${created.name}”`);
     } catch (err) {
@@ -255,13 +288,15 @@ export default function TransactionsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const description = form.description.trim();
+    // Typing is the slowest step in this form, so the description is optional
+    // and falls back to the category — "Food & Drinks" reads fine in the
+    // ledger, and the placeholder shows what will be saved before you submit.
+    const description = form.description.trim() || form.category;
     const amount = Number(form.amount);
 
     // Validate every field at once so all problems light up together, rather
     // than surfacing them one refused submit at a time.
     const nextErrors = {};
-    if (!description) nextErrors.description = "Enter a description.";
     if (!form.category) nextErrors.category = "Choose a category.";
     if (form.amount === "" || !Number.isFinite(amount) || amount <= 0) {
       nextErrors.amount = "Enter an amount greater than $0.";
@@ -450,9 +485,27 @@ export default function TransactionsPage() {
             {/* Category picker */}
             <div className="space-y-2">
               <motion.div animate={shakeControls.category} className="space-y-2">
-                <Label className={errors.category ? "text-destructive" : undefined}>
-                  Category
-                </Label>
+                {/* "New" sits on the label line rather than in the grid: as a
+                    tile it took a whole row to itself whenever the category
+                    count was already a multiple of three. */}
+                <div className="flex items-center justify-between gap-2">
+                  <Label className={errors.category ? "text-destructive" : undefined}>
+                    Category
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCategory((v) => !v)}
+                    aria-expanded={showNewCategory}
+                    className={`-my-1 flex h-8 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      showNewCategory
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    New
+                  </button>
+                </div>
                 <div
                   className={`grid grid-cols-3 gap-2 ${
                     errors.category
@@ -467,7 +520,7 @@ export default function TransactionsPage() {
                     <button
                       type="button"
                       key={c.name}
-                      onClick={() => updateForm({ category: c.name })}
+                      onClick={() => selectCategory(c.name)}
                       aria-pressed={selected}
                       className={`relative flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border p-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
                         selected ? "border-transparent" : "border-border hover:bg-accent/50"
@@ -498,23 +551,6 @@ export default function TransactionsPage() {
                     </button>
                   );
                 })}
-
-                {/* Create a custom category */}
-                <button
-                  type="button"
-                  onClick={() => setShowNewCategory((v) => !v)}
-                  aria-expanded={showNewCategory}
-                  className={`flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed p-2 text-center transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
-                    showNewCategory
-                      ? "border-primary text-primary"
-                      : "border-border text-muted-foreground"
-                  }`}
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
-                    <Plus className="h-[18px] w-[18px]" />
-                  </span>
-                  <span className="text-[11px] font-medium leading-tight">New</span>
-                </button>
                 </div>
                 {errors.category && (
                   <FieldError id="tx-category-error">{errors.category}</FieldError>
@@ -597,32 +633,28 @@ export default function TransactionsPage() {
               )}
             </div>
 
-            <motion.div animate={shakeControls.description} className="space-y-2">
-              <Label
-                htmlFor="description"
-                className={errors.description ? "text-destructive" : undefined}
-              >
-                Description
-              </Label>
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <Label htmlFor="description">Description</Label>
+                <span className="text-xs text-muted-foreground">Optional</span>
+              </div>
               <Input
                 id="description"
-                placeholder={formType === "income" ? "e.g. Monthly allowance" : "e.g. Lunch"}
-                value={form.description}
-                required
-                maxLength={120}
-                aria-invalid={Boolean(errors.description)}
-                aria-describedby={errors.description ? "tx-description-error" : undefined}
-                className={
-                  errors.description
-                    ? "border-destructive focus-visible:ring-destructive"
-                    : undefined
+                ref={descriptionRef}
+                // Once a category is picked the placeholder becomes the name
+                // that will actually be saved, so the fallback is visible
+                // rather than a surprise in the ledger.
+                placeholder={
+                  form.category ||
+                  (formType === "income" ? "e.g. Monthly allowance" : "e.g. Lunch")
                 }
+                value={form.description}
+                maxLength={120}
+                enterKeyHint="next"
+                onKeyDown={handleDescriptionKeyDown}
                 onChange={(e) => updateForm({ description: e.target.value })}
               />
-              {errors.description && (
-                <FieldError id="tx-description-error">{errors.description}</FieldError>
-              )}
-            </motion.div>
+            </div>
             <div className="grid grid-cols-2 items-start gap-3">
               <motion.div animate={shakeControls.amount} className="space-y-2">
                 <Label
