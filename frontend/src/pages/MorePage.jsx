@@ -21,6 +21,7 @@ import PageWrapper from "@/components/PageWrapper";
 import Avatar from "@/components/Avatar";
 import BottomSheet from "@/components/BottomSheet";
 import FieldError from "@/components/FieldError";
+import SwitchRow from "@/components/SwitchRow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -94,12 +95,18 @@ export default function MorePage() {
   const now = new Date();
   const [savingsYear, setSavingsYear] = useState(now.getFullYear());
   const [savingsMonth, setSavingsMonth] = useState(now.getMonth());
+  // Carry the target into each new month instead of re-entering it. Per-user
+  // rather than per-month, so it's seeded from the profile every time the sheet
+  // opens rather than from whichever month the stepper is on.
+  const [repeatSavings, setRepeatSavings] = useState(false);
 
   const savingsByMonth = user?.savingsByMonth ?? {};
   const keyFor = (y, m) => `${y}-${m}`;
   const currentMonthSavings = savingsByMonth[keyFor(now.getFullYear(), now.getMonth())] ?? 0;
   // In days mode the target belongs to the running period, not the calendar.
   const currentSavings = isDays ? (period.current?.savings ?? 0) : currentMonthSavings;
+  // The saved preference, as opposed to the sheet's unsaved toggle state.
+  const repeatSavingsOn = !isDays && !!user?.repeatSavings;
 
   // Budget period sheet: mode toggle plus the form for starting the next one.
   const [periodOpen, setPeriodOpen] = useState(false);
@@ -176,6 +183,7 @@ export default function MorePage() {
     setSavingsYear(now.getFullYear());
     setSavingsMonth(now.getMonth());
     loadSavingsInput(now.getFullYear(), now.getMonth());
+    setRepeatSavings(!!user?.repeatSavings);
     setSavingsError("");
     setSavingsOpen(true);
   };
@@ -326,10 +334,18 @@ export default function MorePage() {
         toast.success("Savings target updated");
         return;
       }
-      await setMonthlySavings({ key: keyFor(savingsYear, savingsMonth), amount });
+      await setMonthlySavings({
+        key: keyFor(savingsYear, savingsMonth),
+        amount,
+        repeat: repeatSavings,
+      });
       await refresh();
       setSavingsOpen(false);
-      toast.success(`Savings set for ${monthName(savingsMonth)}`);
+      toast.success(
+        repeatSavings
+          ? `Savings set for ${monthName(savingsMonth)} and every month after`
+          : `Savings set for ${monthName(savingsMonth)}`
+      );
     } catch (err) {
       setSavingsError(err?.response?.data?.message || "Couldn't update savings.");
       savingsShake.start(SHAKE);
@@ -451,7 +467,9 @@ export default function MorePage() {
                   ? period.current
                     ? `${formatPeriodLabel(period.current)}, reserved before your budget`
                     : "Start a period to set one"
-                  : `${monthName(now.getMonth())}, reserved before your budget`}
+                  : repeatSavingsOn
+                    ? `${monthName(now.getMonth())}, repeating each month`
+                    : `${monthName(now.getMonth())}, reserved before your budget`}
               </span>
             </span>
             <span className="shrink-0 font-semibold tabular-nums">
@@ -673,6 +691,18 @@ export default function MorePage() {
               </p>
             )}
           </motion.div>
+          {/* Days mode has no run of months to repeat across — each period
+              carries its own target. */}
+          {!isDays && (
+            <SwitchRow
+              checked={repeatSavings}
+              onChange={setRepeatSavings}
+              disabled={savingSavings}
+              label="Repeat every month"
+              description="New months start with your latest target, so you don't have to set it again."
+            />
+          )}
+
           <Button onClick={handleSaveSavings} disabled={savingSavings} className="w-full">
             {savingSavings
               ? "Saving…"

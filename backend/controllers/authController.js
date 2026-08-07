@@ -4,10 +4,12 @@ import {
   MAX_YEAR,
   resolveClientToday,
   roundMoney,
+  utcToday,
   ymd,
 } from "../lib/validation.js";
 import { dayFromYmd, daysLeftInPeriod } from "../lib/period.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
+import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
 import { signToken, sessionExhausted } from "../middleware/auth.js";
 import { getLifetimeSavings } from "./summaryController.js";
 import { ensureDemoUser } from "../lib/demoSeed.js";
@@ -73,6 +75,11 @@ export async function logout(req, res) {
 /** GET /api/auth/me -> current user profile (used by the client to bootstrap). */
 export async function getMe(req, res) {
   const user = req.user;
+  // Carry here as well as on /streak and /period, because the transactions
+  // page reads the target straight off this payload. Server today is enough:
+  // it only picks which month key to fill, and a client an hour the other side
+  // of the boundary fills the next key with the same value on its own call.
+  await ensureCurrentMonthSavings(user, ymd(utcToday()));
   res.json({
     id: user._id,
     username: user.username,
@@ -82,6 +89,7 @@ export async function getMe(req, res) {
     avatar: user.avatar,
     budgetMode: user.budgetMode || "month",
     savingsByMonth: Object.fromEntries(user.savingsByMonth || []),
+    repeatSavings: !!user.repeatSavings,
     friends: user.friends,
     friendRequests: user.friendRequests,
     customCategories: (user.customCategories || []).map((c) => ({
@@ -201,10 +209,13 @@ export async function updateProfile(req, res) {
 
 const SAVINGS_KEY_RE = /^\d{4}-(0|1[01]|[0-9])$/;
 
-/** PUT /api/auth/savings { key: "YYYY-M", amount } -> set one month's savings. */
+/**
+ * PUT /api/auth/savings { key: "YYYY-M", amount, repeat? } -> set one month's
+ * savings target, and optionally carry it into future months.
+ */
 export async function setSavings(req, res) {
   const user = req.user;
-  const { key, amount } = req.body;
+  const { key, amount, repeat } = req.body;
 
   if (!SAVINGS_KEY_RE.test(key || "")) {
     return res.status(400).json({ message: "Invalid month" });
@@ -217,13 +228,23 @@ export async function setSavings(req, res) {
   if (!Number.isFinite(numericAmount) || numericAmount < 0 || numericAmount > 1e9) {
     return res.status(400).json({ message: "Invalid savings amount" });
   }
+  if (repeat !== undefined && typeof repeat !== "boolean") {
+    return res.status(400).json({ message: "Invalid repeat flag" });
+  }
   const value = roundMoney(numericAmount);
 
-  if (value === 0) user.savingsByMonth.delete(key);
-  else user.savingsByMonth.set(key, value);
+  // Zero is stored rather than deleted. Carrying a target forward has to be
+  // able to tell "I want to save nothing this month" from "I haven't set this
+  // month yet" — deleting the key collapses the two, and the carry would
+  // overwrite a deliberate zero with last month's number.
+  user.savingsByMonth.set(key, value);
+  if (repeat !== undefined) user.repeatSavings = repeat;
   await user.save();
 
-  res.json({ savingsByMonth: Object.fromEntries(user.savingsByMonth) });
+  res.json({
+    savingsByMonth: Object.fromEntries(user.savingsByMonth),
+    repeatSavings: user.repeatSavings,
+  });
 }
 
 /** DELETE /api/auth/me -> permanently delete the account and all its data. */

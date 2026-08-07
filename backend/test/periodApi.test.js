@@ -541,3 +541,122 @@ describe("days mode end to end", () => {
     assert.equal(rows[friend.username].percentageSaved, 75);
   });
 });
+
+// Repeating savings targets, end to end. The unit tests in savingsCarry.test.js
+// cover the rules; these cover the wiring — that opening the app is what
+// materialises the month, and that a deliberate zero survives it.
+const monthKeyAt = (date) => `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
+const thisMonthKey = () => monthKeyAt(new Date());
+const lastMonthKey = () => {
+  const now = new Date();
+  return monthKeyAt(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)));
+};
+
+describe("repeating the savings target", () => {
+  it("stores a zero target instead of dropping the key", async () => {
+    const user = await makeUser();
+    const token = signToken(user);
+    const res = await call("/api/auth/savings", token, "PUT", {
+      key: thisMonthKey(),
+      amount: 0,
+    });
+    assert.equal(res.status, 200);
+    // Deleting it here is what used to make "saving nothing" indistinguishable
+    // from "not set yet", which the carry would then overwrite.
+    const reloaded = await User.findById(user._id);
+    assert.equal(reloaded.savingsByMonth.get(thisMonthKey()), 0);
+  });
+
+  it("turns the repeat on from the savings form and reports it back", async () => {
+    const user = await makeUser();
+    const token = signToken(user);
+    const res = await call("/api/auth/savings", token, "PUT", {
+      key: thisMonthKey(),
+      amount: 200,
+      repeat: true,
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.repeatSavings, true);
+
+    const me = await call("/api/auth/me", token);
+    assert.equal(me.body.repeatSavings, true);
+    assert.equal(me.body.savingsByMonth[thisMonthKey()], 200);
+  });
+
+  it("rejects a non-boolean repeat flag", async () => {
+    const token = signToken(await makeUser());
+    const res = await call("/api/auth/savings", token, "PUT", {
+      key: thisMonthKey(),
+      amount: 200,
+      repeat: "yes",
+    });
+    assert.equal(res.status, 400);
+  });
+
+  it("fills the new month the first time the app is opened", async () => {
+    const user = await makeUser({
+      repeatSavings: true,
+      savingsByMonth: { [lastMonthKey()]: 320 },
+    });
+    const token = signToken(user);
+
+    const before = await User.findById(user._id);
+    assert.equal(before.savingsByMonth.has(thisMonthKey()), false);
+
+    const res = await call(`/api/period?today=${todayYmd()}`, token);
+    assert.equal(res.status, 200);
+
+    const after = await User.findById(user._id);
+    assert.equal(after.savingsByMonth.get(thisMonthKey()), 320);
+    assert.equal(after.savingsByMonth.get(lastMonthKey()), 320, "last month untouched");
+  });
+
+  it("feeds the carried target straight into the daily budget", async () => {
+    const user = await makeUser({
+      repeatSavings: true,
+      savingsByMonth: { [lastMonthKey()]: 320 },
+    });
+    await addTxn(user._id, todayYmd(), "income", 1000);
+
+    const res = await call(`/api/streak?today=${todayYmd()}`, signToken(user));
+    assert.equal(res.status, 200);
+    assert.equal(res.body.periodSavings, 320);
+  });
+
+  it("leaves a deliberate zero alone when the app is opened", async () => {
+    const user = await makeUser({
+      repeatSavings: true,
+      savingsByMonth: { [lastMonthKey()]: 320, [thisMonthKey()]: 0 },
+    });
+    await call(`/api/period?today=${todayYmd()}`, signToken(user));
+
+    const after = await User.findById(user._id);
+    assert.equal(after.savingsByMonth.get(thisMonthKey()), 0);
+  });
+
+  it("does nothing for a user who hasn't asked for it", async () => {
+    const user = await makeUser({ savingsByMonth: { [lastMonthKey()]: 320 } });
+    await call(`/api/period?today=${todayYmd()}`, signToken(user));
+
+    const after = await User.findById(user._id);
+    assert.equal(after.savingsByMonth.has(thisMonthKey()), false);
+  });
+
+  it("never writes to a friend's account from the leaderboard", async () => {
+    // getComparison resolves periods for friends' documents too. If the carry
+    // lived in loadPeriodContext, reading this board would write to them.
+    const friend = await makeUser({
+      repeatSavings: true,
+      savingsByMonth: { [lastMonthKey()]: 320 },
+    });
+    const me = await makeUser();
+    me.friends.push(friend._id);
+    await me.save();
+
+    const res = await call(`/api/friends/comparison?today=${todayYmd()}`, signToken(me));
+    assert.equal(res.status, 200);
+
+    const after = await User.findById(friend._id);
+    assert.equal(after.savingsByMonth.has(thisMonthKey()), false);
+  });
+});

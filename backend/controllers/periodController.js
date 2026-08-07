@@ -8,6 +8,7 @@ import {
   toPeriod,
 } from "../lib/period.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
+import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
 import {
   MAX_YEAR,
   MIN_YEAR,
@@ -88,6 +89,7 @@ export async function getPeriod(req, res) {
   if (!today) return res.status(400).json({ message: "Invalid today date" });
   const todayKey = ymd(today);
 
+  await ensureCurrentMonthSavings(req.user, todayKey);
   const context = await loadPeriodContext(req.user, todayKey);
   res.json({
     mode: context.mode,
