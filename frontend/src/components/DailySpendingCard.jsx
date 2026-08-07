@@ -83,14 +83,21 @@ function DayTick({ x, y, payload, days, today, axis, primary }) {
 }
 
 /**
- * Daily spending tracker for the active budget period, as a calendar (default)
- * or a bar chart. Each day is judged against its own rolling budget from the
- * streak — (income − savings target − spent so far) ÷ days left — so a red day
- * here always matches a broken day in the streak, and today's budget is the
- * same number the home page shows.
+ * Daily spending tracker for a span of days, as a calendar (default) or a bar
+ * chart. Each day is judged against its own rolling budget from the streak —
+ * (income − savings target − spent so far) ÷ days left — so a red day here
+ * always matches a broken day in the streak, and today's budget is the same
+ * number the home page shows.
  *
- * The period can be any length and can straddle a month boundary, so the grid
- * is built from the period's own date span rather than a calendar month.
+ * The span can be any length and can straddle a month boundary, so the grid is
+ * built from its own date range rather than a calendar month.
+ *
+ * Budgets are optional. Leave `periodDays` empty (or `income` at 0) and every
+ * verdict switches off together — no tints, no budget line, no legend, no
+ * per-day budget in the detail sheet — leaving a plain record of what was
+ * spent. /stats uses it that way: it spans months with different budgets, and
+ * a verdict there would have to pick one to judge against. Day amounts fall
+ * back to the transactions themselves, so they stay correct either way.
  */
 export default function DailySpendingCard({
   transactions = [],
@@ -98,6 +105,8 @@ export default function DailySpendingCard({
   period,
   periodDays = [],
   todayBudget = 0,
+  subtitle,
+  emptyMessage = "No spending logged yet this period. Add an expense on the Transactions page to see your daily pattern.",
 }) {
   const colors = useChartColors();
   const reduce = useReducedMotion();
@@ -187,7 +196,7 @@ export default function DailySpendingCard({
             <div>
               <h2 className="font-semibold">Daily spending</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {formatPeriodLabel(period)}
+                {subtitle ?? formatPeriodLabel(period)}
               </p>
             </div>
             <div className="text-right">
@@ -389,8 +398,7 @@ export default function DailySpendingCard({
             </>
           ) : (
             <div className="flex h-40 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              No spending logged yet this period. Add an expense on the
-              Transactions page to see your daily pattern.
+              {emptyMessage}
             </div>
           )}
         </CardContent>

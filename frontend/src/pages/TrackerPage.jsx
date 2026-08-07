@@ -104,15 +104,33 @@ export default function TrackerPage() {
 
   return (
     <PageWrapper>
-      <motion.div variants={fadeUp} initial="initial" animate="animate">
-        <h1 className="text-2xl font-extrabold tracking-tight">
-          {budgetPeriod.mode === "month" ? "Monthly Tracker" : "Period Tracker"}
-        </h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          {current
-            ? formatPeriodLabel(current, { mode: budgetPeriod.mode })
-            : "No budget period running"}
-        </p>
+      <motion.div
+        variants={fadeUp}
+        initial="initial"
+        animate="animate"
+        className="flex items-start justify-between gap-3"
+      >
+        <div className="min-w-0">
+          <h1 className="text-2xl font-extrabold tracking-tight">
+            {budgetPeriod.mode === "month" ? "Monthly Tracker" : "Period Tracker"}
+          </h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {current
+              ? formatPeriodLabel(current, { mode: budgetPeriod.mode })
+              : "No budget period running"}
+          </p>
+        </div>
+        {/* Same destination as the button at the foot of the page. This page
+            runs long, so reaching your history shouldn't require scrolling
+            past all of it first. */}
+        <button
+          type="button"
+          onClick={() => navigate("/stats")}
+          className="mt-0.5 flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <BarChart3 className="h-3.5 w-3.5" />
+          All months
+        </button>
       </motion.div>
 
       {!budgetPeriod.loading && !current ? (
