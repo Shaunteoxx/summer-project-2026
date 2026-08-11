@@ -25,6 +25,25 @@ services:
       - NODE_ENV=development
       - MONGO_URI=mongodb://mongo:27017/brokenomore
       - PORT=5000
+    # Run the working tree, not the copy baked into the image, and restart on
+    # save — the same arrangement the frontend has. Without this the container
+    # keeps serving whatever the code looked like when the image was last
+    # built, which shows up as a 404 on a route you have just written.
+    #
+    # node_modules is a named volume so the container keeps its own Linux
+    # install rather than the host's macOS one. Docker only seeds that volume
+    # from the image when the volume does not yet exist, so after changing
+    # package.json it has to be dropped by hand — and *not* with
+    # `docker compose down -v`, which removes every volume in the project,
+    # mongo_data included. Drop this one alone:
+    #
+    #   docker compose stop backend && docker compose rm -f backend
+    #   docker volume rm summer-project-2026_backend_modules
+    #   docker compose up -d --build backend
+    command: npm run dev
+    volumes:
+      - ./backend:/app
+      - backend_modules:/app/node_modules
     depends_on:
       mongo:
         condition: service_healthy
@@ -45,4 +64,5 @@ services:
 
 volumes:
   mongo_data:
+  backend_modules:
   frontend_modules:
