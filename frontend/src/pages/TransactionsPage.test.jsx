@@ -3,16 +3,26 @@
 // both are easy to break without noticing, because the form still *works*
 // afterwards, it just costs more taps or saves a blank-looking row.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  within,
+  waitForElementToBeRemoved,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const addTransaction = vi.fn();
 const addCategory = vi.fn();
 
+let mockTransactions = [];
+let mockTransfers = [];
+const removeTransfer = vi.fn();
 vi.mock("@/api/endpoints", () => ({
-  fetchTransactions: () => Promise.resolve([]),
+  fetchTransactions: () => Promise.resolve(mockTransactions),
   addTransaction: (...args) => addTransaction(...args),
   removeTransaction: vi.fn(),
+  fetchTransfers: () => Promise.resolve(mockTransfers),
+  removeTransfer: (...args) => removeTransfer(...args),
 }));
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { savingsByMonth: {} } }),
@@ -21,8 +31,36 @@ vi.mock("@/hooks/useToast", () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(), show: vi.fn() }),
 }));
 vi.mock("@/hooks/useDemoGuard", () => ({ useDemoGuard: () => () => false }));
+// Accounts are opt-in: with none created, every piece of account UI hides and
+// the form behaves exactly as it did before the feature. Overridden per-test
+// below where the picker itself is under test.
+let mockAccounts = [];
+vi.mock("@/hooks/useAccounts", () => ({
+  useAccounts: () => ({
+    accounts: mockAccounts,
+    active: mockAccounts.filter((a) => !a.archived),
+    hasAccounts: mockAccounts.filter((a) => !a.archived).length > 0,
+    getAccount: (id) => mockAccounts.find((a) => a.id === id),
+    addAccount: vi.fn(),
+    updateAccount: vi.fn(),
+    removeAccount: vi.fn(),
+    defaultAccountId: () => mockAccounts.filter((a) => !a.archived)[0]?.id ?? "",
+    rememberAccount: vi.fn(),
+  }),
+}));
+
+// A running period, so the ledger has a window and transfers get fetched.
+// The object is hoisted, not rebuilt per call: `current` feeds a useCallback
+// dependency, and a fresh identity each render would spin the load effect
+// forever. The real provider keeps it in state, so it is stable there too.
+const mockPeriod = {
+  loading: false,
+  mode: "month",
+  noun: "month",
+  current: { start: "2026-08-01", end: "2026-08-31", savings: 0 },
+};
 vi.mock("@/hooks/useBudgetPeriod", () => ({
-  useBudgetPeriod: () => ({ loading: false, mode: "month", current: null }),
+  useBudgetPeriod: () => mockPeriod,
 }));
 
 // Coarse pointer = phone, where the amount is a keypad button rather than a
@@ -58,8 +96,23 @@ const openExpenseSheet = async (user) => {
 
 const submitted = () => addTransaction.mock.calls.at(-1)[0];
 
+/** The account filter trigger, whose label changes with the selection. */
+const accountButton = () =>
+  screen.getByRole("button", { name: /^Filter(ing)? by/ });
+
+/** Open the account filter sheet and choose one. */
+const pickAccount = async (user, name) => {
+  await user.click(accountButton());
+  const sheet = within(screen.getByRole("dialog"));
+  await user.click(sheet.getByRole("button", { name }));
+};
+
 beforeEach(() => {
   coarse = true;
+  mockAccounts = [];
+  mockTransactions = [];
+  mockTransfers = [];
+  removeTransfer.mockReset().mockResolvedValue({});
   addTransaction.mockReset().mockImplementation((payload) =>
     Promise.resolve({ ...payload, _id: "t1", date: `${payload.date}T00:00:00.000Z` })
   );
@@ -201,5 +254,218 @@ describe("adding a category", () => {
       "placeholder",
       "Groceries"
     );
+  });
+});
+
+describe("tagging entries with an account", () => {
+  const twoAccounts = [
+    { id: "a1", name: "Trust", color: "#c26b6b", archived: false },
+    { id: "a2", name: "DBS", color: "#7cb37c", archived: false },
+  ];
+
+  const fillAmount = async (user) => {
+    await user.click(screen.getByRole("button", { name: "4" }));
+    await user.click(screen.getByRole("button", { name: /^Use/ }));
+  };
+
+  it("shows no account UI at all before you make one", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet(user);
+
+    expect(sheet.queryByText("Paid from")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Filter by account")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Move money between accounts/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it("sends the chosen account with the transaction", async () => {
+    mockAccounts = twoAccounts;
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet(user);
+
+    await user.click(sheet.getByRole("button", { name: /DBS/ }));
+    await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
+    await user.click(sheet.getByLabelText(/^Amount/));
+    await fillAmount(user);
+    await user.click(screen.getByRole("button", { name: "Add expense" }));
+
+    expect(submitted().accountId).toBe("a2");
+  });
+
+  it("preselects the first account so it costs no extra tap", async () => {
+    mockAccounts = twoAccounts;
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet(user);
+
+    expect(sheet.getByRole("button", { name: /Trust/ })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  it("asks where income landed rather than where it came from", async () => {
+    mockAccounts = twoAccounts;
+    const user = userEvent.setup();
+    render(<TransactionsPage />);
+    await user.click(screen.getByRole("button", { name: /^Income$/ }));
+
+    const sheet = within(screen.getByRole("dialog"));
+    expect(sheet.getByText("Paid into")).toBeInTheDocument();
+    expect(sheet.queryByText("Paid from")).not.toBeInTheDocument();
+  });
+
+  it("offers the transfer action only with two accounts to move between", async () => {
+    mockAccounts = [twoAccounts[0]];
+    const { unmount } = render(<TransactionsPage />);
+    expect(
+      screen.queryByRole("button", { name: /Move money between accounts/ })
+    ).not.toBeInTheDocument();
+    unmount();
+
+    mockAccounts = twoAccounts;
+    render(<TransactionsPage />);
+    expect(
+      screen.getByRole("button", { name: /Move money between accounts/ })
+    ).toBeInTheDocument();
+  });
+});
+
+describe("transfers in the ledger", () => {
+  const twoAccounts = [
+    { id: "a1", name: "Trust", color: "#c26b6b", archived: false },
+    { id: "a2", name: "DBS", color: "#7cb37c", archived: false },
+  ];
+  const expense = {
+    _id: "t1",
+    date: "2026-08-05T00:00:00.000Z",
+    type: "expense",
+    amount: 12,
+    category: "Food & Drinks",
+    description: "Lunch",
+    accountId: "a1",
+  };
+  const move = {
+    _id: "m1",
+    date: "2026-08-06T00:00:00.000Z",
+    from: "a2",
+    to: "a1",
+    amount: 50,
+  };
+
+  const show = async () => {
+    render(<TransactionsPage />);
+    return screen.findByText("Lunch");
+  };
+
+  it("leaves a record of the move rather than swallowing it", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [expense];
+    mockTransfers = [move];
+    await show();
+
+    expect(screen.getByText(/DBS/, { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByText("$50.00")).toBeInTheDocument();
+  });
+
+  it("signs it neither way, because it moved no money in or out", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [expense];
+    mockTransfers = [move];
+    await show();
+
+    // The expense is signed; the transfer deliberately isn't.
+    expect(screen.getByText(/^−\$12\.00$/)).toBeInTheDocument();
+    expect(screen.getByText("$50.00")).toBeInTheDocument();
+  });
+
+  it("hides transfers under the Expenses and Income filters", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [expense];
+    mockTransfers = [move];
+    const user = userEvent.setup();
+    await show();
+
+    expect(screen.getByText("$50.00")).toBeInTheDocument();
+    await user.click(
+      within(screen.getByRole("group", { name: "Filter by type" })).getByRole(
+        "button",
+        { name: "Expenses" }
+      )
+    );
+    // AnimatePresence keeps the row mounted through its exit animation, so
+    // wait it out rather than asserting on the frame after the click.
+    await waitForElementToBeRemoved(() => screen.queryByText("$50.00"));
+    expect(screen.getByText("Lunch")).toBeInTheDocument();
+  });
+
+  it("keeps a transfer visible from either account's filter", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [];
+    mockTransfers = [move];
+    const user = userEvent.setup();
+    render(<TransactionsPage />);
+    await screen.findByText("$50.00");
+
+    // The money left DBS and arrived in Trust, so it belongs to both.
+    await pickAccount(user, "Trust");
+    expect(screen.getByText("$50.00")).toBeInTheDocument();
+    await pickAccount(user, "DBS");
+    expect(screen.getByText("$50.00")).toBeInTheDocument();
+  });
+
+  it("deletes one and puts it back if the server refuses", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [expense];
+    mockTransfers = [move];
+    removeTransfer.mockRejectedValue(new Error("nope"));
+    const user = userEvent.setup();
+    await show();
+
+    await user.click(screen.getByRole("button", { name: /Delete transfer of/ }));
+    expect(removeTransfer).toHaveBeenCalledWith("m1");
+    expect(await screen.findByText("$50.00")).toBeInTheDocument();
+  });
+
+  it("keeps every type filter on screen without scrolling", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [expense];
+    await show();
+
+    // Scoped to the group: "Income" is also the name of the add button above.
+    const group = screen.getByRole("group", { name: "Filter by type" });
+    for (const label of ["All", "Expenses", "Income"]) {
+      expect(within(group).getByRole("button", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("lists every account at once in the picker, however many there are", async () => {
+    // Four accounts is where a chip row starts scrolling and the later ones
+    // become invisible. A sheet shows all of them whatever the count.
+    mockAccounts = [
+      ...twoAccounts,
+      { id: "a3", name: "Revolut", color: "#8a93a6", archived: false },
+      { id: "a4", name: "Cash", color: "#9ca85b", archived: false },
+    ];
+    mockTransactions = [expense];
+    const user = userEvent.setup();
+    await show();
+
+    await user.click(accountButton());
+    const sheet = within(screen.getByRole("dialog"));
+    for (const label of ["All accounts", "Trust", "DBS", "Revolut", "Cash"]) {
+      expect(sheet.getByRole("button", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("shows which account is being filtered on the button itself", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [expense];
+    const user = userEvent.setup();
+    await show();
+
+    expect(accountButton()).toHaveAccessibleName("Filter by account");
+    await pickAccount(user, "DBS");
+    expect(accountButton()).toHaveAccessibleName(/Filtering by DBS/);
   });
 });

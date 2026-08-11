@@ -15,6 +15,7 @@ import {
   PiggyBank,
   ChevronLeft,
   CalendarRange,
+  Wallet,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -22,11 +23,13 @@ import Avatar from "@/components/Avatar";
 import BottomSheet from "@/components/BottomSheet";
 import FieldError from "@/components/FieldError";
 import SwitchRow from "@/components/SwitchRow";
+import AccountsSheet from "@/components/AccountsSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
+import { useAccounts } from "@/hooks/useAccounts";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
@@ -74,6 +77,8 @@ export default function MorePage() {
   const toast = useToast();
   const guard = useDemoGuard();
   const isDays = period.mode === "days";
+  const { active: activeAccounts } = useAccounts();
+  const accountCount = activeAccounts.length;
   // `history` from the API is every period; the running one is rendered
   // separately above, so keep it out of the "Past periods" list.
   const pastPeriods = (period.history ?? []).filter(
@@ -118,6 +123,8 @@ export default function MorePage() {
   // Id of the period awaiting an inline "really delete?" confirmation.
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const periodShake = useAnimationControls();
+
+  const [accountsOpen, setAccountsOpen] = useState(false);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -454,6 +461,27 @@ export default function MorePage() {
           </button>
 
           <button
+            onClick={() => {
+              if (guard()) return;
+              setAccountsOpen(true);
+            }}
+            className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+              <Wallet className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">Bank accounts</span>
+              <span className="block text-sm text-muted-foreground">
+                {accountCount === 0
+                  ? "Tag where your money comes and goes"
+                  : `${accountCount} account${accountCount === 1 ? "" : "s"}`}
+              </span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+          </button>
+
+          <button
             onClick={openSavings}
             className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
@@ -618,6 +646,8 @@ export default function MorePage() {
           </Button>
         </div>
       </BottomSheet>
+
+      <AccountsSheet open={accountsOpen} onClose={() => setAccountsOpen(false)} />
 
       {/* Savings target sheet */}
       <BottomSheet

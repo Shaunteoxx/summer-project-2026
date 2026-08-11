@@ -16,6 +16,7 @@ import {
 import PageWrapper from "@/components/PageWrapper";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import StreakCard from "@/components/StreakCard";
+import AccountsCard from "@/components/AccountsCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -192,6 +193,12 @@ export default function HomePage() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Where this period's money physically sits. Hides itself entirely
+          until the user has made an account. */}
+      <div className="mt-4">
+        <AccountsCard />
+      </div>
 
       {/* Streak */}
       <div className="mt-4">

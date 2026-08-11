@@ -24,6 +24,26 @@ export const deleteAccount = () =>
 export const setMonthlySavings = (payload) =>
   api.put("/auth/savings", payload).then((r) => r.data);
 
+// --- Bank accounts ---
+// Created/edited through /auth because they are embedded on the user; the
+// /accounts endpoint below is the read-only per-period totals view.
+export const addAccount = (payload) =>
+  api.post("/auth/accounts", payload).then((r) => r.data);
+export const updateAccount = (id, payload) =>
+  api.patch(`/auth/accounts/${id}`, payload).then((r) => r.data);
+export const removeAccount = (id) =>
+  api.delete(`/auth/accounts/${id}`).then((r) => r.data);
+export const fetchAccountTotals = (today) =>
+  api.get("/accounts", { params: { today } }).then((r) => r.data);
+
+// --- Transfers between the user's own accounts ---
+export const fetchTransfers = (params) =>
+  api.get("/transfers", { params }).then((r) => r.data);
+export const addTransfer = (payload) =>
+  api.post("/transfers", payload).then((r) => r.data);
+export const removeTransfer = (id) =>
+  api.delete(`/transfers/${id}`).then((r) => r.data);
+
 // --- Budget period ---
 export const fetchPeriod = (today) =>
   api.get("/period", { params: { today } }).then((r) => r.data);

@@ -5,6 +5,7 @@ import { MotionConfig } from "framer-motion";
 import App from "./App.jsx";
 import { AuthProvider } from "./hooks/useAuth.jsx";
 import { BudgetPeriodProvider } from "./hooks/useBudgetPeriod.jsx";
+import { AccountsProvider } from "./hooks/useAccounts.jsx";
 import { CategoriesProvider } from "./hooks/useCategories.jsx";
 import { ThemeProvider } from "./hooks/useTheme.jsx";
 import { ToastProvider } from "./hooks/useToast.jsx";
@@ -19,7 +20,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             <AuthProvider>
               <BudgetPeriodProvider>
                 <CategoriesProvider>
-                  <App />
+                  <AccountsProvider>
+                    <App />
+                  </AccountsProvider>
                 </CategoriesProvider>
               </BudgetPeriodProvider>
             </AuthProvider>
