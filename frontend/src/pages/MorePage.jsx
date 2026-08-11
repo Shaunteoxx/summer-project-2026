@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   CalendarRange,
   Wallet,
+  Repeat,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -24,12 +25,14 @@ import BottomSheet from "@/components/BottomSheet";
 import FieldError from "@/components/FieldError";
 import SwitchRow from "@/components/SwitchRow";
 import AccountsSheet from "@/components/AccountsSheet";
+import RecurringSheet from "@/components/RecurringSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useRecurring } from "@/hooks/useRecurring";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
@@ -79,6 +82,8 @@ export default function MorePage() {
   const isDays = period.mode === "days";
   const { active: activeAccounts } = useAccounts();
   const accountCount = activeAccounts.length;
+  const { rules, addRule, updateRule, removeRule } = useRecurring();
+  const liveRules = rules.filter((r) => !r.paused).length;
   // `history` from the API is every period; the running one is rendered
   // separately above, so keep it out of the "Past periods" list.
   const pastPeriods = (period.history ?? []).filter(
@@ -125,6 +130,7 @@ export default function MorePage() {
   const periodShake = useAnimationControls();
 
   const [accountsOpen, setAccountsOpen] = useState(false);
+  const [recurringOpen, setRecurringOpen] = useState(false);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -482,6 +488,29 @@ export default function MorePage() {
           </button>
 
           <button
+            onClick={() => {
+              if (guard()) return;
+              setRecurringOpen(true);
+            }}
+            className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+              <Repeat className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">Repeating entries</span>
+              <span className="block text-sm text-muted-foreground">
+                {rules.length === 0
+                  ? "Add rent and subscriptions once"
+                  : liveRules === rules.length
+                    ? `${rules.length} entr${rules.length === 1 ? "y" : "ies"}, added automatically`
+                    : `${liveRules} of ${rules.length} running`}
+              </span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+          </button>
+
+          <button
             onClick={openSavings}
             className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
@@ -648,6 +677,15 @@ export default function MorePage() {
       </BottomSheet>
 
       <AccountsSheet open={accountsOpen} onClose={() => setAccountsOpen(false)} />
+
+      <RecurringSheet
+        open={recurringOpen}
+        onClose={() => setRecurringOpen(false)}
+        rules={rules}
+        onAdd={addRule}
+        onUpdate={updateRule}
+        onRemove={removeRule}
+      />
 
       {/* Savings target sheet */}
       <BottomSheet

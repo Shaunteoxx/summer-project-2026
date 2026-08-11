@@ -13,9 +13,12 @@ import {
   getHomeStats,
   addAccount,
   addCategory,
+  addRecurring,
   removeAccount,
   removeCategory,
+  removeRecurring,
   updateAccount,
+  updateRecurring,
   updateProfile,
   deleteAccount,
   setSavings,
@@ -82,6 +85,10 @@ router.delete("/categories/:id", requireAuth, blockDemoMutations, asyncHandler(r
 router.post("/accounts", requireAuth, blockDemoMutations, asyncHandler(addAccount));
 router.patch("/accounts/:id", requireAuth, blockDemoMutations, asyncHandler(updateAccount));
 router.delete("/accounts/:id", requireAuth, blockDemoMutations, asyncHandler(removeAccount));
+
+router.post("/recurring", requireAuth, blockDemoMutations, asyncHandler(addRecurring));
+router.patch("/recurring/:id", requireAuth, blockDemoMutations, asyncHandler(updateRecurring));
+router.delete("/recurring/:id", requireAuth, blockDemoMutations, asyncHandler(removeRecurring));
 router.patch("/profile", requireAuth, blockDemoMutations, asyncHandler(updateProfile));
 router.put("/savings", requireAuth, blockDemoMutations, asyncHandler(setSavings));
 router.delete("/me", requireAuth, blockDemoMutations, asyncHandler(deleteAccount));

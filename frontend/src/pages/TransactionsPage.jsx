@@ -12,6 +12,7 @@ import {
   Wallet,
   ChevronDown,
   Check,
+  Repeat,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -59,6 +60,9 @@ export default function TransactionsPage() {
 
   // Which kind of entry the sheet is adding: "income" | "expense" | null (closed).
   const [formType, setFormType] = useState(null);
+  // The row the sheet is editing, or null. Mutually exclusive with formType —
+  // the sheet is one sheet, and it is either adding or correcting.
+  const [editing, setEditing] = useState(null);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   // "" is every account; an id narrows to one.
@@ -120,6 +124,24 @@ export default function TransactionsPage() {
       : new Date(created.date).getUTCMonth() === now.getMonth() &&
         new Date(created.date).getUTCFullYear() === now.getFullYear();
     if (inView) setTransactions((prev) => [created, ...prev]);
+  };
+
+  /**
+   * An edit can move a row out of the window being listed — re-dating a lunch
+   * into last month, say. Replacing it in place would leave it on screen under
+   * a period it no longer belongs to, so it drops out of the list instead.
+   */
+  const handleUpdated = (updated) => {
+    const ymd = String(updated.date).slice(0, 10);
+    const inView = current
+      ? ymd >= current.start && ymd <= current.end
+      : new Date(updated.date).getUTCMonth() === now.getMonth() &&
+        new Date(updated.date).getUTCFullYear() === now.getFullYear();
+    setTransactions((prev) =>
+      inView
+        ? prev.map((t) => (t._id === updated._id ? updated : t))
+        : prev.filter((t) => t._id !== updated._id)
+    );
   };
 
   const totals = transactions.reduce(
@@ -334,8 +356,13 @@ export default function TransactionsPage() {
 
       <AddTransactionSheet
         type={formType}
-        onClose={() => setFormType(null)}
+        editing={editing}
+        onClose={() => {
+          setFormType(null);
+          setEditing(null);
+        }}
         onAdded={handleAdded}
+        onUpdated={handleUpdated}
       />
 
       <TransferSheet
@@ -541,35 +568,58 @@ export default function TransactionsPage() {
                     exit={{ opacity: 0, x: 24, transition: { duration: 0.25 } }}
                   >
                     <Card>
-                      <CardContent className="flex items-center justify-between gap-3 p-3.5">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                            style={{
-                              backgroundColor: `${cat.color}22`,
-                              color: cat.color,
-                            }}
-                          >
-                            <Icon className="h-[18px] w-[18px]" />
+                      <CardContent className="flex items-center justify-between gap-1 p-3.5">
+                        {/* The row itself opens the edit sheet. Everything but
+                            the delete button is one target, so a mistyped
+                            amount is a tap on the amount to fix — delete stays
+                            a separate, deliberate button beside it rather than
+                            nested inside a tappable card. */}
+                        <button
+                          type="button"
+                          onClick={() => setEditing(t)}
+                          aria-label={`Edit ${t.description}`}
+                          className="-m-1 flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg p-1 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <span className="flex min-w-0 items-center gap-3">
+                            <span
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                              style={{
+                                backgroundColor: `${cat.color}22`,
+                                color: cat.color,
+                              }}
+                            >
+                              <Icon className="h-[18px] w-[18px]" />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate font-semibold">
+                                {t.description}
+                              </span>
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                {/* Rows written by a repeating entry say so.
+                                    Nobody typed them, so without this they
+                                    read as entries you don't remember making. */}
+                                {t.recurringId && (
+                                  <Repeat
+                                    className="h-3 w-3 shrink-0"
+                                    aria-label="Repeating entry"
+                                  />
+                                )}
+                                <span className="truncate">
+                                  {new Date(t.date).toLocaleDateString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    timeZone: "UTC",
+                                  })}{" "}
+                                  · {t.category}
+                                  {getAccount(t.accountId) && (
+                                    <> · {getAccount(t.accountId).name}</>
+                                  )}
+                                </span>
+                              </span>
+                            </span>
                           </span>
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold">{t.description}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(t.date).toLocaleDateString(undefined, {
-                                month: "short",
-                                day: "numeric",
-                                timeZone: "UTC",
-                              })}{" "}
-                              · {t.category}
-                              {getAccount(t.accountId) && (
-                                <> · {getAccount(t.accountId).name}</>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1">
                           <span
-                            className={`font-bold tabular-nums ${
+                            className={`shrink-0 font-bold tabular-nums ${
                               isIncome ? "text-success" : "text-destructive"
                             }`}
                           >
@@ -579,14 +629,14 @@ export default function TransactionsPage() {
                               maximumFractionDigits: 2,
                             })}
                           </span>
-                          <button
-                            onClick={() => handleDelete(t._id)}
-                            aria-label={`Delete ${t.description}`}
-                            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(t._id)}
+                          aria-label={`Delete ${t.description}`}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </CardContent>
                     </Card>
                   </motion.div>

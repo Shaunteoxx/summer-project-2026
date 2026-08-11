@@ -2,6 +2,7 @@ import Transaction from "../models/Transaction.js";
 import { parseYmd, resolveClientToday } from "../lib/validation.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
 import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
+import { ensureRecurringDue } from "../lib/recurring.js";
 import {
   addDays,
   createPeriodResolver,
@@ -283,8 +284,11 @@ export async function getStreak(req, res) {
 
   const todayKey = ymd(today);
   // Before the context is built, not alongside it — the loader reads the very
-  // map this may write to.
+  // map this may write to. Recurring entries likewise have to be written before
+  // the transactions are read, or a rent due today wouldn't reach the streak
+  // until the next request.
   await ensureCurrentMonthSavings(req.user, todayKey);
+  await ensureRecurringDue(req.user, todayKey);
   const [transactions, context] = await Promise.all([
     Transaction.find({ userId: req.user._id }).sort({ date: 1 }),
     loadPeriodContext(req.user, todayKey),
@@ -310,6 +314,7 @@ export async function restoreStreak(req, res) {
 
   const todayKey = ymd(today);
   await ensureCurrentMonthSavings(req.user, todayKey);
+  await ensureRecurringDue(req.user, todayKey);
   const [transactions, context] = await Promise.all([
     Transaction.find({ userId: req.user._id }).sort({ date: 1 }),
     loadPeriodContext(req.user, todayKey),

@@ -13,6 +13,7 @@ Built with **React + Vite**, **Node + Express**, and **MongoDB**, with Google OA
 - **Dark & light theme** — system-aware with a manual toggle (no flash on load)
 - **Budget periods** — budget by **calendar month** (the default) or by a **custom number of days**, for allowances that don't run monthly (a fortnight, five weeks, half a month). You start each custom period yourself and start the next when it ends; days in between simply aren't budgeted, and never count against your streak
 - **Bank accounts** — tag each entry with the account it came from or went into (one card for PayWave, another for PayNow), filter the ledger by account, and see on the homepage where this period's money is sitting. **Transfers** move money between your own accounts without ever touching the budget. Deliberately not bank balances: there are no opening figures, so an account shows only what has moved through it this period
+- **Repeating entries** — tick **Repeat monthly** while logging rent and it's set up in the same breath, on the day you already picked; the rule starts *after* the entry you're adding, so the month you just logged is never posted twice. Manage them (weekly schedules, pausing, editing) under Repeating entries on the More page. Either way it's added for you on each due date. A rule that lands on the 31st uses the last day of shorter months rather than skipping them. What it writes is an ordinary transaction: correct it, delete it, or stop the rule entirely and the entries it already added stay put. Nothing is ever back-filled into days you've already lived through, and pausing means what it says — resuming starts from the day you resume
 - **Repeating savings target** — turn on *Repeat every month* and each new month starts with your most recent target instead of $0, so a target that doesn't change never has to be re-entered. Months you've already lived through are never touched
 - **Homepage** — what's left to spend this period (after reserving your savings target) with the days left, accumulated savings, a daily-budget streak, and animated count-up stats
 - **Transactions**
@@ -157,6 +158,21 @@ To stop and delete all saved data (wipes the database):
 docker compose down -v
 ```
 
+Both services run your working tree, so edits to `frontend/` or `backend/` take
+effect on save — the frontend hot-reloads, the backend restarts itself. The one
+thing that isn't picked up automatically is a change to `backend/package.json`:
+its dependencies live in a named volume that Docker only fills the first time it
+is created, so install a new package with
+
+```bash
+docker compose stop backend && docker compose rm -f backend
+docker volume rm summer-project-2026_backend_modules
+docker compose up -d --build backend
+```
+
+Note `docker volume rm`, not `docker compose down -v` — the latter removes every
+volume in the project, including the database.
+
 ---
 
 ### Troubleshooting
@@ -168,6 +184,8 @@ docker compose down -v
 | `redirect_uri_mismatch` from Google | The redirect URI in Google Cloud Console must be **exactly** `http://localhost:5000/api/auth/google/callback` |
 | "Access blocked" from Google | Add your Google account as a **Test user** on the OAuth consent screen |
 | Port 5173 or 5000 already in use | Stop whatever is using that port, or run `docker compose down` first |
+| A backend route you just wrote returns 404 | The container is running stale code. Check `docker compose logs backend` for a crash on the last restart — a syntax error leaves the old process dead rather than reloading |
+| `Cannot find package '…'` on backend start | A dependency was added without refilling the backend's node_modules volume — see the commands under *Subsequent runs* |
 
 ---
 
@@ -231,6 +249,7 @@ All routes except the OAuth start/callback require a `Bearer <JWT>` header.
 | GET | `/api/auth/home` | Homepage stats |
 | PATCH | `/api/auth/profile` | Update display name / avatar |
 | POST | `/api/auth/accounts` | Create a bank account (`PATCH`/`DELETE` by id; delete refuses once it has history) |
+| POST | `/api/auth/recurring` | Create a repeating entry (`PATCH` to edit or pause, `DELETE` to stop it; entries already added stay) |
 | GET | `/api/accounts` | Per-account totals for the active period |
 | GET | `/api/transfers` | Transfers in a date range (`POST` to create, `DELETE` by id) |
 | PUT | `/api/auth/savings` | Set a calendar month's savings target (`repeat` carries it into future months) |
@@ -244,6 +263,7 @@ All routes except the OAuth start/callback require a `Bearer <JWT>` header.
 | DELETE | `/api/period/:id` | Remove a period (its transactions are kept) |
 | GET | `/api/transactions` | List transactions by `?start=&end=` or `?month=&year=` |
 | POST | `/api/transactions` | Add a transaction |
+| PATCH | `/api/transactions/:id` | Correct one — partial; `type` is not editable |
 | DELETE | `/api/transactions/:id` | Delete a transaction |
 | GET | `/api/summary/all` | All monthly summaries (drives Stats) |
 | GET | `/api/streak` | Streak, today's budget, and the period's per-day budgets |
@@ -268,6 +288,9 @@ All routes except the OAuth start/callback require a `Bearer <JWT>` header.
 - **Budget periods have two shapes.** In month mode the period is *derived* from the calendar and nothing is stored; in days mode it is a stored row the user starts by hand. A single resolver (`backend/lib/period.js`) hides the difference behind `(date) → period | null`, so nothing downstream branches on the mode. A `null` result means the day falls outside every period: it has no budget, so the streak skips it rather than counting it as a loss.
 - **A repeating savings target is materialised, never inferred.** The obvious way to carry a target into a new month is a read-time fallback ("no target this month? use the last one"). That would be wrong: the streak resolves a period for *every day since your first transaction*, so a fallback would retroactively give past months a target they never had, shrinking historical daily budgets and rewriting the streak. Instead `backend/lib/savingsCarry.js` writes a real entry for the current month, once, and never for a past one — so a stored `0` has to mean "saving nothing" rather than "unset", which is why `PUT /api/auth/savings` stores zeros instead of deleting the key. It is also called from the owner-scoped handlers rather than the shared period loader, because the friends leaderboard runs that loader over *other people's* documents.
 - **Restores scale with length** — roughly three per thirty days — so a short period isn't trivially forgiving and a long one isn't punishing.
+- **Repeating entries are written, never evaluated.** A rule (rent, a subscription) is a template that produces a real transaction on each due date, and from then on that row is ordinary in every respect — the streak, summaries and per-account totals see it without knowing it was generated, and you can correct or delete it like anything else. The alternative, evaluating rules at read time, fails for the same reason a read-time savings fallback does: `computeStreak` walks every day since your first transaction, so editing a rule would keep changing what past days cost. Two guards make materialising safe to attempt on any request — a `lastRunKey` watermark on the rule short-circuits it once a day, and a unique partial index on `(userId, recurringId, dueKey)` means two requests racing on app open cannot both insert the same occurrence. `dueKey` is stored rather than derived from the row's date precisely so that correcting the date doesn't free the day up to be written twice.
+- **A rule can only start today or later.** Back-filling would write entries into days already lived through and rewrite the streak for them — the trap `lib/savingsCarry.js` documents. Catching up after a week away is different and does happen: those days hadn't been seen yet, and the money really did move. Pausing follows the same rule, so resuming starts from the day you resume rather than replaying the gap. The one concession is a day of timezone skew, since a client west of UTC sends a local date that reads as yesterday: that clamps up to today instead of being refused.
+- **An edit sends only what changed, and can't change a type.** `PATCH /api/transactions/:id` is partial, so tagging a row that predates accounts is a one-field request and an edit can never blank out a field the client didn't know to send. Two things fall out of that. A row tagged to an account you have since archived survives being edited: the picker can't offer that account and the API would refuse to be sent it, but an untouched field is never sent in the first place. And `accountId: null` has to be spelled out to clear a tag, since an absent key means "leave it alone" — which is why tapping the selected account chip deselects it rather than being a dead end. `type` is refused outright: categories are per-type, so switching would have to silently drop the category, and an entry that changes sign is a different entry. Nothing derived is rewritten on an edit — the streak, summaries and per-account totals are all computed at read time from these rows — but `month`/`year` must move with `date`, because the history views group by them and would otherwise disagree with the row they're grouping.
 - **Accounts split where money sits, never the budget.** Per-account *budgets* would be arbitrary — if the period budget is $600 and the money is split $200/$400, there is no "Trust budget", only a fact about where it happens to be. So the budget stays pool-wide and accounts are a second view of the same money. Because every transfer has one `from` and one `to`, transfers cancel across accounts and `Σ per-account net === income − spent`, which is exactly the daily budget's numerator before the savings reserve. The homepage card shows that reserve as its own line so the two views are seen to reconcile rather than looking like they disagree.
 - **Transfers are not transactions.** They live in their own collection (`models/Transfer.js`). Four places branch on `Transaction.type`, and an unknown third value would mean three different things to them — the streak would read it as income and inflate the daily budget, the home totals and leaderboard as spending, the monthly summaries would ignore it. A separate collection makes every one of those blind to transfers by construction rather than by remembering to filter in four places. `backend/test/transfers.test.js` pins it: posting a transfer leaves `/api/streak` byte-identical.
 - **Two savings rates, on purpose.** The all-time rate is `total saved ÷ total earned`, so every dollar counts once. The per-month figure is the *mean of each month's rate*, so every month counts once — a $50 month weighs as much as a $2,000 one. They give different numbers on lumpy income, which is why they're labelled "Of everything earned" and "Each month counts once" rather than both being called an average.

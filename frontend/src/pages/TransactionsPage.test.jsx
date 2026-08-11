@@ -4,14 +4,17 @@
 // afterwards, it just costs more taps or saves a blank-looking row.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  fireEvent,
   render,
   screen,
+  waitFor,
   within,
   waitForElementToBeRemoved,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const addTransaction = vi.fn();
+const updateTransaction = vi.fn();
 const addCategory = vi.fn();
 
 let mockTransactions = [];
@@ -20,6 +23,7 @@ const removeTransfer = vi.fn();
 vi.mock("@/api/endpoints", () => ({
   fetchTransactions: () => Promise.resolve(mockTransactions),
   addTransaction: (...args) => addTransaction(...args),
+  updateTransaction: (...args) => updateTransaction(...args),
   removeTransaction: vi.fn(),
   fetchTransfers: () => Promise.resolve(mockTransfers),
   removeTransfer: (...args) => removeTransfer(...args),
@@ -46,6 +50,16 @@ vi.mock("@/hooks/useAccounts", () => ({
     removeAccount: vi.fn(),
     defaultAccountId: () => mockAccounts.filter((a) => !a.archived)[0]?.id ?? "",
     rememberAccount: vi.fn(),
+  }),
+}));
+
+const addRule = vi.fn();
+vi.mock("@/hooks/useRecurring", () => ({
+  useRecurring: () => ({
+    rules: [],
+    addRule: (...args) => addRule(...args),
+    updateRule: vi.fn(),
+    removeRule: vi.fn(),
   }),
 }));
 
@@ -116,7 +130,13 @@ beforeEach(() => {
   addTransaction.mockReset().mockImplementation((payload) =>
     Promise.resolve({ ...payload, _id: "t1", date: `${payload.date}T00:00:00.000Z` })
   );
+  // The API answers a PATCH with the whole row, not just the patch, so the
+  // page can swap it straight into the ledger.
+  updateTransaction.mockReset().mockImplementation((id, patch) =>
+    Promise.resolve({ ...mockTransactions.find((t) => t._id === id), ...patch })
+  );
   addCategory.mockReset();
+  addRule.mockReset().mockResolvedValue({});
 });
 
 describe("optional description", () => {
@@ -458,6 +478,17 @@ describe("transfers in the ledger", () => {
     }
   });
 
+  it("keeps deleting a deliberate button of its own, not a tap on the row", async () => {
+    // The row opens the editor, so delete has to stay separate — one stray tap
+    // must never be able to destroy an entry.
+    mockAccounts = twoAccounts;
+    mockTransactions = [expense];
+    await show();
+
+    expect(screen.getByRole("button", { name: "Edit Lunch" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Lunch" })).toBeInTheDocument();
+  });
+
   it("shows which account is being filtered on the button itself", async () => {
     mockAccounts = twoAccounts;
     mockTransactions = [expense];
@@ -467,5 +498,293 @@ describe("transfers in the ledger", () => {
     expect(accountButton()).toHaveAccessibleName("Filter by account");
     await pickAccount(user, "DBS");
     expect(accountButton()).toHaveAccessibleName(/Filtering by DBS/);
+  });
+});
+
+// Correcting an entry, rather than deleting and retyping it. The sheet is the
+// same one used for adding, so the risk isn't that editing fails loudly — it's
+// that opening the editor quietly rewrites fields nobody touched.
+describe("editing an entry", () => {
+  const twoAccounts = [
+    { id: "a1", name: "Trust", color: "#c26b6b", archived: false },
+    { id: "a2", name: "DBS", color: "#7cb37c", archived: false },
+  ];
+  const expense = {
+    _id: "t1",
+    date: "2026-08-05T00:00:00.000Z",
+    type: "expense",
+    amount: 12,
+    category: "Food & Drinks",
+    description: "Lunch",
+    accountId: null,
+  };
+
+  /** Tap the row and hand back the editor's scope. */
+  const openEditor = async (user, row = expense) => {
+    mockTransactions = [row];
+    render(<TransactionsPage />);
+    await user.click(
+      await screen.findByRole("button", { name: `Edit ${row.description}` })
+    );
+    return within(screen.getByRole("dialog"));
+  };
+
+  const save = (user) =>
+    user.click(screen.getByRole("button", { name: "Save changes" }));
+
+  beforeEach(() => {
+    // A real keyboard, so the amount is a typeable field rather than the keypad.
+    coarse = false;
+  });
+
+  it("opens on the entry as it stands", async () => {
+    mockAccounts = twoAccounts;
+    const user = userEvent.setup();
+    const sheet = await openEditor(user, { ...expense, accountId: "a2" });
+
+    expect(screen.getByRole("dialog", { name: "Edit expense" })).toBeInTheDocument();
+    expect(sheet.getByLabelText("Description")).toHaveValue("Lunch");
+    expect(sheet.getByLabelText("Amount")).toHaveValue(12);
+    expect(sheet.getByLabelText("Date")).toHaveValue("2026-08-05");
+    expect(sheet.getByRole("button", { name: /Food & Drinks/ })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(sheet.getByRole("button", { name: /DBS/ })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  it("sends only the field that changed", async () => {
+    const user = userEvent.setup();
+    const sheet = await openEditor(user);
+
+    await user.clear(sheet.getByLabelText("Amount"));
+    await user.type(sheet.getByLabelText("Amount"), "8.5");
+    await save(user);
+
+    // Exact, not a subset: an edit that resends untouched fields is an edit
+    // that can overwrite them with a stale copy.
+    expect(updateTransaction).toHaveBeenCalledWith("t1", { amount: 8.5 });
+  });
+
+  it("costs no request at all when nothing was touched", async () => {
+    const user = userEvent.setup();
+    await openEditor(user);
+
+    await save(user);
+
+    expect(updateTransaction).not.toHaveBeenCalled();
+    await waitForElementToBeRemoved(() => screen.queryByRole("dialog"));
+  });
+
+  it("tags a row logged before accounts existed", async () => {
+    mockAccounts = twoAccounts;
+    const user = userEvent.setup();
+    const sheet = await openEditor(user);
+
+    // Nothing is preselected — an untagged row stays untagged unless you say
+    // otherwise, or opening the editor would silently tag your whole history.
+    expect(sheet.getByRole("button", { name: /Trust/ })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+
+    await user.click(sheet.getByRole("button", { name: /DBS/ }));
+    await save(user);
+
+    expect(updateTransaction).toHaveBeenCalledWith("t1", { accountId: "a2" });
+  });
+
+  it("clears a tag out loud rather than by omission", async () => {
+    mockAccounts = twoAccounts;
+    const user = userEvent.setup();
+    const sheet = await openEditor(user, { ...expense, accountId: "a2" });
+
+    await user.click(sheet.getByRole("button", { name: /DBS/ }));
+    await save(user);
+
+    // Tapping the selected account deselects it. null, not undefined: an
+    // absent key would leave the old tag in place.
+    expect(updateTransaction).toHaveBeenCalledWith("t1", { accountId: null });
+  });
+
+  it("still shows a tag pointing at an account you've since archived", async () => {
+    mockAccounts = [
+      twoAccounts[0],
+      { id: "a9", name: "Closed", color: "#8a93a6", archived: true },
+    ];
+    const user = userEvent.setup();
+    const sheet = await openEditor(user, { ...expense, accountId: "a9" });
+
+    // It can't be chosen for anything new, but the row is tagged to it and
+    // hiding that would read as untagged.
+    expect(sheet.getByRole("button", { name: /Closed/ })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+
+    await user.clear(sheet.getByLabelText("Description"));
+    await user.type(sheet.getByLabelText("Description"), "Dinner");
+    await save(user);
+
+    expect(updateTransaction).toHaveBeenCalledWith("t1", { description: "Dinner" });
+  });
+
+  it("drops the row from the ledger when it's re-dated out of the period", async () => {
+    const user = userEvent.setup();
+    const sheet = await openEditor(user);
+
+    fireEvent.change(sheet.getByLabelText("Date"), {
+      target: { value: "2026-07-20" },
+    });
+    await save(user);
+
+    expect(updateTransaction).toHaveBeenCalledWith("t1", { date: "2026-07-20" });
+    // The ledger lists one period. Leaving the row on screen under a period it
+    // no longer belongs to would be a lie about where the money went.
+    await waitFor(() => expect(screen.queryByText("Lunch")).not.toBeInTheDocument());
+  });
+
+  it("shows the corrected figures without a reload", async () => {
+    const user = userEvent.setup();
+    const sheet = await openEditor(user);
+
+    await user.clear(sheet.getByLabelText("Amount"));
+    await user.type(sheet.getByLabelText("Amount"), "8.5");
+    await save(user);
+
+    expect(await screen.findByText(/^−\$8\.50$/)).toBeInTheDocument();
+    // The balance summary above the ledger reads from the same list.
+    expect(screen.getByText("Lunch")).toBeInTheDocument();
+  });
+
+  it("goes back to adding after an edit, rather than staying on the row", async () => {
+    const user = userEvent.setup();
+    await openEditor(user);
+    await user.click(screen.getByRole("button", { name: "Close dialog" }));
+
+    await user.click(screen.getByRole("button", { name: /^Expense$/ }));
+
+    const sheet = within(screen.getByRole("dialog"));
+    expect(screen.getByRole("dialog", { name: "Add expense" })).toBeInTheDocument();
+    expect(sheet.getByLabelText("Description")).toHaveValue("");
+    expect(sheet.getByLabelText("Amount")).toHaveValue(null);
+  });
+});
+
+// Setting an entry to repeat, from the moment you realise it does. The trap
+// here is double-posting: the entry being saved is this month's, so the rule
+// must never also fire for the same day.
+describe("repeating an entry as you add it", () => {
+  const fillExpense = async (user, sheet) => {
+    await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
+    await user.type(sheet.getByLabelText("Description"), "Rent");
+    await user.clear(sheet.getByLabelText("Amount"));
+    await user.type(sheet.getByLabelText("Amount"), "850");
+  };
+
+  beforeEach(() => {
+    coarse = false;
+  });
+
+  it("starts the rule after this entry, so the month isn't logged twice", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet(user);
+
+    await fillExpense(user, sheet);
+    fireEvent.change(sheet.getByLabelText("Date"), {
+      target: { value: "2026-08-15" },
+    });
+    await user.click(sheet.getByRole("checkbox", { name: /Repeat monthly/ }));
+    await user.click(screen.getByRole("button", { name: "Add expense" }));
+
+    expect(addRule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: "Rent",
+        amount: 850,
+        type: "expense",
+        frequency: "monthly",
+        dayOfMonth: 15,
+        // The 16th, not the 15th: today's entry is already in the ledger.
+        startKey: "2026-08-16",
+      })
+    );
+  });
+
+  it("says which day and which month before you commit to it", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet(user);
+
+    fireEvent.change(sheet.getByLabelText("Date"), {
+      target: { value: "2026-08-15" },
+    });
+    await user.click(sheet.getByRole("checkbox", { name: /Repeat monthly/ }));
+
+    expect(
+      sheet.getByText("Adds this again on the 15th of each month, from September.")
+    ).toBeInTheDocument();
+  });
+
+  it("warns about short months only when the day is late enough to shift", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet(user);
+
+    await user.click(sheet.getByRole("checkbox", { name: /Repeat monthly/ }));
+    fireEvent.change(sheet.getByLabelText("Date"), {
+      target: { value: "2026-08-15" },
+    });
+    expect(sheet.queryByText(/Shorter months/)).not.toBeInTheDocument();
+
+    fireEvent.change(sheet.getByLabelText("Date"), {
+      target: { value: "2026-08-31" },
+    });
+    expect(sheet.getByText(/Shorter months use their last day/)).toBeInTheDocument();
+  });
+
+  it("adds the entry and nothing else when the box is left alone", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet(user);
+
+    await fillExpense(user, sheet);
+    await user.click(screen.getByRole("button", { name: "Add expense" }));
+
+    expect(addTransaction).toHaveBeenCalled();
+    expect(addRule).not.toHaveBeenCalled();
+  });
+
+  it("keeps the entry when the rule can't be saved", async () => {
+    addRule.mockRejectedValue({ response: { data: { message: "nope" } } });
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet(user);
+
+    await fillExpense(user, sheet);
+    await user.click(sheet.getByRole("checkbox", { name: /Repeat monthly/ }));
+    await user.click(screen.getByRole("button", { name: "Add expense" }));
+
+    // The expense was what was asked for; the repeat was a convenience on top.
+    expect(addTransaction).toHaveBeenCalled();
+    expect(await screen.findByText("Rent")).toBeInTheDocument();
+  });
+
+  it("isn't offered when correcting an entry that has already happened", async () => {
+    mockTransactions = [
+      {
+        _id: "t1",
+        date: "2026-08-05T00:00:00.000Z",
+        type: "expense",
+        amount: 12,
+        category: "Food & Drinks",
+        description: "Lunch",
+        accountId: null,
+      },
+    ];
+    const user = userEvent.setup();
+    render(<TransactionsPage />);
+    await user.click(await screen.findByRole("button", { name: "Edit Lunch" }));
+
+    const sheet = within(screen.getByRole("dialog"));
+    expect(sheet.queryByRole("checkbox", { name: /Repeat monthly/ })).not.toBeInTheDocument();
   });
 });

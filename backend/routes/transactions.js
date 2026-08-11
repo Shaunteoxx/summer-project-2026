@@ -4,6 +4,7 @@ import { asyncHandler } from "../middleware/asyncHandler.js";
 import {
   getTransactions,
   createTransaction,
+  updateTransaction,
   deleteTransaction,
 } from "../controllers/transactionController.js";
 
@@ -14,6 +15,7 @@ router.use(blockDemoMutations);
 
 router.get("/", asyncHandler(getTransactions));
 router.post("/", asyncHandler(createTransaction));
+router.patch("/:id", asyncHandler(updateTransaction));
 router.delete("/:id", asyncHandler(deleteTransaction));
 
 export default router;

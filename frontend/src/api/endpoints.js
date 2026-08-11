@@ -33,6 +33,14 @@ export const updateAccount = (id, payload) =>
   api.patch(`/auth/accounts/${id}`, payload).then((r) => r.data);
 export const removeAccount = (id) =>
   api.delete(`/auth/accounts/${id}`).then((r) => r.data);
+// --- Repeating entries ---
+export const addRecurring = (payload) =>
+  api.post("/auth/recurring", payload).then((r) => r.data);
+export const updateRecurring = (id, payload) =>
+  api.patch(`/auth/recurring/${id}`, payload).then((r) => r.data);
+export const removeRecurring = (id) =>
+  api.delete(`/auth/recurring/${id}`).then((r) => r.data);
+
 export const fetchAccountTotals = (today) =>
   api.get("/accounts", { params: { today } }).then((r) => r.data);
 
@@ -67,6 +75,10 @@ export const fetchTransactions = (params) =>
   api.get("/transactions", { params }).then((r) => r.data);
 export const addTransaction = (payload) =>
   api.post("/transactions", payload).then((r) => r.data);
+// Partial: send only what changed. `accountId: null` clears the tag, so an
+// absent key and an explicit null mean different things here.
+export const updateTransaction = (id, payload) =>
+  api.patch(`/transactions/${id}`, payload).then((r) => r.data);
 export const removeTransaction = (id) =>
   api.delete(`/transactions/${id}`).then((r) => r.data);
 

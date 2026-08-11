@@ -8,13 +8,14 @@ import FieldError from "@/components/FieldError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { addTransaction } from "@/api/endpoints";
+import { addTransaction, updateTransaction } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
-import { cn, formatMoney, localToday } from "@/lib/utils";
+import { useRecurring } from "@/hooks/useRecurring";
+import { cn, formatMoney, localToday, ordinal } from "@/lib/utils";
 import { CUSTOM_COLOR_OPTIONS } from "@/lib/categories";
 import { SHAKE } from "@/animations/variants";
 
@@ -27,29 +28,102 @@ const emptyForm = (accountId = "") => ({
 });
 
 /**
- * The add-entry sheet: category, description, amount and date for one new
- * income or expense. `type` doubles as the open flag — null keeps it closed,
- * and "income" or "expense" fixes which kind of entry is being added, so the
- * form never has to ask.
+ * What a "repeat this" rule would do, worked out from the entry being added.
+ *
+ * The rule starts the day *after* this entry, never on it — the entry being
+ * saved is this month's, and a rule that also fired today would post it twice.
+ * Because of that the first repeat is always the following month, whatever
+ * date the entry carries. Never earlier than today either, since a rule can't
+ * reach into days already lived through.
+ */
+export function repeatPlan(dateYmd) {
+  const day = Number(String(dateYmd).slice(8, 10));
+  if (!Number.isInteger(day) || day < 1) return null;
+
+  const dayAfter = new Date(`${dateYmd}T00:00:00.000Z`);
+  dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+  const startKey =
+    dayAfter.toISOString().slice(0, 10) > localToday()
+      ? dayAfter.toISOString().slice(0, 10)
+      : localToday();
+
+  const entry = new Date(`${dateYmd}T00:00:00.000Z`);
+  const nextMonth = new Date(
+    Date.UTC(entry.getUTCFullYear(), entry.getUTCMonth() + 1, 1)
+  );
+  return {
+    dayOfMonth: day,
+    startKey,
+    caption:
+      `Adds this again on the ${ordinal(day)} of each month, from ` +
+      `${nextMonth.toLocaleDateString(undefined, { month: "long", timeZone: "UTC" })}.` +
+      (day > 28 ? " Shorter months use their last day." : ""),
+  };
+}
+
+/** Seed the form from an existing row, so an edit starts from what's there. */
+const formFrom = (transaction) => ({
+  description: transaction.description,
+  amount: String(transaction.amount),
+  category: transaction.category,
+  // Transaction dates are stored at UTC midnight; slicing the ISO string keeps
+  // the day the user chose, which building a local Date from it would not.
+  date: String(transaction.date).slice(0, 10),
+  accountId: transaction.accountId ? String(transaction.accountId) : "",
+});
+
+/**
+ * The entry sheet: category, description, amount and date for one income or
+ * expense. It both adds and edits, because an edit asks for exactly the same
+ * fields under the same rules — a second form would be the same 600 lines
+ * drifting out of step.
+ *
+ * Which mode it is in comes from the props, and either one doubles as the open
+ * flag: `editing` is the row being corrected, otherwise `type` ("income" or
+ * "expense") fixes which kind of entry is being added, so the form never has to
+ * ask. Both null keeps it closed.
+ *
+ * An edit sends only the fields that actually changed. That keeps a row tagged
+ * to an account the user has since archived — the picker can't show it, and
+ * resending it would be refused — and makes "opened it, changed nothing" cost
+ * no request at all.
  *
  * Owns everything about the entry being drafted. The page owns the ledger, so a
- * successful save is handed back through onAdded rather than written from here
- * — only the page knows which window it is currently listing.
+ * successful save is handed back through onAdded/onUpdated rather than written
+ * from here — only the page knows which window it is currently listing.
  *
  * In keypad mode the dismiss affordances (X, Escape, drag-down) step back to
  * the form instead of discarding a half-filled entry.
  */
-export default function AddTransactionSheet({ type, onClose, onAdded }) {
+export default function AddTransactionSheet({
+  type: addType = null,
+  editing = null,
+  onClose,
+  onAdded,
+  onUpdated,
+}) {
+  // An edit is fixed to the kind of entry it already is: categories are
+  // per-type, and the API refuses a type change for the same reason.
+  const type = editing ? editing.type : addType;
+  const isEdit = Boolean(editing);
   const toast = useToast();
   const guard = useDemoGuard();
   // On phones the keypad replaces the OS keyboard entirely, so it can't be
   // missed. On desktop the field stays a plain typeable input.
   const touchFirst = useCoarsePointer();
   const { categoriesByType, addCategory, removeCategory, custom } = useCategories();
-  const { active: accounts, hasAccounts, defaultAccountId, rememberAccount } =
-    useAccounts();
+  const {
+    active: accounts,
+    hasAccounts,
+    getAccount,
+    defaultAccountId,
+    rememberAccount,
+  } = useAccounts();
+  const { addRule } = useRecurring();
 
   const [form, setForm] = useState(emptyForm);
+  // Ticked while adding: also set this entry up to repeat every month.
+  const [repeat, setRepeat] = useState(false);
   // Per-field validation messages, keyed by field name (category/amount/date).
   const [errors, setErrors] = useState({});
   // Server-side / general failure not tied to one field.
@@ -95,23 +169,33 @@ export default function AddTransactionSheet({ type, onClose, onAdded }) {
       ? amountNumber.toFixed(2)
       : "";
 
+  // An older entry can be tagged to an account that has since been archived.
+  // List it beside the active ones so the tag reads as it is rather than as
+  // cleared; moving off it is one-way, which is what archiving means.
+  const taggedAccount =
+    form.accountId && !accounts.some((a) => a.id === form.accountId)
+      ? getAccount(form.accountId)
+      : null;
+  const pickableAccounts = taggedAccount ? [...accounts, taggedAccount] : accounts;
+
   const resetNewCategory = () => {
     setShowNewCategory(false);
     setNewCategoryName("");
     setNewCategoryColor(CUSTOM_COLOR_OPTIONS[0]);
   };
 
-  // Start clean every time the sheet opens, so a cancelled entry never leaks
-  // into the next one.
+  // Reseed every time the sheet opens, so a cancelled entry never leaks into
+  // the next one and an edit always starts from the row as it stands.
   useEffect(() => {
     if (type === null) return;
-    setForm(emptyForm(defaultAccountId()));
+    setForm(editing ? formFrom(editing) : emptyForm(defaultAccountId()));
     setErrors({});
     setFormError("");
+    setRepeat(false);
     resetNewCategory();
     setCalcOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
+  }, [type, editing]);
 
   // Merge form changes and clear the error(s) for whichever field(s) just changed,
   // so the red state disappears the moment the user starts fixing it.
@@ -228,25 +312,96 @@ export default function AddTransactionSheet({ type, onClose, onAdded }) {
     setFormError("");
     setSubmitting(true);
     try {
-      const created = await addTransaction({
+      if (isEdit) {
+        await saveEdit({ description, amount });
+      } else {
+        const created = await addTransaction({
+          description,
+          amount,
+          type,
+          category: form.category,
+          date: form.date,
+          accountId: form.accountId || undefined,
+        });
+        rememberAccount(form.accountId);
+        onAdded(created);
+        onClose();
+        const sign = type === "income" ? "+" : "−";
+        toast.success(`Added ${sign}${formatMoney(amount)} · ${form.category}`);
+        // After the entry, and never in place of it: the entry is what was
+        // asked for, so a rule that fails to save must not lose it.
+        if (repeat) await createRepeat({ description, amount });
+      }
+    } catch (err) {
+      const message = err?.response?.data?.message;
+      setFormError(
+        message ||
+          `Couldn't ${isEdit ? "save your changes" : "add transaction"}. Please try again.`
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /**
+   * Turn the entry just added into a monthly rule.
+   *
+   * Deliberately after the transaction has saved and the sheet has closed: the
+   * entry is what the user asked for and it is already safe. If the rule fails
+   * they are told, and the entry stays — the alternative, one request that
+   * either does both or neither, would throw away a logged expense over a
+   * failed convenience.
+   */
+  const createRepeat = async ({ description, amount }) => {
+    const plan = repeatPlan(form.date);
+    if (!plan) return;
+    try {
+      await addRule({
         description,
         amount,
         type,
         category: form.category,
-        date: form.date,
-        accountId: form.accountId || undefined,
+        accountId: form.accountId || null,
+        frequency: "monthly",
+        dayOfMonth: plan.dayOfMonth,
+        startKey: plan.startKey,
       });
-      rememberAccount(form.accountId);
-      onAdded(created);
-      onClose();
-      const sign = type === "income" ? "+" : "−";
-      toast.success(`Added ${sign}${formatMoney(amount)} · ${form.category}`);
+      toast.success(`Repeating on the ${ordinal(plan.dayOfMonth)} of each month`);
     } catch (err) {
-      const message = err?.response?.data?.message;
-      setFormError(message || "Couldn't add transaction. Please try again.");
-    } finally {
-      setSubmitting(false);
+      toast.error(
+        err?.response?.data?.message ||
+          "Added the entry, but couldn't set it to repeat."
+      );
     }
+  };
+
+  /**
+   * Send only what moved. Anything the user didn't touch is left out of the
+   * request entirely, so the server keeps whatever it already had — including
+   * an account that has since been archived, which the picker can't offer and
+   * the API would refuse to be sent.
+   */
+  const saveEdit = async ({ description, amount }) => {
+    const patch = {};
+    if (description !== editing.description) patch.description = description;
+    if (amount !== editing.amount) patch.amount = amount;
+    if (form.category !== editing.category) patch.category = form.category;
+    if (form.date !== String(editing.date).slice(0, 10)) patch.date = form.date;
+
+    const wasAccount = editing.accountId ? String(editing.accountId) : "";
+    // Null, not undefined: clearing the tag has to be said out loud.
+    if (form.accountId !== wasAccount) patch.accountId = form.accountId || null;
+
+    if (Object.keys(patch).length === 0) {
+      onClose();
+      return;
+    }
+
+    const updated = await updateTransaction(editing._id, patch);
+    if (patch.accountId) rememberAccount(patch.accountId);
+    onUpdated(updated);
+    onClose();
+    toast.success("Transaction updated");
   };
 
   return (
@@ -257,9 +412,7 @@ export default function AddTransactionSheet({ type, onClose, onAdded }) {
     title={
       calcOpen
         ? "Calculator"
-        : type === "income"
-          ? "Add income"
-          : "Add expense"
+        : `${isEdit ? "Edit" : "Add"} ${type === "income" ? "income" : "expense"}`
     }
   >
     {calcOpen ? (
@@ -276,7 +429,7 @@ export default function AddTransactionSheet({ type, onClose, onAdded }) {
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {/* Account picker. Hidden entirely for anyone who hasn't made an
             account, so the form is exactly as it was for them. */}
-        {hasAccounts && (
+        {(hasAccounts || taggedAccount) && (
           <div className="space-y-2">
             <Label id="tx-account-label">
               {type === "income" ? "Paid into" : "Paid from"}
@@ -286,13 +439,18 @@ export default function AddTransactionSheet({ type, onClose, onAdded }) {
               aria-labelledby="tx-account-label"
               className="flex flex-wrap gap-2"
             >
-              {accounts.map((a) => {
+              {pickableAccounts.map((a) => {
                 const selected = form.accountId === a.id;
                 return (
                   <button
                     type="button"
                     key={a.id}
-                    onClick={() => updateForm({ accountId: a.id })}
+                    // Tapping the selected chip clears it. Without that a
+                    // mis-tag is unfixable: there is no "none" chip, and every
+                    // other tap only ever moves the tag somewhere else.
+                    onClick={() =>
+                      updateForm({ accountId: selected ? "" : a.id })
+                    }
                     aria-pressed={selected}
                     className={`flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
                       selected
@@ -593,6 +751,30 @@ export default function AddTransactionSheet({ type, onClose, onAdded }) {
             )}
           </motion.div>
         </div>
+        {/* Rent and subscriptions are realised at the moment you log them, not
+            later in a settings screen — so the offer to repeat sits here,
+            after the date it derives its schedule from. Editing an existing
+            entry doesn't offer it: that entry has already happened, and its
+            rule (if any) is managed on the More page. */}
+        {!isEdit && (
+          <div className="rounded-xl border border-border p-3">
+            <label className="flex cursor-pointer items-center justify-between gap-3">
+              <span className="text-sm font-medium">Repeat monthly</span>
+              <input
+                type="checkbox"
+                checked={repeat}
+                onChange={(e) => setRepeat(e.target.checked)}
+                className="h-5 w-5 shrink-0 cursor-pointer accent-primary"
+              />
+            </label>
+            {repeat && repeatPlan(form.date) && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {repeatPlan(form.date).caption}
+              </p>
+            )}
+          </div>
+        )}
+
         {formError && (
           <p
             id="transaction-form-error"
@@ -609,11 +791,15 @@ export default function AddTransactionSheet({ type, onClose, onAdded }) {
           aria-describedby={formError ? "transaction-form-error" : undefined}
           disabled={submitting}
         >
-          {submitting
-            ? "Adding…"
-            : type === "income"
-              ? "Add income"
-              : "Add expense"}
+          {isEdit
+            ? submitting
+              ? "Saving…"
+              : "Save changes"
+            : submitting
+              ? "Adding…"
+              : type === "income"
+                ? "Add income"
+                : "Add expense"}
         </Button>
       </form>
     )}

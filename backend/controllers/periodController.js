@@ -9,6 +9,7 @@ import {
 } from "../lib/period.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
 import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
+import { ensureRecurringDue } from "../lib/recurring.js";
 import {
   MAX_YEAR,
   MIN_YEAR,
@@ -90,6 +91,7 @@ export async function getPeriod(req, res) {
   const todayKey = ymd(today);
 
   await ensureCurrentMonthSavings(req.user, todayKey);
+  await ensureRecurringDue(req.user, todayKey);
   const context = await loadPeriodContext(req.user, todayKey);
   res.json({
     mode: context.mode,

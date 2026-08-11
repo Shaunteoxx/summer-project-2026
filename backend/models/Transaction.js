@@ -27,11 +27,30 @@ const transactionSchema = new mongoose.Schema(
     // does for custom categories. Null on rows logged before the user made any
     // accounts, and on any they leave untagged.
     accountId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    // Set when this row was produced by a rule in User.recurring, so the ledger
+    // can say where a row nobody typed came from. Null on everything else.
+    recurringId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    // The occurrence date this row was produced for, as a UTC YYYY-MM-DD key.
+    // Kept alongside `date` rather than derived from it because it is what
+    // makes materialising idempotent, and it has to survive the user correcting
+    // the date afterwards — otherwise the rule would produce the day again.
+    dueKey: { type: String, default: null },
   },
   { timestamps: true }
 );
 
 transactionSchema.index({ userId: 1, year: 1, month: 1 });
 transactionSchema.index({ userId: 1, accountId: 1 });
+// One row per rule per due date, enforced by the database rather than by the
+// materialiser checking first: two requests arriving together both compute the
+// same occurrence, and only one may win. Partial so the millions of ordinary
+// rows, which share `recurringId: null`, stay out of the index entirely.
+transactionSchema.index(
+  { userId: 1, recurringId: 1, dueKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { recurringId: { $type: "objectId" } },
+  }
+);
 
 export default mongoose.model("Transaction", transactionSchema);

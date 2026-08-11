@@ -58,6 +58,43 @@ const userSchema = new mongoose.Schema(
         archived: { type: Boolean, default: false },
       },
     ],
+    // Entries that repeat on a schedule — rent, a subscription, an allowance.
+    // Embedded like accounts above: a handful per user, and the materialiser in
+    // lib/recurring.js runs on ordinary requests, where they arrive free on the
+    // authenticated user rather than costing a query per request.
+    //
+    // A rule is a template, not a transaction. It produces real Transaction rows
+    // on their due dates and has no further hold over them: correcting or
+    // deleting one produced row leaves the rule alone, and deleting the rule
+    // leaves its history alone.
+    recurring: [
+      {
+        description: { type: String, required: true, trim: true, maxlength: 120 },
+        amount: { type: Number, required: true, min: 0.01, max: 1e9 },
+        type: { type: String, enum: ["income", "expense"], required: true },
+        // Stored as a name, exactly as transactions store it, so a rule keeps
+        // working if the custom category behind it is later deleted.
+        category: { type: String, required: true, trim: true, maxlength: 40 },
+        accountId: { type: mongoose.Schema.Types.ObjectId, default: null },
+        frequency: { type: String, enum: ["monthly", "weekly"], required: true },
+        // Monthly only. Clamped to the length of each month as it goes, so the
+        // 31st means the 28th in February rather than skipping the month.
+        dayOfMonth: { type: Number, min: 1, max: 31 },
+        // Weekly only. 0 = Sunday, matching Date.getUTCDay().
+        weekday: { type: Number, min: 0, max: 6 },
+        // First day this rule may produce an entry for. Never in the past at
+        // creation: a rule that back-filled would rewrite a streak that has
+        // already been lived, the same trap lib/savingsCarry.js documents.
+        startKey: { type: String, required: true },
+        // Every occurrence on or before this day has been materialised. Null
+        // until the first run. Advancing it is what makes catching up after a
+        // week away produce each missed day exactly once.
+        lastRunKey: { type: String, default: null },
+        // Paused rules produce nothing, and resuming does not back-fill the
+        // gap — the entries genuinely didn't happen while it was off.
+        paused: { type: Boolean, default: false },
+      },
+    ],
     // User-defined categories on top of the fixed built-in set.
     customCategories: [
       {
