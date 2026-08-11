@@ -18,6 +18,8 @@ import summaryRoutes from "./routes/summary.js";
 import friendRoutes from "./routes/friends.js";
 import streakRoutes from "./routes/streak.js";
 import periodRoutes from "./routes/period.js";
+import accountRoutes from "./routes/accounts.js";
+import transferRoutes from "./routes/transfers.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -78,6 +80,8 @@ app.use("/api/summary", summaryRoutes);
 app.use("/api/friends", friendRoutes);
 app.use("/api/streak", streakRoutes);
 app.use("/api/period", periodRoutes);
+app.use("/api/accounts", accountRoutes);
+app.use("/api/transfers", transferRoutes);
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 
 app.use((err, req, res, next) => {
