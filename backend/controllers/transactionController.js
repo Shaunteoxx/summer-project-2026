@@ -12,6 +12,19 @@ const FIXED_CATEGORIES = {
   income: new Set(["Allowance", "Job", "Gifts"]),
 };
 
+/**
+ * Resolve an accountId from the request against the user's own accounts.
+ * Returns { ok, value } so an explicit null (untagged) stays distinguishable
+ * from a rejection.
+ */
+function resolveAccountId(user, raw) {
+  if (raw === undefined || raw === null || raw === "") return { ok: true, value: null };
+  const match = (user.accounts || []).find(
+    (a) => String(a._id) === String(raw) && !a.archived
+  );
+  return match ? { ok: true, value: match._id } : { ok: false };
+}
+
 function categoryAllowed(user, type, category) {
   if (FIXED_CATEGORIES[type]?.has(category)) return true;
   return (user.customCategories || []).some(
@@ -40,6 +53,17 @@ export async function getTransactions(req, res) {
     filter = period;
   }
 
+  // "none" narrows to rows logged before the user made any accounts, or ones
+  // they left untagged — the same bucket the per-account totals call unassigned.
+  const { accountId } = req.query;
+  if (accountId === "none") {
+    filter = { ...filter, accountId: null };
+  } else if (accountId !== undefined && accountId !== "") {
+    const resolved = resolveAccountId(req.user, accountId);
+    if (!resolved.ok) return res.status(400).json({ message: "Unknown account" });
+    filter = { ...filter, accountId: resolved.value };
+  }
+
   const transactions = await Transaction.find({
     userId: req.user._id,
     ...filter,
@@ -49,7 +73,7 @@ export async function getTransactions(req, res) {
 
 /** POST /api/transactions */
 export async function createTransaction(req, res) {
-  const { description, amount, type, category, date } = req.body;
+  const { description, amount, type, category, date, accountId } = req.body;
   if (!description || amount === undefined || !type || !category) {
     return res.status(400).json({
       message: "description, amount, type and category are required",
@@ -81,6 +105,9 @@ export async function createTransaction(req, res) {
   const when = parseTransactionDate(date);
   if (!when) return res.status(400).json({ message: "Invalid transaction date" });
 
+  const account = resolveAccountId(req.user, accountId);
+  if (!account.ok) return res.status(400).json({ message: "Choose a valid account" });
+
   const transaction = await Transaction.create({
     userId: req.user._id,
     description: desc,
@@ -90,6 +117,7 @@ export async function createTransaction(req, res) {
     date: when,
     month: when.getUTCMonth(),
     year: when.getUTCFullYear(),
+    accountId: account.value,
   });
   res.status(201).json(transaction);
 }

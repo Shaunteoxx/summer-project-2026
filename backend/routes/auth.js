@@ -11,8 +11,11 @@ import {
   logout,
   getMe,
   getHomeStats,
+  addAccount,
   addCategory,
+  removeAccount,
   removeCategory,
+  updateAccount,
   updateProfile,
   deleteAccount,
   setSavings,
@@ -75,6 +78,10 @@ router.get("/me", requireAuth, asyncHandler(getMe));
 router.get("/home", requireAuth, asyncHandler(getHomeStats));
 router.post("/categories", requireAuth, blockDemoMutations, asyncHandler(addCategory));
 router.delete("/categories/:id", requireAuth, blockDemoMutations, asyncHandler(removeCategory));
+
+router.post("/accounts", requireAuth, blockDemoMutations, asyncHandler(addAccount));
+router.patch("/accounts/:id", requireAuth, blockDemoMutations, asyncHandler(updateAccount));
+router.delete("/accounts/:id", requireAuth, blockDemoMutations, asyncHandler(removeAccount));
 router.patch("/profile", requireAuth, blockDemoMutations, asyncHandler(updateProfile));
 router.put("/savings", requireAuth, blockDemoMutations, asyncHandler(setSavings));
 router.delete("/me", requireAuth, blockDemoMutations, asyncHandler(deleteAccount));

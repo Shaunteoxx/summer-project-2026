@@ -41,6 +41,23 @@ const userSchema = new mongoose.Schema(
     repeatSavings: { type: Boolean, default: false },
     friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    // Bank accounts the user splits their spending across — one card for
+    // PayWave, another for PayNow. Embedded for the same reasons as
+    // customCategories below: a handful per user, wanted on every page, and
+    // they ride along with /api/auth/me instead of costing a request.
+    //
+    // No opening balance on purpose. An account's figure is this period's money
+    // in it (income in − spent + transfers in − transfers out), which keeps it
+    // consistent with everything else here and makes the per-account totals sum
+    // to the period's income minus spending. It is deliberately not the bank's
+    // balance; see ACCOUNTS_PLAN.md §2.2.
+    accounts: [
+      {
+        name: { type: String, required: true, trim: true, maxlength: 24 },
+        color: { type: String, required: true },
+        archived: { type: Boolean, default: false },
+      },
+    ],
     // User-defined categories on top of the fixed built-in set.
     customCategories: [
       {
