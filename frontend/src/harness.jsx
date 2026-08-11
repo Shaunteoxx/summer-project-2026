@@ -10,11 +10,12 @@
  *
  * Query params:
  *   theme   light | dark              (default dark; applied in harness.html)
- *   view    calculator | savings | stats   (default calculator)
+ *   view    calculator | savings | stats | keyboard  (default calculator)
  *   tone    destructive | success     expense or income styling (calculator)
  *   amount  seed value for the field, e.g. 48
  *   repeat  1 to start the savings view's toggle switched on
  *   lens    all | months — which headline lens the stats view opens on
+ *   keyboard  px height of a simulated on-screen keyboard (keyboard view)
  *   press   comma-separated key labels or aria-labels to click after mount,
  *           e.g. 1,2,.,5,0,+,8 — lets a screenshot capture a mid-expression
  *           state. Use aria-labels for icon keys: Backspace, Clear, Divide.
@@ -253,6 +254,170 @@ function StatsView() {
   );
 }
 
+
+/**
+ * The add-entry sheet at phone size with a simulated keyboard up — the case
+ * that was broken: on iOS the sheet stayed behind the keyboard and you couldn't
+ * see the description you were typing into. `keyboard=300` fakes a 300px
+ * keyboard by shrinking the visual viewport, exactly as Safari does.
+ */
+function KeyboardView() {
+  const px = Number(params.get("keyboard") || 0);
+
+  useEffect(() => {
+    if (!px || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    Object.defineProperty(vv, "height", {
+      configurable: true,
+      get: () => window.innerHeight - px,
+    });
+    vv.dispatchEvent(new Event("resize"));
+  }, []);
+
+  return (
+    <>
+      {/* The strip the keyboard would occupy, so the shot shows the overlap. */}
+      {px > 0 && (
+        <div
+          className="fixed inset-x-0 bottom-0 z-[60] flex items-start justify-center border-t-2 border-dashed border-red-500/60 bg-red-500/10 pt-2 text-xs font-semibold text-red-500"
+          style={{ height: px }}
+        >
+          simulated keyboard ({px}px)
+        </div>
+      )}
+      <BottomSheet open onClose={() => {}} title="Add expense">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Paid from</Label>
+            <div className="flex flex-wrap gap-2">
+              <span className="flex h-9 items-center gap-2 rounded-full border border-border px-3 text-sm">Trust</span>
+              <span className="flex h-9 items-center gap-2 rounded-full border border-border px-3 text-sm">DBS</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {["Food", "Transport", "Shopping", "Fun", "Travel"].map((c) => (
+                <span key={c} className="flex min-h-[68px] items-center justify-center rounded-xl border border-border text-[11px]">
+                  {c}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <Label htmlFor="kb-description">Description</Label>
+              <span className="text-xs text-muted-foreground">Optional</span>
+            </div>
+            <Input id="kb-description" defaultValue="Chicken rice" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Amount</Label>
+              <Input defaultValue="4.50" />
+            </div>
+            <div className="space-y-2">
+              <Label>Date</Label>
+              <Input defaultValue="2026-08-08" />
+            </div>
+          </div>
+          <Button className="w-full">Add expense</Button>
+        </div>
+      </BottomSheet>
+    </>
+  );
+}
+
+
+/**
+ * The ledger's filter controls and a transfer entry, at phone width.
+ *
+ * Type stays a full-width segmented control so all three options are always
+ * visible; the account filter collapses to one button beside the search, and
+ * opens a sheet listing every account. An earlier attempt merged both into one
+ * scrolling chip row, which pushed the account options off screen — worse with
+ * every account added.
+ */
+function LedgerView() {
+  const [filter, setFilter] = useState("all");
+  const account = params.get("account");
+
+  return (
+    <div className="mx-auto w-full max-w-app p-4">
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Input placeholder="Search description or category" className="px-9" />
+        </div>
+        <button
+          type="button"
+          className={`flex h-11 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium ${
+            account
+              ? "border-primary/40 bg-primary/10 text-primary"
+              : "border-input text-muted-foreground"
+          }`}
+        >
+          {account ? (
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#C26B6B" }} />
+          ) : (
+            <span className="text-base leading-none">◫</span>
+          )}
+          <span>{account || "Account"}</span>
+          <span className="text-xs opacity-60">▾</span>
+        </button>
+      </div>
+
+      <div className="mt-3 flex gap-1 rounded-full bg-muted p-1">
+        {[
+          ["all", "All"],
+          ["expense", "Expenses"],
+          ["income", "Income"],
+        ].map(([v, label]) => (
+          <button
+            key={v}
+            onClick={() => setFilter(v)}
+            className={`relative flex-1 rounded-full px-3 py-1.5 text-sm font-medium ${
+              filter === v ? "text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            {filter === v && (
+              <span className="absolute inset-0 rounded-full bg-card shadow-sm" />
+            )}
+            <span className="relative">{label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 space-y-2.5">
+        <div className="rounded-xl border border-border bg-card">
+          <div className="flex items-center justify-between gap-3 p-3.5">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#C26B6B22] text-[#C26B6B]">*</span>
+              <div className="min-w-0">
+                <p className="truncate font-semibold">Chicken rice</p>
+                <p className="text-xs text-muted-foreground">6 Aug - Food &amp; Drinks - Trust</p>
+              </div>
+            </div>
+            <span className="font-bold tabular-nums text-destructive">-$4.50</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-dashed border-border bg-card">
+          <div className="flex items-center justify-between gap-3 p-3.5">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">T</span>
+              <div className="min-w-0">
+                <p className="truncate font-semibold">DBS to Trust</p>
+                <p className="text-xs text-muted-foreground">2 Aug - Transfer</p>
+              </div>
+            </div>
+            <span className="font-bold tabular-nums text-muted-foreground">$400.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const VIEWS = {
   calculator: () => (
     <BottomSheet open onClose={() => {}} title="Calculator" closeLabel="Back to form">
@@ -266,6 +431,8 @@ const VIEWS = {
   ),
   savings: SavingsView,
   stats: StatsView,
+  keyboard: KeyboardView,
+  ledger: LedgerView,
 };
 
 function Harness() {

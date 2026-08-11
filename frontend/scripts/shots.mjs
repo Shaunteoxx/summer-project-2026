@@ -56,6 +56,8 @@ const WINDOW_CHROME_PX = 87;
 const USE_BUTTON = /Use (?:\$[\d,.]+|amount)/;
 const SWITCH_STATE = /role="switch"[^>]*aria-checked="(?:true|false)"/;
 const LENS_STATE = /aria-pressed="true"/;
+const SHEET_OPEN = /role="dialog"/;
+const LEDGER_MARK = /Chicken rice/;
 
 const SHOTS = [
   { name: "expense-dark", theme: "dark", tone: "destructive", press: "1,2,.,5,0,+,8", expect: "Use $20.50" },
@@ -76,6 +78,15 @@ const SHOTS = [
   { name: "stats-all-light", view: "stats", theme: "light", probe: LENS_STATE, expect: 'aria-pressed="true"' },
   { name: "stats-months-light", view: "stats", theme: "light", lens: "months", probe: LENS_STATE, expect: 'aria-pressed="true"' },
   { name: "stats-big-light", view: "stats", theme: "light", big: "1", probe: LENS_STATE, expect: 'aria-pressed="true"' },
+
+  // The add sheet with a simulated keyboard: it must sit clear of the strip the
+  // keyboard covers, not behind it.
+  { name: "keyboard-off-light", view: "keyboard", theme: "light", probe: SHEET_OPEN, expect: 'role="dialog"' },
+  { name: "keyboard-on-light", view: "keyboard", theme: "light", keyboard: "300", probe: SHEET_OPEN, expect: 'role="dialog"' },
+
+  // The merged filter row and a transfer entry in the ledger.
+  { name: "ledger-light", view: "ledger", theme: "light", probe: LEDGER_MARK, expect: "Chicken rice" },
+  { name: "ledger-picked", view: "ledger", theme: "light", account: "Trust", probe: LEDGER_MARK, expect: "Chicken rice" },
 ];
 
 await mkdir(OUT, { recursive: true });

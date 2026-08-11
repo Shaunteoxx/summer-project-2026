@@ -1,5 +1,6 @@
 import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
+import Transfer from "../models/Transfer.js";
 
 // Identity of the single shared, read-only demo account.
 const DEMO_GOOGLE_ID = "demo-account";
@@ -46,14 +47,19 @@ const TRAVEL = ["Weekend trip", "Bus to JB", "Flight deposit"];
  * account shows an unbroken streak and a calendar with no red in it. Scaling up
  * is how a longer seed gets days worth looking at.
  */
-function genMonth(userId, year, month, lastDay, rand, spendScale = 1) {
+function genMonth(userId, year, month, lastDay, rand, spendScale = 1, accounts = null) {
   const docs = [];
+  // Income lands in the first account; day-to-day spending comes off the
+  // second, which is what makes the seeded transfers necessary.
+  const accountFor = (type) =>
+    accounts ? (type === "income" ? accounts.income : accounts.spending) : null;
   const add = (type, category, description, amount, day) =>
     docs.push({
       userId,
       type,
       category,
       description,
+      accountId: accountFor(type),
       amount: money(type === "expense" ? amount * spendScale : amount),
       // UTC midnight, matching how real transactions store "YYYY-MM-DD" dates
       // (the streak keys days by UTC, so local-midnight dates shift a day).
@@ -97,9 +103,32 @@ function genMonth(userId, year, month, lastDay, rand, spendScale = 1) {
  */
 export async function seedHistoryFor(
   user,
-  { months = 3, monthlySavings = MONTHLY_SAVINGS, seed = 20260614, spendScale = 1 } = {}
+  {
+    months = 3,
+    monthlySavings = MONTHLY_SAVINGS,
+    seed = 20260614,
+    spendScale = 1,
+    withAccounts = false,
+  } = {}
 ) {
-  await Transaction.deleteMany({ userId: user._id });
+  await Promise.all([
+    Transaction.deleteMany({ userId: user._id }),
+    Transfer.deleteMany({ userId: user._id }),
+  ]);
+
+  // Two accounts, the way someone actually splits spending: one card for
+  // PayWave, another for PayNow.
+  let accounts = null;
+  if (withAccounts) {
+    user.accounts = [
+      { name: "DBS", color: "#7CB37C" },
+      { name: "Trust", color: "#C26B6B" },
+    ];
+    accounts = {
+      income: user.accounts[0]._id,
+      spending: user.accounts[1]._id,
+    };
+  }
 
   const now = new Date();
   const rand = mulberry32(seed);
@@ -117,15 +146,31 @@ export async function seedHistoryFor(
     const isCurrent = year === now.getFullYear() && month === now.getMonth();
     const lastDay = isCurrent ? now.getDate() : new Date(year, month + 1, 0).getDate();
     savings[`${year}-${month}`] = monthlySavings;
-    docs.push(...genMonth(user._id, year, month, lastDay, rand, spendScale));
+    docs.push(...genMonth(user._id, year, month, lastDay, rand, spendScale, accounts));
   }
 
   await Transaction.insertMany(docs);
+
+  // Spending comes off Trust while income lands in DBS, so each month needs a
+  // top-up — exactly the situation transfers exist for.
+  let transfers = 0;
+  if (accounts) {
+    const rows = window.map(({ year, month }) => ({
+      userId: user._id,
+      from: accounts.income,
+      to: accounts.spending,
+      amount: 400,
+      date: new Date(Date.UTC(year, month, 2)),
+    }));
+    await Transfer.insertMany(rows);
+    transfers = rows.length;
+  }
+
   user.savingsByMonth = savings;
   user.restoredDays = [];
   await user.save();
 
-  return { user, transactions: docs.length, months: window.length };
+  return { user, transactions: docs.length, months: window.length, transfers };
 }
 
 /**

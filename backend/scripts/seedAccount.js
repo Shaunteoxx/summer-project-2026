@@ -64,7 +64,11 @@ if (existing > 0 && !has("force")) {
 // Enough spending that days land on both sides of the daily budget — an
 // account that never goes over shows a flat green calendar and teaches you
 // nothing about the streak.
-const result = await seedHistoryFor(user, { months, spendScale: value("spend", 2.4) });
+const result = await seedHistoryFor(user, {
+  months,
+  spendScale: value("spend", 2.4),
+  withAccounts: true,
+});
 // Show off the carry: with this on, next month starts with the same target
 // instead of $0. Month mode only, which is what a fresh account is on.
 user.repeatSavings = true;
@@ -73,6 +77,7 @@ await user.save();
 console.log(
   `✅ Seeded ${user.username} (${email})\n` +
     `   ${result.transactions} transactions across ${result.months} months\n` +
+    `   2 accounts (DBS, Trust) and ${result.transfers} transfers\n` +
     `   savings target set on every month, repeat-every-month on`
 );
 
