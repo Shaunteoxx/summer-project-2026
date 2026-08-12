@@ -27,9 +27,47 @@ import ReactDOM from "react-dom/client";
 import { MotionConfig } from "framer-motion";
 
 import BottomSheet from "./components/BottomSheet.jsx";
+import RecurringSheet from "./components/RecurringSheet.jsx";
+import DailySpendingCard from "./components/DailySpendingCard.jsx";
+import SavingsGoalCard from "./components/SavingsGoalCard.jsx";
+import { CategoriesProvider } from "./hooks/useCategories.jsx";
+import { AccountsProvider } from "./hooks/useAccounts.jsx";
+import { ToastProvider } from "./hooks/useToast.jsx";
+import { AuthProvider } from "./hooks/useAuth.jsx";
+import { BudgetPeriodProvider } from "./hooks/useBudgetPeriod.jsx";
 import AmountCalculator from "./components/AmountCalculator.jsx";
 import SwitchRow from "./components/SwitchRow.jsx";
 import { LensTab, StatTile } from "./pages/StatsPage.jsx";
+import { SavedVsSpentCard, CategoryCard } from "./pages/TrackerPage.jsx";
+import {
+  DynamicDailyHero,
+  WhatIfCard,
+  PaceForecastCard,
+  GoalDailyCard,
+} from "./pages/PlanPage.jsx";
+import { Section, Row, RowValue, Segmented } from "./pages/MorePage.jsx";
+import Avatar from "./components/Avatar.jsx";
+import {
+  BarChart3 as _bar,
+  Users as _users,
+  CalendarRange as _cal,
+  Wallet as _wallet,
+  Repeat as _repeat,
+  PiggyBank as _piggy,
+  Sun as _sun,
+  Moon as _moon,
+  LogOut as _out,
+  Search as _search,
+  ArrowLeftRight as _swap,
+} from "lucide-react";
+
+/** Icons for the More harness view, matching the page's own set. */
+const I = {
+  bar: _bar, users: _users, cal: _cal, wallet: _wallet, repeat: _repeat,
+  piggy: _piggy, sun: _sun, moon: _moon, out: _out,
+};
+import { ThemeProvider } from "./hooks/useTheme.jsx";
+import { useChartColors } from "./hooks/useChartColors.js";
 import { Button } from "./components/ui/button.jsx";
 import { Input } from "./components/ui/input.jsx";
 import { Label } from "./components/ui/label.jsx";
@@ -77,6 +115,25 @@ const press = (params.get("press") || "").split(",").filter(Boolean);
 const width = params.get("width");
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * The provider stack the real components reach for. Auth comes first because
+ * CategoriesProvider and the demo guard both read it. With no backend behind
+ * them these settle on their built-in defaults, which is what these views want.
+ */
+function Providers({ children }) {
+  return (
+    <AuthProvider>
+      <ToastProvider>
+        <BudgetPeriodProvider>
+          <CategoriesProvider>
+            <AccountsProvider>{children}</AccountsProvider>
+          </CategoriesProvider>
+        </BudgetPeriodProvider>
+      </ToastProvider>
+    </AuthProvider>
+  );
+}
 
 /**
  * Click keypad keys one at a time. Each click must settle into React state
@@ -193,7 +250,7 @@ function StatsView() {
   return (
     <div className="mx-auto w-full max-w-app space-y-4 p-5">
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight">All Months</h1>
+        <h1 className="text-title-lg">All Months</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Savings vs spending across every month you've tracked.
         </p>
@@ -418,6 +475,452 @@ function LedgerView() {
   );
 }
 
+/**
+ * The two Tracker donut cards, with the mockup's own numbers so a shot can be
+ * held against `design/mockups.html` §06 directly.
+ *
+ * Both cards take their palette as a prop rather than reaching for a provider,
+ * which is what lets them render here without the page's data plumbing.
+ * `?empty=1` shows the no-data state instead.
+ */
+function TrackerView() {
+  const colors = useChartColors();
+  const empty = params.get("empty") === "1";
+
+  const saved = 952.6;
+  const spent = 287.4;
+  const cats = [
+    ["Food & Drinks", 98.4, "#CC624E", "#FE9580"],
+    ["Shopping", 74.9, "#659734", "#94C866"],
+    ["Transport", 52.2, "#B9740F", "#F0A346"],
+    ["Entertainment", 34.5, "#139A94", "#1ED0C8"],
+    ["Travel", 27.4, "#1290CC", "#5DC1FD"],
+  ];
+  const dark = params.get("theme") !== "light";
+  const byCategory = cats.map(([name, value, light, night]) => ({
+    name,
+    value,
+    color: dark ? night : light,
+  }));
+
+  return (
+    <div className="mx-auto w-full max-w-app space-y-3 p-4">
+      <SavedVsSpentCard
+        saved={empty ? 0 : saved}
+        spent={empty ? 0 : spent}
+        percentageSaved={empty ? 0 : 77}
+        hasData={!empty}
+        colors={colors}
+        footnote={empty ? null : "Goal: set aside $300.00 this month"}
+      />
+      <Providers>
+        <SavingsGoalCard
+          target={300}
+          income={1240}
+          spent={287.4}
+          period={{ id: "p", start: "2026-08-01", end: "2026-08-31" }}
+        />
+      </Providers>
+      <CategoryCard
+        byCategory={empty ? [] : byCategory}
+        spent={empty ? 0 : spent}
+        colors={colors}
+        emptyNoun="month"
+      />
+    </div>
+  );
+}
+
+/**
+ * The Plan page's four planners on the mockup's own August numbers (§07):
+ * $1,240 in, $300 reserved, $287.40 spent, day 11 of 31. That set is what makes
+ * both of the mockup's headline figures come out — $32.63/day and $26.13/day.
+ *
+ * `?filled=1` types into the what-if and goal fields so the result strips show.
+ */
+function PlanView() {
+  const P = {
+    income: 1240,
+    savings: 300,
+    spentSoFar: 287.4,
+    periodDays: 31,
+    dayOfPeriod: 11,
+    daysLeft: 21,
+    daysAfterToday: 20,
+    todayBudget: 32.63,
+    noun: "month",
+  };
+
+  useEffect(() => {
+    if (params.get("filled") !== "1") return;
+    // React tracks the input's value internally, so setting .value directly is
+    // ignored — go through the native setter and fire a bubbling input event.
+    const set = (id, v) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      ).set.call(el, v);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    set("whatif-price", "120");
+    set("goal-target", "450");
+  }, []);
+
+  return (
+    <div className="mx-auto w-full max-w-app p-4">
+      <DynamicDailyHero
+        income={P.income}
+        savings={P.savings}
+        spentSoFar={P.spentSoFar}
+        daysAfterToday={P.daysAfterToday}
+        noun={P.noun}
+      />
+      <div className="mt-[26px] space-y-3">
+        <WhatIfCard
+          leftToday={P.todayBudget}
+          income={P.income}
+          savings={P.savings}
+          spentSoFar={P.spentSoFar}
+          daysAfterToday={P.daysAfterToday}
+          noun={P.noun}
+        />
+        <PaceForecastCard
+          income={P.income}
+          savings={P.savings}
+          spentSoFar={P.spentSoFar}
+          periodDays={P.periodDays}
+          dayOfPeriod={P.dayOfPeriod}
+          periodEndYmd="2026-08-31"
+          daysAfterToday={P.daysAfterToday}
+          todayBudget={P.todayBudget}
+          noun={P.noun}
+        />
+        <GoalDailyCard
+          income={P.income}
+          savings={P.savings}
+          spentBeforeToday={P.spentSoFar}
+          daysLeft={P.daysLeft}
+          noun={P.noun}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The More page's settings list, built from the same Section/Row primitives the
+ * page uses. The page itself needs six providers and a logged-in session, so
+ * this composes the mockup's §07 arrangement out of the real parts instead.
+ */
+function MoreView() {
+  const [theme, setTheme] = useState(
+    params.get("theme") === "light" ? "light" : "dark"
+  );
+  const user = { username: "shaunteo", email: "shaunteo2003@gmail.com", avatar: "panda" };
+
+  return (
+    <div className="mx-auto w-full max-w-app px-4 pt-6">
+      <div className="flex items-center gap-3.5">
+        <Avatar user={user} className="h-[54px] w-[54px]" />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[19px] font-semibold tracking-[-0.02em]">
+            {user.username}
+          </h1>
+          <p className="mt-0.5 truncate text-meta text-ink-3">{user.email}</p>
+        </div>
+        <Button
+          variant="outline"
+          className="h-8 shrink-0 rounded-sm px-3.5 text-[13px] font-medium"
+        >
+          Edit
+        </Button>
+      </div>
+
+      <Section label="Browse">
+        <Row icon={I.bar} title="Stats" meta="Spending breakdown & trends" onClick={() => {}} />
+        <Row
+          icon={I.users}
+          title="Friends"
+          meta="Compare savings on the leaderboard"
+          onClick={() => {}}
+        />
+      </Section>
+
+      <Section label="Budget">
+        <Row
+          icon={I.cal}
+          title="Budget period"
+          meta="Resets on the 1st"
+          value={<RowValue>Monthly</RowValue>}
+          onClick={() => {}}
+        />
+        <Row
+          icon={I.wallet}
+          title="Bank accounts"
+          meta="Tag where money comes and goes"
+          value={<RowValue>3</RowValue>}
+          onClick={() => {}}
+        />
+        <Row
+          icon={I.repeat}
+          title="Repeating entries"
+          meta="Added automatically"
+          value={<RowValue>4</RowValue>}
+          onClick={() => {}}
+        />
+        <Row
+          icon={I.piggy}
+          title="Savings target"
+          meta="August · repeats monthly"
+          value={<RowValue strong>$300.00</RowValue>}
+          onClick={() => {}}
+        />
+      </Section>
+
+      <Section label="Preferences">
+        <Row
+          icon={theme === "dark" ? I.moon : I.sun}
+          title="Appearance"
+          meta={theme === "dark" ? "Dark mode" : "Light mode"}
+          chevron={false}
+          value={
+            <Segmented
+              label="Appearance"
+              options={[
+                { value: "light", label: "Light" },
+                { value: "dark", label: "Dark" },
+              ]}
+              value={theme}
+              onChange={setTheme}
+            />
+          }
+        />
+      </Section>
+
+      <Section label="Account">
+        <Row icon={I.out} title="Log out" chevron={false} onClick={() => {}} />
+      </Section>
+
+      <div className="mt-[30px] text-center">
+        <button className="rounded-sm px-2.5 py-1.5 text-[13px] font-medium text-negative">
+          Delete account
+        </button>
+        <p className="mt-4 text-[11.5px] leading-relaxed text-ink-3">
+          Broke No More · Avatars by Twemoji (CC-BY 4.0)
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The repeating-entries sheet, in its two states. `?form=1` opens the editor;
+ * the default shows the saved list, including a paused rule and the delete
+ * confirmation, which are the states with the most colour decisions in them.
+ */
+function RecurringView() {
+  const rules = [
+    { id: "1", description: "Rent", amount: 650, type: "expense", category: "Shopping",
+      frequency: "monthly", dayOfMonth: 1, startKey: "2026-01-01" },
+    { id: "2", description: "Allowance", amount: 1200, type: "income", category: "Allowance",
+      frequency: "monthly", dayOfMonth: 28, startKey: "2026-01-01" },
+    { id: "3", description: "Spotify", amount: 11.98, type: "expense", category: "Entertainment",
+      frequency: "weekly", weekday: 2, startKey: "2026-01-01", paused: true },
+  ];
+
+  useEffect(() => {
+    if (params.get("form") !== "1") return;
+    const btn = [...document.querySelectorAll("button")].find((b) =>
+      b.textContent.includes("New repeating entry")
+    );
+    btn?.click();
+  }, []);
+
+  // The sheet reaches for categories, accounts, toasts and the demo guard.
+  // Their providers fall back to the built-in category set when the API isn't
+  // there, which is exactly what this view needs.
+  return (
+    <Providers>
+    <RecurringSheet
+      open
+      onClose={() => {}}
+      rules={params.get("empty") === "1" ? [] : rules}
+      onAdd={async () => {}}
+      onUpdate={async () => {}}
+      onRemove={async () => {}}
+    />
+    </Providers>
+  );
+}
+
+/**
+ * The daily-spending card over a 31-day period, with a couple of over-budget
+ * days so the tints and the legend both show. `?chart=1` switches to the bar
+ * view (the card remembers the choice in localStorage, so it's forced here).
+ */
+function DailyView() {
+  const start = "2026-08-01";
+  const ymd = (i) => `2026-08-${String(i + 1).padStart(2, "0")}`;
+  const spend = [12, 0, 41, 8, 33, 60, 5, 22, 0, 18, 47, 9, 0, 25, 31, 14];
+  const periodDays = spend.map((v, i) => ({ date: ymd(i), spent: v, budget: 32.63 }));
+  const transactions = spend.flatMap((v, i) =>
+    v === 0
+      ? []
+      : [{ _id: `t${i}`, type: "expense", amount: v, date: `${ymd(i)}T00:00:00.000Z`,
+           category: "Food & Drinks", description: "Lunch" }]
+  );
+
+  localStorage.setItem("spendingView", params.get("chart") === "1" ? "chart" : "calendar");
+
+  return (
+    <Providers>
+        <div className="mx-auto w-full max-w-app p-4">
+          <DailySpendingCard
+            transactions={transactions}
+            income={1240}
+            period={{ start, end: "2026-08-31", days: 31, daysLeft: 15 }}
+            periodDays={periodDays}
+            todayBudget={32.63}
+          />
+        </div>
+    </Providers>
+  );
+}
+
+/**
+ * The Friends page's search field, requests and leaderboard, on the mockup's
+ * §07 roster — the arrangement the page now renders.
+ */
+function FriendsView() {
+  const board = [
+    ["shaunteo", 77, true], ["marcus", 64], ["priya", 58], ["dan", 41], ["weiling", 33],
+  ];
+
+  return (
+    <div className="mx-auto w-full max-w-app px-4 pt-6">
+      <h1 className="text-title-lg">Friends</h1>
+      <p className="mt-1 text-[13px] text-ink-3">Savings rate · 1–31 August</p>
+
+      <div className="relative mt-4">
+        <_search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
+        <Input placeholder="Find someone by username" className="pl-10" readOnly />
+      </div>
+
+      <section className="mt-6">
+        <h2 className="mb-2.5 px-0.5 text-overline text-ink-3">Requests · 2</h2>
+        <div className="overflow-hidden rounded-lg border border-hairline bg-surface shadow-card [&>*+*]:border-t [&>*+*]:border-hairline">
+          {["jaymes", "aaron"].map((n) => (
+            <div key={n} className="flex items-center gap-3 px-4 py-[13px]">
+              <Avatar user={{ username: n }} className="h-[34px] w-[34px]" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-medium tracking-[-0.01em]">{n}</span>
+                <span className="mt-0.5 block truncate text-meta text-ink-3">Wants to compare</span>
+              </span>
+              <span className="flex shrink-0 gap-1.5">
+                <button className="flex h-[30px] items-center rounded-[9px] border border-hairline-strong px-2.5 text-[12.5px] font-medium text-ink-2">Decline</button>
+                <button className="flex h-[30px] items-center rounded-[9px] bg-ink px-2.5 text-[12.5px] font-semibold text-surface">Accept</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-6">
+        <h2 className="mb-2.5 px-0.5 text-overline text-ink-3">Leaderboard</h2>
+        <ul className="-mx-4 border-y border-hairline bg-surface [&>*+*]:border-t [&>*+*]:border-hairline">
+          {board.map(([n, pct, me], i) => (
+            <li key={n} className={`flex items-center gap-3 px-4 py-[13px] ${me ? "bg-surface-2" : ""}`}>
+              <span className={`num w-4 shrink-0 text-center text-[12.5px] ${i < 3 ? "font-semibold text-ink-2" : "font-medium text-ink-3"}`}>{i + 1}</span>
+              <Avatar user={{ username: n }} className="h-[34px] w-[34px]" />
+              <span className="min-w-0 flex-1 truncate text-[15px] font-medium tracking-[-0.01em]">
+                {n}
+                {me && <span className="ml-1.5 text-[11px] font-medium text-ink-3">You</span>}
+              </span>
+              <span className="num shrink-0 text-[15px] font-medium text-positive">{pct}%</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+/**
+ * The grouped ledger from §05: a day header carrying the day's net, then that
+ * day's rows on hairlines. Mirrors the page's markup without its data layer.
+ */
+function LedgerGroupedView() {
+  const days = [
+    ["Today · 11 Aug", "−$12.70", null, [
+      ["food", "Chicken rice", "Food & Drinks · Trust", "−$4.50"],
+      ["transport", "Grab to school", "Transport · Trust", "−$8.20"],
+    ]],
+    ["Yesterday · 10 Aug", "−$29.90", null, [
+      ["shopping", "Uniqlo tee", "Shopping · Trust", "−$29.90"],
+    ]],
+    ["8 Aug", "−$10.90", null, [
+      ["entertainment", "Spotify", "Entertainment · DBS", "−$10.90", true],
+    ]],
+    ["4 Aug", "—", null, [["transfer", "DBS → Trust", "Transfer · doesn't touch your budget", "$400.00"]]],
+    ["1 Aug", "+$1,240.00", "pos", [
+      ["allowance", "Monthly allowance", "Allowance · DBS", "+$1,240.00", false, "pos"],
+    ]],
+  ];
+  const CAT = {
+    food: "#CC624E", transport: "#B9740F", shopping: "#659734",
+    entertainment: "#139A94", allowance: "#7A79D7",
+  };
+  const dark = params.get("theme") !== "light";
+  const DARK = {
+    food: "#FE9580", transport: "#F0A346", shopping: "#94C866",
+    entertainment: "#1ED0C8", allowance: "#AAADFD",
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-app px-4 pt-6">
+      <h1 className="text-title-lg">Transactions</h1>
+      <p className="mt-1 text-[13px] text-ink-3">1–31 August · this period · 5 entries</p>
+      {days.map(([label, sub, subCol, rows]) => (
+        <section key={label} className="mt-[22px]">
+          <header className="flex items-baseline justify-between gap-3 pb-2">
+            <h2 className="text-overline text-ink-3">{label}</h2>
+            <span className={`num text-[12px] font-medium ${subCol ? "text-positive" : "text-ink-3"}`}>{sub}</span>
+          </header>
+          <ul className="-mx-4 border-y border-hairline bg-surface [&>*+*]:border-t [&>*+*]:border-hairline">
+            {rows.map(([c, t, m, a, rep, col]) => (
+              <li key={t} className="flex items-center gap-3 px-4 py-[13px]">
+                {c === "transfer" ? (
+                  <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-sm bg-surface-2 text-ink-3">
+                    <_swap className="h-4 w-4" />
+                  </span>
+                ) : (
+                  <span
+                    className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-sm"
+                    style={{
+                      background: `color-mix(in srgb, ${(dark ? DARK : CAT)[c]} 14%, transparent)`,
+                      color: (dark ? DARK : CAT)[c],
+                    }}
+                  />
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5 text-[15px] font-medium tracking-[-0.01em]">
+                    <span className="truncate">{t}</span>
+                    {rep && <_repeat className="h-3 w-3 shrink-0 text-ink-3" />}
+                  </span>
+                  <span className="mt-0.5 block truncate text-meta text-ink-3">{m}</span>
+                </span>
+                <span className={`num shrink-0 text-[15px] font-medium ${col ? "text-positive" : c === "transfer" ? "text-ink-3" : "text-ink"}`}>{a}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 const VIEWS = {
   calculator: () => (
     <BottomSheet open onClose={() => {}} title="Calculator" closeLabel="Back to form">
@@ -433,6 +936,13 @@ const VIEWS = {
   stats: StatsView,
   keyboard: KeyboardView,
   ledger: LedgerView,
+  tracker: TrackerView,
+  plan: PlanView,
+  more: MoreView,
+  recurring: RecurringView,
+  daily: DailyView,
+  friends: FriendsView,
+  grouped: LedgerGroupedView,
 };
 
 function Harness() {
@@ -463,8 +973,15 @@ function Harness() {
  */
 const reducedMotion = params.get("motion") === "on" ? "user" : "always";
 
+// ThemeProvider resolves its own initial theme from storage, then re-applies the
+// `dark` class in an effect. Left alone it would fight the pre-paint class
+// harness.html sets from ?theme=, so seed storage with the same answer first.
+localStorage.setItem("bnm_theme", params.get("theme") === "light" ? "light" : "dark");
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <MotionConfig reducedMotion={reducedMotion}>
-    <Harness />
+    <ThemeProvider>
+      <Harness />
+    </ThemeProvider>
   </MotionConfig>
 );

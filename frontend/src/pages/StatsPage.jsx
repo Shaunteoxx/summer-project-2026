@@ -140,8 +140,8 @@ export default function StatsPage() {
   return (
     <PageWrapper>
       <motion.div variants={fadeUp} initial="initial" animate="animate">
-        <h1 className="text-2xl font-extrabold tracking-tight">All Months</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
+        <h1 className="text-title-lg">All Months</h1>
+        <p className="mt-1 text-[13px] text-ink-3">
           Savings vs spending across every month you've tracked.
         </p>
       </motion.div>
@@ -171,7 +171,7 @@ export default function StatsPage() {
           </div>
         ) : data.length === 0 ? (
           <Card>
-            <CardContent className="p-10 text-center text-sm text-muted-foreground">
+            <CardContent className="p-10 text-center text-[13px] leading-relaxed text-ink-3">
               No monthly data yet. Add some transactions to start building your
               history.
             </CardContent>
@@ -182,7 +182,7 @@ export default function StatsPage() {
                 below are per-month by nature and stay put. */}
             <motion.div variants={fadeUp} initial="initial" animate="animate">
               <div
-                className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1"
+                className="grid grid-cols-2 gap-0.5 rounded-md bg-surface-2 p-[3px]"
                 role="group"
                 aria-label="Headline figures"
               >
@@ -221,7 +221,6 @@ export default function StatsPage() {
                     accent
                     // Named apart from "Average month" so the two rates
                     // disagreeing reads as two questions, not a bug.
-                    hint="Of everything earned"
                   />
                 </>
               ) : (
@@ -324,7 +323,7 @@ export default function StatsPage() {
 
           {/* Per-month breakdown */}
           <motion.div variants={fadeUp} initial="initial" animate="animate">
-            <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h2 className="mb-2.5 px-0.5 text-overline text-ink-3">
               Monthly breakdown
             </h2>
             <Card>
@@ -341,27 +340,27 @@ export default function StatsPage() {
                           animate={{ opacity: 1, height: "auto" }}
                           exit={{ opacity: 0, height: 0 }}
                           transition={{ duration: 0.25 }}
-                          className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-3 last:border-b-0"
+                          className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-[13px] last:border-b-0"
                         >
                           <div className="min-w-0">
-                            <p className="font-semibold">
+                            <p className="text-[15px] font-medium tracking-[-0.01em]">
                               {monthName(s.month)} {s.year}
                             </p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="num mt-0.5 text-meta text-ink-3">
                               +{formatMoney(s.totalIncome)} in · −
                               {formatMoney(s.totalExpenses)} out
                             </p>
                           </div>
                           <div className="shrink-0 text-right">
                             <p
-                              className={`font-bold tabular-nums ${
-                                positive ? "text-success" : "text-destructive"
+                              className={`num text-[15px] font-medium ${
+                                positive ? "text-positive" : "text-negative"
                               }`}
                             >
                               {positive ? "+" : "−"}
                               {formatMoney(Math.abs(s.totalSaved))}
                             </p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="num mt-0.5 text-meta text-ink-3">
                               {s.percentageSaved}% saved
                             </p>
                           </div>
@@ -376,7 +375,7 @@ export default function StatsPage() {
                     type="button"
                     onClick={() => setShowAllMonths((v) => !v)}
                     aria-expanded={showAllMonths}
-                    className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-sm px-3 py-2.5 text-[13px] font-semibold text-ink-2 transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {showAllMonths
                       ? "Show less"
@@ -404,14 +403,14 @@ export function LensTab({ active, onClick, label, hint }) {
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-lg px-3 py-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      className={`rounded-[9px] px-3 py-2 text-center transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         active
-          ? "bg-card font-semibold shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
+          ? "bg-surface font-semibold text-ink shadow-card dark:bg-surface-3"
+          : "text-ink-3 hover:text-ink-2"
       }`}
     >
-      <span className="block text-sm">{label}</span>
-      <span className="block text-[11px] text-muted-foreground">{hint}</span>
+      <span className="block text-[13px]">{label}</span>
+      <span className="block text-[11px] text-ink-3">{hint}</span>
     </button>
   );
 }
@@ -438,11 +437,11 @@ export function StatTile({ label, value, money, suffix, accent, hint }) {
 
   return (
     <motion.div variants={fadeScaleItem}>
-      <Card className={`h-full ${accent ? "border-primary/30 bg-primary/5" : ""}`}>
+      <Card className={`h-full ${accent ? "bg-positive/[0.09]" : ""}`}>
         <CardContent className="p-4">
           <p
-            className={`font-extrabold tracking-tight ${valueSizeClass(rendered)} ${
-              accent ? "text-primary" : ""
+            className={`font-semibold tracking-tight ${valueSizeClass(rendered)} ${
+              accent ? "text-positive" : ""
             }`}
           >
             <AnimatedNumber
@@ -452,9 +451,9 @@ export function StatTile({ label, value, money, suffix, accent, hint }) {
               suffix={suffix}
             />
           </p>
-          <p className="mt-0.5 text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="mt-1 text-meta text-ink-2">{label}</p>
           {hint && (
-            <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground/80">
+            <p className="mt-0.5 text-[11px] leading-tight text-ink-3">
               {hint}
             </p>
           )}

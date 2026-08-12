@@ -4,6 +4,7 @@ import { AnimatePresence } from "framer-motion";
 
 import Navbar from "@/components/Navbar";
 import BottomNav from "@/components/BottomNav";
+import AddFab from "@/components/AddFab";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 // Eager: tiny screens that gate the rest of the app.
@@ -13,7 +14,7 @@ import AuthCallback from "@/pages/AuthCallback";
 // Lazy: authenticated pages are split into their own chunks so the
 // initial load doesn't ship heavy deps (e.g. recharts) until needed.
 const HomePage = lazy(() => import("@/pages/HomePage"));
-const CalculatorPage = lazy(() => import("@/pages/CalculatorPage"));
+const PlanPage = lazy(() => import("@/pages/PlanPage"));
 const TransactionsPage = lazy(() => import("@/pages/TransactionsPage"));
 const TrackerPage = lazy(() => import("@/pages/TrackerPage"));
 const StatsPage = lazy(() => import("@/pages/StatsPage"));
@@ -34,15 +35,15 @@ class AppErrorBoundary extends Component {
   render() {
     if (!this.state.failed) return this.props.children;
     return (
-      <main className="app-bg flex min-h-[100dvh] items-center justify-center p-6 text-center">
+      <main className="flex min-h-[100dvh] items-center justify-center bg-canvas p-6 text-center">
         <div className="max-w-sm space-y-4">
-          <h1 className="text-xl font-bold">Something went wrong</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-title">Something went wrong</h1>
+          <p className="text-sm text-ink-3">
             Reload the app to try again. Your saved transactions are unaffected.
           </p>
           <button
             type="button"
-            className="rounded-xl bg-primary px-4 py-2 font-semibold text-primary-foreground"
+            className="h-11 rounded-md bg-ink px-5 font-semibold text-surface"
             onClick={() => window.location.reload()}
           >
             Reload app
@@ -53,15 +54,21 @@ class AppErrorBoundary extends Component {
   }
 }
 
-/** Centered spinner shown while a lazy page chunk is loading. */
+/**
+ * Shown while a lazy page chunk loads. A bare indeterminate track rather than a
+ * spinner, matching BrandLoader — and only after a beat, so a fast chunk never
+ * flashes a loading state on screen.
+ */
 function PageFallback() {
   return (
     <div
-      className="flex min-h-[60vh] items-center justify-center"
+      className="flex min-h-[60vh] items-start justify-center pt-24"
       role="status"
       aria-label="Loading page"
     >
-      <div className="h-9 w-9 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
+      <div className="h-0.5 w-[120px] overflow-hidden rounded-full bg-surface-3 opacity-0 motion-safe:animate-fade-in-delayed">
+        <div className="h-full w-[38%] rounded-full bg-ink motion-safe:animate-track-slide" />
+      </div>
     </div>
   );
 }
@@ -73,7 +80,7 @@ function PageFallback() {
 function AppLayout() {
   const location = useLocation();
   return (
-    <div className="app-bg flex min-h-[100dvh] flex-col">
+    <div className="flex min-h-[100dvh] flex-col bg-canvas">
       <Navbar />
       <main className="mx-auto w-full max-w-app flex-1">
         <AnimatePresence mode="wait">
@@ -82,6 +89,7 @@ function AppLayout() {
           </Suspense>
         </AnimatePresence>
       </main>
+      <AddFab />
       <BottomNav />
     </div>
   );
@@ -104,7 +112,9 @@ export default function App() {
         }
       >
         <Route path="/" element={<HomePage />} />
-        <Route path="/calculator" element={<CalculatorPage />} />
+        <Route path="/plan" element={<PlanPage />} />
+        {/* "Calculator" was the old name; keep the URL working. */}
+        <Route path="/calculator" element={<Navigate to="/plan" replace />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/tracker" element={<TrackerPage />} />
         <Route path="/stats" element={<StatsPage />} />

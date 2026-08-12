@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Wallet } from "lucide-react";
+import { ArrowLeftRight } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,20 +10,24 @@ import { formatMoney, localToday } from "@/lib/utils";
 import { fadeUp } from "@/animations/variants";
 
 /**
- * Where this period's money sits, account by account.
+ * Account activity — what moved through each account this period.
  *
- * Deliberately headed "In your accounts" and never "Balance": there are no
- * opening balances, so a figure here is only what has moved through that
- * account since the period began, not what the bank would tell you.
+ * This shows two figures per account rather than one net. The net version
+ * ("DBS +$1,175.20") answered no question anyone actually has: it isn't a
+ * balance, isn't spending, and isn't actionable. Because that number needed
+ * explaining, the card had to carry three extra rows reconciling it back to a
+ * figure already on screen, plus a footnote walking back what the heading
+ * implied. Splitting the net into the two numbers it was made from fixes it at
+ * source — "$1,240 in, $64.80 out" needs no interpretation, and nothing here
+ * resembles a balance, so the disclaimer disappears on its own.
  *
- * The reserved line is what makes the card add up. Per-account nets sum to
- * income − spent, which is the daily budget's numerator *before* the savings
- * reserve — so without showing the reserve, "Trust + DBS" and "left to spend"
- * would look like they disagreed.
+ * It lives on Transactions rather than Home because it's reference data, not
+ * status: it summarises the period the list below is showing, and the Out
+ * column is literally the sum of those rows.
  *
- * Renders nothing at all until the user has made an account.
+ * Renders nothing until the user has made an account.
  */
-export default function AccountsCard() {
+export default function AccountsCard({ onTransfer = null }) {
   const { hasAccounts } = useAccounts();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -32,9 +36,9 @@ export default function AccountsCard() {
     if (!hasAccounts) return;
     setLoading(true);
     fetchAccountTotals(localToday())
-      .then(setData)
       // A failure here costs this card, not the page it sits on.
-      .catch(() => setData(null))
+      .catch(() => null)
+      .then(setData)
       .finally(() => setLoading(false));
   }, [hasAccounts]);
 
@@ -45,10 +49,10 @@ export default function AccountsCard() {
   if (loading) {
     return (
       <Card>
-        <CardContent className="space-y-3 p-5">
+        <CardContent className="space-y-3 p-[18px]">
           <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-5 w-full" />
-          <Skeleton className="h-5 w-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
         </CardContent>
       </Card>
     );
@@ -56,42 +60,99 @@ export default function AccountsCard() {
 
   if (!data || !data.period) return null;
 
+  // In and Out are derived, not stored: the API reports income, spent and the
+  // two transfer directions separately. Transfers belong in the columns —
+  // money genuinely moved through the account — and they cancel across
+  // accounts, so the totals still reconcile to leftToSpend.
+  const toRow = (a) => ({
+    ...a,
+    in: round(a.income + (a.transfersIn ?? 0)),
+    out: round(a.spent + (a.transfersOut ?? 0)),
+  });
+
   // Archived accounts drop out once they have nothing left in the period.
-  const rows = data.accounts.filter((a) => !a.archived || a.net !== 0);
-  const { totals, unassigned } = data;
+  const rows = data.accounts.map(toRow).filter((a) => !a.archived || a.in || a.out);
+  const unassigned = data.unassigned ? toRow(data.unassigned) : null;
+  const { totals } = data;
+  const overspent = totals.leftToSpend < 0;
+
+  // Summed from the rows on screen rather than taken from the API, so the Total
+  // line always equals what's directly above it.
+  const shown = [...rows, ...(unassigned ? [unassigned] : [])];
+  const totalIn = round(shown.reduce((n, a) => n + a.in, 0));
+  const totalOut = round(shown.reduce((n, a) => n + a.out, 0));
 
   return (
     <motion.div variants={fadeUp} initial="initial" animate="animate">
       <Card>
-        <CardContent className="p-5">
-          <h2 className="flex items-center gap-2 font-semibold">
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-            In your accounts
-          </h2>
+        <CardContent className="p-[18px]">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-title">Account activity</h2>
+            {/* Transfers move money between the accounts listed right below,
+                so this is where the action belongs — it used to be a
+                full-width button competing with adding a transaction, which
+                is a far more common thing to want. */}
+            {onTransfer && (
+              <button
+                type="button"
+                onClick={onTransfer}
+                className="flex shrink-0 items-center gap-1.5 rounded-sm text-[12.5px] font-medium text-ink-2 transition-colors duration-base ease-out hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ArrowLeftRight className="h-3.5 w-3.5" />
+                Transfer
+              </button>
+            )}
+          </div>
 
-          <ul className="mt-3 space-y-2">
+          <div className="mt-3 flex border-b border-hairline pb-2">
+            <span className="flex-1" />
+            <span className="w-[84px] text-right text-[10px] font-medium uppercase tracking-[0.07em] text-ink-3">
+              In
+            </span>
+            <span className="w-[80px] text-right text-[10px] font-medium uppercase tracking-[0.07em] text-ink-3">
+              Out
+            </span>
+          </div>
+
+          <ul>
             {rows.map((a) => (
-              <Row key={a.id} label={a.name} color={a.color} value={a.net} />
+              <Row key={a.id} label={a.name} color={a.color} inAmt={a.in} outAmt={a.out} />
             ))}
             {unassigned && (
-              <Row
-                label="Not assigned"
-                value={unassigned.net}
-                hint="Entries logged without an account"
-              />
+              <Row label="Not assigned" inAmt={unassigned.in} outAmt={unassigned.out} />
             )}
           </ul>
 
-          <div className="mt-3 space-y-2 border-t border-border pt-3">
-            <Row label="Total" value={totals.net} strong />
-            {totals.reserved > 0 && (
-              <Row label="Reserved for savings" value={-totals.reserved} />
-            )}
-            <Row label="Left to spend" value={totals.leftToSpend} strong accent />
+          <div className="mt-1 flex border-t border-hairline pt-2.5">
+            <span className="flex-1 text-sm font-semibold">Total</span>
+            <span className="num w-[84px] text-right text-sm font-semibold text-positive">
+              {formatMoney(totalIn)}
+            </span>
+            <span className="num w-[80px] text-right text-sm font-semibold">
+              {formatMoney(totalOut)}
+            </span>
           </div>
 
-          <p className="mt-3 text-xs text-muted-foreground">
-            Amount for this period.
+          {/* One sentence instead of three reconciliation rows. */}
+          <p className="mt-3 border-t border-hairline pt-3 text-[11.5px] leading-relaxed text-ink-3">
+            Less {formatMoney(totals.reserved)} reserved for savings,{" "}
+            {overspent ? (
+              <>
+                you&apos;re{" "}
+                <b className="font-semibold text-negative">
+                  {formatMoney(Math.abs(totals.leftToSpend))}
+                </b>{" "}
+                past this period&apos;s budget.
+              </>
+            ) : (
+              <>
+                that&apos;s your{" "}
+                <b className="font-medium text-ink-2">
+                  {formatMoney(totals.leftToSpend)}
+                </b>{" "}
+                left to spend.
+              </>
+            )}
           </p>
         </CardContent>
       </Card>
@@ -99,30 +160,36 @@ export default function AccountsCard() {
   );
 }
 
-function Row({ label, value, color, strong, accent, hint }) {
+/** Money maths in JS needs rounding at every step or cents drift. */
+const round = (n) => Math.round(n * 100) / 100;
+
+function Row({ label, color, inAmt, outAmt }) {
   return (
-    <li className="flex items-baseline justify-between gap-3 text-sm">
-      <span className="flex min-w-0 items-center gap-2">
+    <li className="flex py-2">
+      <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
         {color && (
           <span
-            className="h-2.5 w-2.5 shrink-0 rounded-full"
+            className="h-[9px] w-[9px] shrink-0 rounded-[3px]"
             style={{ background: color }}
           />
         )}
-        <span className={`truncate ${strong ? "font-semibold" : ""}`}>{label}</span>
-        {hint && (
-          <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-            {hint}
-          </span>
-        )}
+        <span className="truncate">{label}</span>
       </span>
+      {/* An em-dash rather than $0.00 where nothing came in: the column stays
+          scannable instead of filling with zeroes that mean "not applicable". */}
       <span
-        className={`shrink-0 tabular-nums ${strong ? "font-bold" : ""} ${
-          accent ? "text-primary" : value < 0 ? "text-destructive" : ""
+        className={`num w-[84px] shrink-0 text-right text-sm ${
+          inAmt ? "font-medium text-positive" : "text-ink-3"
         }`}
       >
-        {value < 0 ? "−" : ""}
-        {formatMoney(Math.abs(value))}
+        {inAmt ? formatMoney(inAmt) : "—"}
+      </span>
+      <span
+        className={`num w-[80px] shrink-0 text-right text-sm ${
+          outAmt ? "font-medium" : "text-ink-3"
+        }`}
+      >
+        {outAmt ? formatMoney(outAmt) : "—"}
       </span>
     </li>
   );

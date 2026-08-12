@@ -1,10 +1,12 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, XCircle, Info, X } from "lucide-react";
 
+// Green still means money kept and red still means something went wrong; an
+// informational toast takes ink rather than a third status colour.
 const VARIANTS = {
-  success: { icon: CheckCircle2, accent: "text-success" },
-  error: { icon: XCircle, accent: "text-destructive" },
-  info: { icon: Info, accent: "text-primary" },
+  success: { icon: CheckCircle2, accent: "text-positive" },
+  error: { icon: XCircle, accent: "text-negative" },
+  info: { icon: Info, accent: "text-ink-2" },
 };
 
 // Swipe far enough, or flick fast enough, and the toast is dismissed.
@@ -46,11 +48,11 @@ export default function ToastViewport({ toasts, onDismiss }) {
                     offset.y > SWIPE_OFFSET || velocity.y > SWIPE_VELOCITY;
                   if (swipedSideways || swipedDown) onDismiss(t.id);
                 }}
-                className="surface-blur pointer-events-auto flex touch-none items-center gap-3 rounded-xl border border-border/80 bg-card/95 p-3.5 shadow-lg"
+                className="surface-blur pointer-events-auto flex touch-none items-center gap-3 rounded-lg border border-hairline p-3.5 shadow-float"
                 role="status"
               >
                 <Icon className={`h-5 w-5 shrink-0 ${accent}`} />
-                <p className="flex-1 text-sm font-medium leading-snug text-card-foreground">
+                <p className="flex-1 text-[13px] font-medium leading-snug text-ink">
                   {t.message}
                 </p>
                 {t.action ? (
@@ -59,7 +61,7 @@ export default function ToastViewport({ toasts, onDismiss }) {
                       t.action.onClick();
                       onDismiss(t.id);
                     }}
-                    className="-my-1 shrink-0 rounded-md px-2.5 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="-my-1 shrink-0 rounded-sm px-2.5 py-1.5 text-[13px] font-semibold text-ink transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {t.action.label}
                   </button>
@@ -67,7 +69,7 @@ export default function ToastViewport({ toasts, onDismiss }) {
                   <button
                     onClick={() => onDismiss(t.id)}
                     aria-label="Dismiss notification"
-                    className="-my-1 -mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="-my-1 -mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <X className="h-4 w-4" />
                   </button>

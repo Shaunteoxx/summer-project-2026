@@ -207,17 +207,17 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {/* Income or expense. Fixed for the life of the rule on the server,
               but free to choose while writing one. */}
-          <div role="group" aria-label="Type" className="flex gap-1 rounded-full bg-muted p-1">
+          <div role="group" aria-label="Type" className="flex gap-0.5 rounded-md bg-surface-2 p-[3px]">
             {["expense", "income"].map((option) => (
               <button
                 key={option}
                 type="button"
                 onClick={() => update({ type: option, category: "" })}
                 aria-pressed={form.type === option}
-                className={`flex-1 rounded-full px-3 py-1.5 text-sm font-medium capitalize transition-colors ${
+                className={`flex-1 rounded-[9px] px-3 py-1.5 text-[13px] capitalize transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   form.type === option
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-surface font-semibold text-ink shadow-card dark:bg-surface-3"
+                    : "font-medium text-ink-3 hover:text-ink-2"
                 }`}
               >
                 {option}
@@ -226,7 +226,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
           </div>
 
           <div className="space-y-2">
-            <Label className={errors.category ? "text-destructive" : undefined}>
+            <Label className={errors.category ? "text-negative" : undefined}>
               Category
             </Label>
             <div className="flex flex-wrap gap-2">
@@ -238,8 +238,8 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                     key={c.name}
                     onClick={() => update({ category: c.name })}
                     aria-pressed={selected}
-                    className={`flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                      selected ? "border-transparent" : "border-border text-muted-foreground hover:bg-accent/50"
+                    className={`flex h-9 items-center gap-2 rounded-sm border px-3 text-[13px] font-medium transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      selected ? "border-transparent" : "border-hairline-strong text-ink-2 hover:bg-surface-2"
                     }`}
                     style={
                       selected
@@ -248,7 +248,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                     }
                   >
                     <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      className="h-2 w-2 shrink-0 rounded-[3px]"
                       style={{ background: c.color }}
                     />
                     {c.name}
@@ -262,7 +262,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
           <div className="space-y-2">
             <div className="flex items-baseline justify-between gap-2">
               <Label htmlFor="rule-description">Description</Label>
-              <span className="text-xs text-muted-foreground">Optional</span>
+              <span className="text-[12px] text-ink-3">Optional</span>
             </div>
             <Input
               id="rule-description"
@@ -276,7 +276,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
           <div className="space-y-2">
             <Label
               htmlFor="rule-amount"
-              className={errors.amount ? "text-destructive" : undefined}
+              className={errors.amount ? "text-negative" : undefined}
             >
               Amount
             </Label>
@@ -296,17 +296,17 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
 
           <div className="space-y-2">
             <Label>How often</Label>
-            <div role="group" aria-label="How often" className="flex gap-1 rounded-full bg-muted p-1">
+            <div role="group" aria-label="How often" className="flex gap-0.5 rounded-md bg-surface-2 p-[3px]">
               {["monthly", "weekly"].map((option) => (
                 <button
                   key={option}
                   type="button"
                   onClick={() => update({ frequency: option })}
                   aria-pressed={form.frequency === option}
-                  className={`flex-1 rounded-full px-3 py-1.5 text-sm font-medium capitalize transition-colors ${
+                  className={`flex-1 rounded-[9px] px-3 py-1.5 text-[13px] capitalize transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     form.frequency === option
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                      ? "bg-surface font-semibold text-ink shadow-card dark:bg-surface-3"
+                      : "font-medium text-ink-3 hover:text-ink-2"
                   }`}
                 >
                   {option}
@@ -319,7 +319,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
             <div className="space-y-2">
               <Label
                 htmlFor="rule-day"
-                className={errors.dayOfMonth ? "text-destructive" : undefined}
+                className={errors.dayOfMonth ? "text-negative" : undefined}
               >
                 Day of the month
               </Label>
@@ -335,7 +335,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
               />
               {/* Said up front rather than discovered in February. */}
               {Number(form.dayOfMonth) > 28 && !errors.dayOfMonth && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[12px] text-ink-3">
                   Shorter months use their last day.
                 </p>
               )}
@@ -353,10 +353,10 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                       type="button"
                       onClick={() => update({ weekday: String(index) })}
                       aria-pressed={selected}
-                      className={`h-9 w-12 rounded-full border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      className={`h-9 w-12 rounded-sm border text-[13px] font-medium transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         selected
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground hover:bg-accent/50"
+                          ? "border-transparent bg-ink text-surface"
+                          : "border-hairline-strong text-ink-2 hover:bg-surface-2"
                       }`}
                     >
                       {label}
@@ -385,8 +385,8 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                       key={a.id}
                       onClick={() => update({ accountId: selected ? "" : a.id })}
                       aria-pressed={selected}
-                      className={`flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                        selected ? "border-transparent" : "border-border text-muted-foreground hover:bg-accent/50"
+                      className={`flex h-9 items-center gap-2 rounded-sm border px-3 text-[13px] font-medium transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        selected ? "border-transparent" : "border-hairline-strong text-ink-2 hover:bg-surface-2"
                       }`}
                       style={
                         selected
@@ -395,7 +395,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                       }
                     >
                       <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        className="h-2 w-2 shrink-0 rounded-[3px]"
                         style={{ background: a.color }}
                       />
                       {a.name}
@@ -418,7 +418,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
               />
               {/* The rule can't reach backwards, so say what it will actually
                   do rather than letting the first entry be a surprise. */}
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[12px] leading-relaxed text-ink-3">
                 Entries are added on each due date from here on. Anything before
                 that you add yourself.
               </p>
@@ -426,7 +426,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
           )}
 
           {formError && (
-            <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+            <p role="alert" className="rounded-md bg-negative/[0.08] px-3 py-2 text-[13px] font-medium text-negative">
               {formError}
             </p>
           )}
@@ -443,11 +443,11 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
       ) : (
         <div className="space-y-3">
           {rules.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border p-8 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-foreground">
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-hairline-strong p-8 text-center">
+              <span className="flex h-[52px] w-[52px] items-center justify-center rounded-md bg-surface-2 text-ink-3">
                 <Repeat className="h-6 w-6" />
               </span>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-[13px] leading-relaxed text-ink-3">
                 Rent, a subscription, an allowance — anything that lands on the
                 same day each month. It gets added for you when the day comes.
               </p>
@@ -459,27 +459,27 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                 return (
                   <li
                     key={rule.id}
-                    className={`rounded-xl border border-border p-3 ${rule.paused ? "opacity-60" : ""}`}
+                    className={`rounded-lg border border-hairline p-3 ${rule.paused ? "opacity-60" : ""}`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <button
                         type="button"
                         onClick={() => startEditing(rule)}
                         aria-label={`Edit ${rule.description}`}
-                        className="-m-1 min-w-0 flex-1 rounded-lg p-1 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="-m-1 min-w-0 flex-1 rounded-sm p-1 text-left transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <span className="flex items-baseline gap-2">
-                          <span className="truncate font-semibold">{rule.description}</span>
+                          <span className="truncate text-[15px] font-medium tracking-[-0.01em]">{rule.description}</span>
                           <span
-                            className={`shrink-0 text-sm font-bold tabular-nums ${
-                              rule.type === "income" ? "text-success" : "text-destructive"
+                            className={`num shrink-0 text-[14px] font-medium ${
+                              rule.type === "income" ? "text-positive" : "text-ink"
                             }`}
                           >
                             {rule.type === "income" ? "+" : "−"}
                             {formatMoney(rule.amount)}
                           </span>
                         </span>
-                        <span className="block truncate text-xs text-muted-foreground">
+                        <span className="mt-0.5 block truncate text-meta text-ink-3">
                           {describeSchedule(rule)} · {rule.category}
                           {account && <> · {account.name}</>}
                           {rule.paused && " · Paused"}
@@ -490,7 +490,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                           type="button"
                           onClick={() => handlePause(rule)}
                           aria-label={`${rule.paused ? "Resume" : "Pause"} ${rule.description}`}
-                          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           {rule.paused ? (
                             <Play className="h-4 w-4" />
@@ -510,10 +510,10 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                               ? `Confirm removing ${rule.description}`
                               : `Remove ${rule.description}`
                           }
-                          className={`flex h-9 items-center justify-center gap-1 rounded-full px-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          className={`flex h-9 items-center justify-center gap-1 rounded-sm px-2 text-[12px] font-semibold transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                             confirmId === rule.id
-                              ? "bg-destructive/10 text-destructive"
-                              : "w-9 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                              ? "bg-negative/[0.08] text-negative"
+                              : "w-9 text-ink-3 hover:bg-negative/[0.08] hover:text-negative"
                           }`}
                         >
                           {confirmId === rule.id ? (
@@ -536,7 +536,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
               other list on this page (accounts) refuses deletion for exactly
               the opposite reason. */}
           {rules.length > 0 && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[12px] leading-relaxed text-ink-3">
               Removing a repeating entry stops it happening again. The entries it
               has already added stay in your ledger.
             </p>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Target, Pencil } from "lucide-react";
+import { Target } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,83 +84,81 @@ export default function SavingsGoalCard({
     <motion.div variants={fadeUp} initial="initial" animate="animate">
       {target > 0 ? (
         <Card>
-          <CardContent className="p-4">
+          <CardContent>
+            {/* Everything but the bar lives in the header row: title with its
+                caption underneath, verdict and Edit on the right. The verdict
+                used to sit on its own row under the bar, which cost the card a
+                whole line to say two words. */}
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                  <Target className="h-[18px] w-[18px] text-primary" />
-                </span>
-                <div>
-                  <h2 className="font-semibold leading-tight">Savings goal</h2>
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                </div>
-              </div>
-              <button
-                onClick={openSheet}
-                aria-label="Edit savings goal"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="mt-3 flex items-baseline justify-between gap-3">
-              <p className="text-xl font-extrabold tabular-nums">
-                {formatMoney(target)}
-              </p>
-              <p
-                className={cn(
-                  "text-xs font-semibold",
-                  income <= 0
-                    ? "text-muted-foreground"
+              <div className="min-w-0">
+                <h2 className="text-[15px] font-semibold tracking-[-0.015em]">
+                  Savings Target
+                </h2>
+                <p className="mt-0.5 truncate text-[12px] text-ink-3">
+                  {income <= 0
+                    ? "Add income to track this"
                     : onTrack
-                      ? "text-success"
-                      : "text-destructive"
+                      ? "Reserved before you spend"
+                      : "Spending has eaten into it"}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {income > 0 && (
+                  <span
+                    className={cn(
+                      "rounded-xs px-1.5 py-[3px] text-[11px] font-medium",
+                      onTrack
+                        ? "bg-positive/[0.12] text-positive"
+                        : "bg-negative/[0.12] text-negative"
+                    )}
+                  >
+                    {onTrack ? "On track" : `${formatMoney(shortfall)} at risk`}
+                  </span>
                 )}
-              >
-                {income <= 0
-                  ? "Add income to track this"
-                  : onTrack
-                    ? "On track"
-                    : `${formatMoney(shortfall)} at risk`}
-              </p>
+                <button
+                  onClick={openSheet}
+                  aria-label="Edit savings target"
+                  className="-my-1 rounded-sm px-1.5 py-1 text-[12.5px] font-medium text-ink-2 transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Edit
+                </button>
+              </div>
             </div>
 
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+            {/* Covered of target, so the pair reads as progress rather than
+                asking you to compare the figure against the bar. */}
+            <div className="mt-3 flex items-baseline gap-1.5">
+              <span className="num text-[26px] font-medium">{formatMoney(covered)}</span>
+              <span className="text-[13px] text-ink-3">of {formatMoney(target)}</span>
+            </div>
+
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-3">
               <div
                 className={cn(
-                  "h-full rounded-full transition-all",
-                  onTrack ? "bg-success" : "bg-destructive"
+                  "h-full rounded-full transition-[width] duration-enter ease-out",
+                  onTrack ? "bg-positive" : "bg-negative"
                 )}
                 style={{ width: `${pct}%` }}
               />
             </div>
-
-            {income > 0 && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {onTrack
-                  ? "Your unspent income still covers the whole goal."
-                  : "Spending has eaten into your goal — staying under the daily budget wins it back."}
-              </p>
-            )}
           </CardContent>
         </Card>
       ) : (
         <Card>
-          <CardContent className="flex items-center justify-between gap-3 p-4">
+          <CardContent className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                <Target className="h-[18px] w-[18px]" />
+              <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-sm bg-surface-2 text-ink-2">
+                <Target className="h-4 w-4" />
               </span>
               <div className="min-w-0">
-                <p className="font-semibold">No savings goal for {label}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[15px] font-medium tracking-[-0.01em]">No target for {label}</p>
+                <p className="mt-0.5 text-meta text-ink-3">
                   Set one to shape your daily budget.
                 </p>
               </div>
             </div>
             <Button size="sm" onClick={openSheet} className="shrink-0">
-              Set goal
+              Set target
             </Button>
           </CardContent>
         </Card>
@@ -185,7 +183,7 @@ export default function SavingsGoalCard({
               value={input}
               onChange={(e) => setInput(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[12px] leading-relaxed text-ink-3">
               This is reserved before your daily budget is worked out. Set 0 to
               clear the goal.
             </p>

@@ -28,8 +28,8 @@ export default function SwitchRow({ checked, onChange, label, description, disab
       onClick={() => onChange(!checked)}
       className={`flex w-full items-center gap-4 rounded-xl border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${
         checked
-          ? "border-primary/30 bg-primary/5"
-          : "border-border hover:bg-accent/50"
+          ? "border-hairline-strong bg-surface-2"
+          : "border-hairline-strong hover:bg-surface-2"
       }`}
     >
       <span className="min-w-0 flex-1">
@@ -39,7 +39,7 @@ export default function SwitchRow({ checked, onChange, label, description, disab
         {description && (
           <span
             id={`${id}-hint`}
-            className="mt-0.5 block text-xs text-muted-foreground"
+            className="mt-0.5 block text-[12px] leading-relaxed text-ink-3"
           >
             {description}
           </span>
@@ -48,7 +48,7 @@ export default function SwitchRow({ checked, onChange, label, description, disab
       <span
         aria-hidden="true"
         className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors ${
-          checked ? "bg-primary" : "bg-muted-foreground/30"
+          checked ? "bg-positive" : "bg-surface-3"
         }`}
       >
         <span

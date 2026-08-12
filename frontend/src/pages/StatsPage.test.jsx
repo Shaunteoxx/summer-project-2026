@@ -82,7 +82,6 @@ describe("the two savings rates", () => {
 
     // (2100 - 1810) / 2100 = 13.8% -> 14%
     expect(screen.getByText("Savings rate").previousSibling).toHaveTextContent("14%");
-    expect(screen.getByText("Of everything earned")).toBeInTheDocument();
   });
 
   it("keeps the per-month average as its own, different figure", async () => {

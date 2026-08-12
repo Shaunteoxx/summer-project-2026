@@ -1,7 +1,12 @@
-// The homepage account strip. The thing worth pinning is that it reconciles:
-// per-account nets sum to income − spent, and subtracting the savings reserve
-// gives the same "left to spend" the budget card is built from. Without the
-// reserve line on screen those two look like they disagree.
+// Account activity, on the Transactions page. Two things are worth pinning.
+//
+// First, In and Out are derived rather than served: the API reports income,
+// spent and the two transfer directions separately, and the card folds them
+// into two columns. Get that wrong and money silently vanishes from the card.
+//
+// Second, it still reconciles. Total In − Total Out − the savings reserve is
+// the same "left to spend" the budget is built from — transfers cancel across
+// accounts, so including them in the columns doesn't break the arithmetic.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
@@ -22,110 +27,175 @@ vi.mock("@/hooks/useAccounts", () => ({
 
 import AccountsCard from "@/components/AccountsCard";
 
+const account = (over = {}) => ({
+  id: "a1",
+  name: "Trust",
+  color: "#CC624E",
+  archived: false,
+  income: 0,
+  spent: 0,
+  transfersIn: 0,
+  transfersOut: 0,
+  ...over,
+});
+
 const payload = (over = {}) => ({
   period: { start: "2026-08-01", end: "2026-08-31", savings: 200 },
   accounts: [
-    { id: "a1", name: "Trust", color: "#c26b6b", archived: false, net: 12 },
-    { id: "a2", name: "DBS", color: "#7cb37c", archived: false, net: 340 },
+    account({ id: "a1", name: "Trust", spent: 448 }),
+    account({ id: "a2", name: "DBS", color: "#1290CC", income: 800 }),
   ],
   totals: { income: 800, spent: 448, net: 352, reserved: 200, leftToSpend: 152 },
   ...over,
 });
 
-/** The amount rendered on the row whose label matches. */
-const amountFor = (label) =>
-  screen.getByText(label).closest("li").lastElementChild.textContent;
+/** The [in, out] cells of the row whose label matches. */
+const cellsFor = (label) => {
+  const row = screen.getByText(label).closest("li, div");
+  const kids = [...row.children];
+  return kids.slice(-2).map((n) => n.textContent);
+};
 
 beforeEach(() => {
   mockHasAccounts = true;
   fetchAccountTotals.mockReset().mockResolvedValue(payload());
 });
 
-describe("the account strip", () => {
-  it("lists each account's share of the period", async () => {
+describe("account activity", () => {
+  it("splits each account into what came in and what went out", async () => {
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
 
-    expect(amountFor("Trust")).toBe("$12.00");
-    expect(amountFor("DBS")).toBe("$340.00");
+    expect(cellsFor("Trust")).toEqual(["—", "$448.00"]);
+    expect(cellsFor("DBS")).toEqual(["$800.00", "—"]);
   });
 
-  it("shows the reserve, so the total and left-to-spend reconcile", async () => {
+  it("shows an em-dash, not $0.00, where a direction is unused", async () => {
     render(<AccountsCard />);
-    await waitFor(() => expect(screen.getByText("Total")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
 
-    // 12 + 340 = 352, less the 200 reserve, leaves 152.
-    expect(amountFor("Total")).toBe("$352.00");
-    expect(amountFor("Reserved for savings")).toBe("−$200.00");
-    expect(amountFor("Left to spend")).toBe("$152.00");
+    // A column of zeroes reads as data; a column of dashes reads as
+    // "not applicable", which is what it is.
+    expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
   });
 
-  it("hides the reserve line when nothing is being set aside", async () => {
-    fetchAccountTotals.mockResolvedValue(
-      payload({
-        totals: { income: 800, spent: 448, net: 352, reserved: 0, leftToSpend: 352 },
-      })
-    );
-    render(<AccountsCard />);
-    await waitFor(() => expect(screen.getByText("Total")).toBeInTheDocument());
-
-    expect(screen.queryByText("Reserved for savings")).not.toBeInTheDocument();
-  });
-
-  it("shows a negative account plainly rather than flooring it at zero", async () => {
-    // Spending from an account before any money reached it. Shouldn't normally
-    // happen — you'd transfer first — but a back-dated entry can produce it,
-    // and hiding it would hide a real gap in the data.
+  it("folds transfers into the columns they moved through", async () => {
     fetchAccountTotals.mockResolvedValue(
       payload({
         accounts: [
-          { id: "a1", name: "Trust", color: "#c26b6b", archived: false, net: -40 },
-          { id: "a2", name: "DBS", color: "#7cb37c", archived: false, net: 392 },
+          account({ id: "a1", name: "Trust", spent: 448, transfersIn: 400 }),
+          account({ id: "a2", name: "DBS", income: 800, transfersOut: 400 }),
         ],
       })
     );
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
 
-    expect(amountFor("Trust")).toBe("−$40.00");
+    expect(cellsFor("Trust")).toEqual(["$400.00", "$448.00"]);
+    expect(cellsFor("DBS")).toEqual(["$800.00", "$400.00"]);
+    // Transfers cancel, so the totals are unmoved by them.
+    expect(cellsFor("Total")).toEqual(["$1,200.00", "$848.00"]);
   });
 
-  it("surfaces untagged entries instead of quietly losing them", async () => {
+  it("totals what is on screen, and reconciles to left-to-spend", async () => {
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Total")).toBeInTheDocument());
+
+    expect(cellsFor("Total")).toEqual(["$800.00", "$448.00"]);
+    // 800 − 448 = 352, less the 200 reserve, leaves 152.
+    expect(screen.getByText(/Less \$200\.00 reserved for savings/)).toBeInTheDocument();
+    expect(screen.getByText("$152.00")).toBeInTheDocument();
+  });
+
+  it("says how far past you are when the period is overspent", async () => {
+    fetchAccountTotals.mockResolvedValue(
+      payload({
+        accounts: [
+          account({ id: "a1", name: "Trust", spent: 700 }),
+          account({ id: "a2", name: "DBS", income: 800 }),
+        ],
+        totals: { income: 800, spent: 700, net: 100, reserved: 200, leftToSpend: -100 },
+      })
+    );
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Total")).toBeInTheDocument());
+
+    expect(screen.getByText(/past this period's budget/)).toBeInTheDocument();
+    expect(screen.getByText("$100.00")).toBeInTheDocument();
+  });
+
+  it("keeps untagged rows visible so the arithmetic still ties out", async () => {
     fetchAccountTotals.mockResolvedValue(
       payload({ unassigned: { income: 0, spent: 12, net: -12 } })
     );
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Not assigned")).toBeInTheDocument());
 
-    expect(amountFor("Not assigned")).toBe("−$12.00");
+    expect(cellsFor("Not assigned")).toEqual(["—", "$12.00"]);
+    expect(cellsFor("Total")).toEqual(["$800.00", "$460.00"]);
   });
 
-  it("renders nothing until the user has made an account", () => {
+  it("drops an archived account once nothing moved through it", async () => {
+    fetchAccountTotals.mockResolvedValue(
+      payload({
+        accounts: [
+          account({ id: "a1", name: "Trust", spent: 448 }),
+          account({ id: "a2", name: "Old card", archived: true }),
+        ],
+      })
+    );
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+
+    expect(screen.queryByText("Old card")).not.toBeInTheDocument();
+  });
+
+  it("keeps an archived account that still has movement in the period", async () => {
+    fetchAccountTotals.mockResolvedValue(
+      payload({
+        accounts: [
+          account({ id: "a1", name: "Trust", spent: 448 }),
+          account({ id: "a2", name: "Old card", archived: true, spent: 30 }),
+        ],
+      })
+    );
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Old card")).toBeInTheDocument());
+  });
+
+  it("offers a transfer only when there is somewhere to transfer to", async () => {
+    // The page decides: it passes a handler only with two or more accounts,
+    // since moving money to yourself isn't a thing.
+    const { unmount } = render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Total")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Transfer" })).not.toBeInTheDocument();
+    unmount();
+
+    render(<AccountsCard onTransfer={() => {}} />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Transfer" })).toBeInTheDocument()
+    );
+  });
+
+  it("renders nothing at all until the user has made an account", async () => {
     mockHasAccounts = false;
     const { container } = render(<AccountsCard />);
+
     expect(container).toBeEmptyDOMElement();
     expect(fetchAccountTotals).not.toHaveBeenCalled();
   });
 
-  it("stays out of the way when no period is running", async () => {
-    fetchAccountTotals.mockResolvedValue({
-      period: null,
-      accounts: [],
-      totals: { income: 0, spent: 0, net: 0, reserved: 0, leftToSpend: 0 },
-    });
+  it("stays out of the way between periods in days mode", async () => {
+    fetchAccountTotals.mockResolvedValue({ period: null, accounts: [], totals: {} });
     const { container } = render(<AccountsCard />);
+
     await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 
-  it("costs the card, not the page, when the request fails", async () => {
+  it("costs itself, not the page, when the request fails", async () => {
     fetchAccountTotals.mockRejectedValue(new Error("nope"));
     const { container } = render(<AccountsCard />);
-    await waitFor(() => expect(container).toBeEmptyDOMElement());
-  });
 
-  it("says the figures are scoped to the period", async () => {
-    render(<AccountsCard />);
-    await waitFor(() => expect(screen.getByText("Total")).toBeInTheDocument());
-    expect(screen.getByText("Amount for this period.")).toBeInTheDocument();
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 });

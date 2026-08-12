@@ -104,7 +104,14 @@ export default function AddTransactionSheet({
 }) {
   // An edit is fixed to the kind of entry it already is: categories are
   // per-type, and the API refuses a type change for the same reason.
-  const type = editing ? editing.type : addType;
+  //
+  // While ADDING, the type is switchable from inside the sheet — it used to be
+  // fixed by whichever of two buttons you pressed on the page behind it. That
+  // made the choice before you'd seen the form, and it cost the page two
+  // buttons that duplicated what the sheet could say itself.
+  const [draftType, setDraftType] = useState(addType);
+  useEffect(() => setDraftType(addType), [addType]);
+  const type = editing ? editing.type : draftType;
   const isEdit = Boolean(editing);
   const toast = useToast();
   const guard = useDemoGuard();
@@ -412,7 +419,9 @@ export default function AddTransactionSheet({
     title={
       calcOpen
         ? "Calculator"
-        : `${isEdit ? "Edit" : "Add"} ${type === "income" ? "income" : "expense"}`
+        : isEdit
+          ? `Edit ${type === "income" ? "income" : "expense"}`
+          : "New entry"
     }
   >
     {calcOpen ? (
@@ -427,6 +436,36 @@ export default function AddTransactionSheet({
       />
     ) : (
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        {/* Expense / Income. Only while adding: the API refuses a type change
+            on an existing row, and the categories are per-type, so an edit that
+            could flip this would silently invalidate its own category. */}
+        {!isEdit && (
+          <div
+            className="grid grid-cols-2 gap-0.5 rounded-md bg-surface-2 p-[3px]"
+            role="group"
+            aria-label="Entry type"
+          >
+            {[
+              { value: "expense", label: "Expense" },
+              { value: "income", label: "Income" },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                aria-pressed={type === opt.value}
+                onClick={() => setDraftType(opt.value)}
+                className={`rounded-[9px] py-1.5 text-[13px] transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  type === opt.value
+                    ? "bg-surface font-semibold text-ink shadow-card"
+                    : "font-medium text-ink-3 hover:text-ink-2"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Account picker. Hidden entirely for anyone who hasn't made an
             account, so the form is exactly as it was for them. */}
         {(hasAccounts || taggedAccount) && (
@@ -455,7 +494,7 @@ export default function AddTransactionSheet({
                     className={`flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
                       selected
                         ? "border-transparent"
-                        : "border-border text-muted-foreground hover:bg-accent/50"
+                        : "border-hairline-strong text-ink-2 hover:bg-surface-2"
                     }`}
                     style={
                       selected
@@ -482,7 +521,7 @@ export default function AddTransactionSheet({
                 tile it took a whole row to itself whenever the category
                 count was already a multiple of three. */}
             <div className="flex items-center justify-between gap-2">
-              <Label className={errors.category ? "text-destructive" : undefined}>
+              <Label className={errors.category ? "text-negative" : undefined}>
                 Category
               </Label>
               <button
@@ -491,8 +530,8 @@ export default function AddTransactionSheet({
                 aria-expanded={showNewCategory}
                 className={`-my-1 flex h-8 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   showNewCategory
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    ? "bg-ink/[0.06] text-ink"
+                    : "text-ink-3 hover:bg-surface-2 hover:text-ink"
                 }`}
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -502,7 +541,7 @@ export default function AddTransactionSheet({
             <div
               className={`grid grid-cols-3 gap-2 ${
                 errors.category
-                  ? "rounded-xl ring-2 ring-destructive ring-offset-2 ring-offset-card"
+                  ? "rounded-sm ring-2 ring-negative ring-offset-2 ring-offset-surface"
                   : ""
               }`}
             >
@@ -515,8 +554,8 @@ export default function AddTransactionSheet({
                   key={c.name}
                   onClick={() => selectCategory(c.name)}
                   aria-pressed={selected}
-                  className={`relative flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border p-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
-                    selected ? "border-transparent" : "border-border hover:bg-accent/50"
+                  className={`relative flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-sm border p-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
+                    selected ? "border-transparent" : "border-hairline-strong hover:bg-surface-2"
                   }`}
                   style={
                     selected
@@ -552,7 +591,7 @@ export default function AddTransactionSheet({
 
           {/* Custom category creator + manager */}
           {showNewCategory && (
-            <div className="space-y-3 rounded-xl border border-border p-3">
+            <div className="space-y-3 rounded-lg border border-hairline bg-surface-2 p-3">
               <Input
                 placeholder="Category name"
                 value={newCategoryName}
@@ -594,8 +633,8 @@ export default function AddTransactionSheet({
 
           {/* Manage custom categories — always visible when any exist */}
           {custom.filter((c) => c.type === type).length > 0 && (
-            <div className="space-y-1.5 rounded-xl border border-border p-3">
-              <p className="text-xs font-medium text-muted-foreground">
+            <div className="space-y-1.5 rounded-lg border border-hairline p-3">
+              <p className="text-overline text-ink-3">
                 Your categories
               </p>
               {custom
@@ -616,7 +655,7 @@ export default function AddTransactionSheet({
                       type="button"
                       onClick={() => handleRemoveCategory(c.id, c.name)}
                       aria-label={`Remove ${c.name}`}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -629,7 +668,7 @@ export default function AddTransactionSheet({
         <div className="space-y-2">
           <div className="flex items-baseline justify-between gap-2">
             <Label htmlFor="description">Description</Label>
-            <span className="text-xs text-muted-foreground">Optional</span>
+            <span className="text-[12px] text-ink-3">Optional</span>
           </div>
           <Input
             id="description"
@@ -652,7 +691,7 @@ export default function AddTransactionSheet({
           <motion.div animate={shakeControls.amount} className="space-y-2">
             <Label
               htmlFor="amount"
-              className={errors.amount ? "text-destructive" : undefined}
+              className={errors.amount ? "text-negative" : undefined}
             >
               Amount
             </Label>
@@ -674,19 +713,19 @@ export default function AddTransactionSheet({
                 aria-invalid={Boolean(errors.amount)}
                 aria-describedby={errors.amount ? "tx-amount-error" : undefined}
                 className={cn(
-                  "flex h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  errors.amount && "border-destructive focus-visible:ring-destructive"
+                  "flex h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-hairline-strong bg-surface px-3 py-2 text-base ring-offset-background transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  errors.amount && "border-negative focus-visible:ring-negative"
                 )}
               >
                 <span
                   className={cn(
                     "truncate tabular-nums",
-                    !amountDisplay && "text-muted-foreground"
+                    !amountDisplay && "text-ink-3"
                   )}
                 >
                   {amountDisplay || "0.00"}
                 </span>
-                <Calculator className="h-[18px] w-[18px] shrink-0 text-primary" />
+                <Calculator className="h-[18px] w-[18px] shrink-0 text-ink-2" />
               </button>
             ) : (
               <div className="relative">
@@ -715,7 +754,7 @@ export default function AddTransactionSheet({
                   type="button"
                   onClick={() => setCalcOpen(true)}
                   aria-label="Open calculator"
-                  className="absolute inset-y-0 right-0 flex w-11 cursor-pointer items-center justify-center rounded-r-md text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                  className="absolute inset-y-0 right-0 flex w-11 cursor-pointer items-center justify-center rounded-r-md text-ink-2 transition-colors duration-base ease-out hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                 >
                   <Calculator className="h-[18px] w-[18px]" />
                 </button>
@@ -728,7 +767,7 @@ export default function AddTransactionSheet({
           <motion.div animate={shakeControls.date} className="space-y-2">
             <Label
               htmlFor="date"
-              className={errors.date ? "text-destructive" : undefined}
+              className={errors.date ? "text-negative" : undefined}
             >
               Date
             </Label>
@@ -757,7 +796,7 @@ export default function AddTransactionSheet({
             entry doesn't offer it: that entry has already happened, and its
             rule (if any) is managed on the More page. */}
         {!isEdit && (
-          <div className="rounded-xl border border-border p-3">
+          <div className="rounded-lg border border-hairline p-3">
             <label className="flex cursor-pointer items-center justify-between gap-3">
               <span className="text-sm font-medium">Repeat monthly</span>
               <input
@@ -768,7 +807,7 @@ export default function AddTransactionSheet({
               />
             </label>
             {repeat && repeatPlan(form.date) && (
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-[12px] leading-relaxed text-ink-3">
                 {repeatPlan(form.date).caption}
               </p>
             )}
@@ -779,7 +818,7 @@ export default function AddTransactionSheet({
           <p
             id="transaction-form-error"
             role="alert"
-            className="rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+            className="rounded-md bg-negative/[0.08] px-3 py-2 text-[13px] font-medium text-negative"
           >
             {formError}
           </p>

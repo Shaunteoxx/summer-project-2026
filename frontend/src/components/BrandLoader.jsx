@@ -1,16 +1,31 @@
-import { Wallet } from "lucide-react";
-
 /**
- * Branded full-screen loading state for the auth gate / first paint.
- * Uses 100dvh (not 100vh) so it fills the visible viewport on mobile.
+ * Cold-start loader — the auth gate and first paint.
+ *
+ * Deliberately not a spinner. A rotating ring says "something is happening"
+ * without saying what or for how much longer, and the old version stacked two
+ * motion sources (a pulsing emerald tile plus a spinning ring) on a gradient
+ * wash. This is one indeterminate track that at least travels in a direction,
+ * under the wordmark — the only place in the app where the brand is the hero.
+ *
+ * The mark inverts between themes rather than switching to a colour, so the
+ * loader never introduces a hue the rest of the app doesn't use.
  */
 export default function BrandLoader() {
   return (
-    <div className="app-bg flex min-h-[100dvh] flex-col items-center justify-center gap-5">
-      <div className="flex h-14 w-14 animate-pulse items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30">
-        <Wallet className="h-7 w-7" />
+    <div
+      className="flex min-h-[100dvh] flex-col items-center justify-center bg-canvas"
+      role="status"
+      aria-label="Loading Broke No More"
+    >
+      <div className="grid h-[52px] w-[52px] place-items-center rounded-[17px] bg-ink text-[26px] font-semibold tracking-[-0.05em] text-canvas">
+        B
       </div>
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+      <p className="mt-[18px] text-base font-semibold tracking-tight">Broke No More</p>
+      <p className="mt-[5px] text-[12.5px] text-ink-3">Working out your budget…</p>
+
+      <div className="mt-[26px] h-0.5 w-[120px] overflow-hidden rounded-full bg-surface-3">
+        <div className="h-full w-[38%] rounded-full bg-ink motion-safe:animate-track-slide" />
+      </div>
     </div>
   );
 }

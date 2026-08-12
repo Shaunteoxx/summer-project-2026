@@ -74,14 +74,14 @@ export default function StreakCard() {
   if (data && data.periodStatus === "inactive") {
     return (
       <motion.div variants={fadeUp} initial="initial" animate="animate">
-        <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card">
+        <Card>
           <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <span className="flex h-[52px] w-[52px] items-center justify-center rounded-md bg-surface-2 text-ink-2">
               <Flame className="h-6 w-6" />
             </span>
             <div>
-              <p className="font-semibold">No budget period running</p>
-              <p className="mt-0.5 text-sm text-muted-foreground">
+              <p className="text-[17px] font-semibold tracking-[-0.015em]">No budget period running</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
                 Start your next period to pick your streak back up. Days in
                 between aren't counted for or against you.
               </p>
@@ -99,14 +99,14 @@ export default function StreakCard() {
   if (!data || !data.hasIncome) {
     return (
       <motion.div variants={fadeUp} initial="initial" animate="animate">
-        <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card">
+        <Card>
           <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <span className="flex h-[52px] w-[52px] items-center justify-center rounded-md bg-surface-2 text-ink-2">
               <Flame className="h-6 w-6" />
             </span>
             <div>
-              <p className="font-semibold">Start a spending streak</p>
-              <p className="mt-0.5 text-sm text-muted-foreground">
+              <p className="text-[17px] font-semibold tracking-[-0.015em]">Start a spending streak</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
                 Add your income for this {noun} to unlock your daily budget and
                 start a streak.
               </p>
@@ -149,42 +149,42 @@ export default function StreakCard() {
 
   return (
     <motion.div variants={fadeUp} initial="initial" animate="animate">
-      <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card">
-        <CardContent className="p-5">
+      <Card className="overflow-hidden">
+        <CardContent>
           {/* Header: current + best */}
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                <Flame className="h-6 w-6" />
+              <span className="flex h-[42px] w-[42px] items-center justify-center rounded-sm bg-surface-2 text-ink-2">
+                <Flame className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-3xl font-extrabold leading-none tracking-tight">
+                <p className="num text-[27px] font-medium leading-none tracking-[-0.025em]">
                   {currentStreak}
                 </p>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-[13px] text-ink-3">
                   day{currentStreak === 1 ? "" : "s"} on budget
                 </p>
               </div>
             </div>
-            <span className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            <span className="flex items-center gap-1.5 rounded-xs bg-surface-2 px-2 py-[3px] text-[11px] font-medium text-ink-2">
               <Trophy className="h-3.5 w-3.5" /> Best {longestStreak}
             </span>
           </div>
 
           {/* Today's budget progress */}
-          <div className="mt-5">
-            <div className="mb-1.5 flex items-baseline justify-between text-sm">
-              <span className="font-medium">Today</span>
-              <span className="text-muted-foreground tabular-nums">
+          <div className="mt-3">
+            <div className="mb-2 flex items-baseline justify-between text-[13px]">
+              <span className="font-medium text-ink-2">Today</span>
+              <span className="num text-ink-3">
                 {overspent
                   ? formatMoney(today.spent)
                   : `${formatMoney(today.spent)} of ${formatMoney(today.budget)}`}
               </span>
             </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
               <motion.div
                 className={`h-full rounded-full ${
-                  overspent || !today.within ? "bg-destructive" : "bg-success"
+                  overspent || !today.within ? "bg-negative" : "bg-positive"
                 }`}
                 initial={{ width: 0 }}
                 animate={{ width: `${pct * 100}%` }}
@@ -193,8 +193,8 @@ export default function StreakCard() {
             </div>
             <div className="mt-1.5 flex items-baseline justify-between gap-2">
               <p
-                className={`text-xs font-medium ${
-                  overspent || !today.within ? "text-destructive" : "text-success"
+                className={`text-[12px] font-medium ${
+                  overspent || !today.within ? "text-negative" : "text-positive"
                 }`}
               >
                 {overspent
@@ -203,15 +203,15 @@ export default function StreakCard() {
                     ? `${formatMoney(Math.max(today.remaining, 0))} left to spend today`
                     : `${formatMoney(Math.abs(today.remaining))} over today's budget`}
               </p>
-              <p className="shrink-0 text-xs text-muted-foreground">
+              <p className="shrink-0 text-[12px] text-ink-3">
                 {daysLeft} {daysLeft === 1 ? "day" : "days"} left
               </p>
             </div>
             {/* How the daily budget is worked out (keeps the number transparent). */}
             {overspent ? (
-              <div className="mt-2 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2.5">
-                <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-destructive" />
-                <p className="text-[11px] leading-snug text-muted-foreground">
+              <div className="mt-2.5 flex items-start gap-2 rounded-md bg-negative/[0.08] p-3">
+                <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-negative" />
+                <p className="text-[11.5px] leading-relaxed text-ink-2">
                   You&apos;ve spent more than this {noun}&apos;s income minus your{" "}
                   {formatMoney(periodSavings)} savings target, so there&apos;s no
                   daily budget left. It won&apos;t reset until{" "}
@@ -221,31 +221,31 @@ export default function StreakCard() {
                 </p>
               </div>
             ) : (
-              <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+              <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">
                 {formatMoney(today.budget)}/day, after setting aside{" "}
                 {formatMoney(periodSavings)}. Not including today&apos;s spending.
               </p>
             )}
             <button
-              onClick={() => navigate("/calculator")}
-              className="mt-1 text-[11px] font-medium text-primary underline-offset-2 hover:underline"
+              onClick={() => navigate("/plan")}
+              className="mt-1.5 rounded-sm text-[11.5px] font-medium text-ink-2 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Plan with today's budget →
             </button>
           </div>
 
           {/* Last 7 days */}
-          <div className="mt-5 flex justify-between gap-1.5">
+          <div className="mt-3 flex justify-between gap-1.5">
             {last7.map((d) => (
               <DayCell key={d.date} day={d} />
             ))}
           </div>
 
           {/* Saves + restore */}
-          <div className="mt-5 flex items-center justify-between gap-3 border-t border-border/60 pt-4">
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-hairline pt-3">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">
+              <span className="truncate text-[13px] text-ink-3">
+                <span className="num font-semibold text-ink">
                   {savesLeftThisPeriod}
                 </span>{" "}
                 Restores left this {noun}
@@ -260,15 +260,15 @@ export default function StreakCard() {
                       key={i}
                       className={`h-4 w-4 ${
                         i < savesLeftThisPeriod
-                          ? "fill-primary text-primary"
-                          : "text-muted-foreground/30"
+                          ? "fill-ink text-ink"
+                          : "text-ink-3/40"
                       }`}
                     />
                   ))
                 ) : (
                   <>
-                    <Shield className="h-4 w-4 fill-primary text-primary" />
-                    <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                    <Shield className="h-4 w-4 fill-ink text-ink" />
+                    <span className="num text-[12px] font-medium text-ink-3">
                       / {savesTotal}
                     </span>
                   </>
@@ -299,9 +299,9 @@ export default function StreakCard() {
         title="Restore your streak?"
       >
         <div className="space-y-5">
-          <div className="flex items-start gap-3 rounded-xl bg-primary/5 p-4">
-            <Shield className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-            <p className="text-sm text-muted-foreground">
+          <div className="flex items-start gap-3 rounded-md bg-surface-2 p-4">
+            <Shield className="mt-0.5 h-5 w-5 shrink-0 text-ink-2" />
+            <p className="text-[13px] leading-relaxed text-ink-2">
               This spends <strong>1 of {restore?.savesLeft}</strong> saves left this{" "}
               {noun} to repair the day you went over budget and bring your streak
               back.
@@ -327,16 +327,21 @@ export default function StreakCard() {
 }
 
 const CELL = {
-  win: { Icon: Check, cls: "bg-success/15 text-success", label: "within budget" },
-  saved: { Icon: Shield, cls: "bg-amber-500/15 text-amber-500", label: "saved" },
-  break: { Icon: X, cls: "bg-destructive/15 text-destructive", label: "over budget" },
+  win: { Icon: Check, cls: "bg-positive/[0.12] text-positive", label: "within budget" },
+  // Green, not amber. Amber says "something still needs your attention", which
+  // is wrong once a restore has succeeded — the streak IS intact. The shield
+  // glyph carries the distinction instead: a tick means you stayed within
+  // budget, a shield means the day was repaired. Colour tells you the outcome,
+  // shape tells you how you got there.
+  saved: { Icon: Shield, cls: "bg-positive/[0.12] text-positive", label: "restored" },
+  break: { Icon: X, cls: "bg-negative/[0.12] text-negative", label: "over budget" },
   // Outside every budget period, so it has no budget to be judged against.
   untracked: {
     Icon: Minus,
-    cls: "bg-muted text-muted-foreground/50",
+    cls: "bg-surface-2 text-ink-3/60",
     label: "not in a budget period",
   },
-  none: { Icon: Minus, cls: "bg-muted text-muted-foreground/50", label: "no data" },
+  none: { Icon: Minus, cls: "bg-surface-2 text-ink-3/60", label: "no data" },
 };
 
 function DayCell({ day }) {
@@ -344,23 +349,21 @@ function DayCell({ day }) {
   const within = isToday ? day.within : day.status === "win";
   const meta = isToday
     ? within
-      ? { Icon: Flame, cls: "bg-primary/15 text-primary", label: "today, on track" }
-      : { Icon: Flame, cls: "bg-destructive/15 text-destructive", label: "today, over budget" }
+      ? { Icon: Flame, cls: "bg-ink text-surface", label: "today, on track" }
+      : { Icon: Flame, cls: "bg-negative text-white", label: "today, over budget" }
     : CELL[day.status] ?? CELL.none;
   const { Icon, cls, label } = meta;
 
   return (
     <div className="flex flex-1 flex-col items-center gap-1">
       <span
-        className={`flex h-9 w-full items-center justify-center rounded-lg ${cls} ${
-          isToday ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""
-        }`}
+        className={`flex h-9 w-full items-center justify-center rounded-[8px] ${cls}`}
         role="img"
         aria-label={`${day.date}: ${label}`}
       >
         <Icon className="h-4 w-4" strokeWidth={2.5} />
       </span>
-      <span className="text-[10px] font-medium text-muted-foreground">
+      <span className="text-[10px] font-medium text-ink-3">
         {dowOf(day.date)}
       </span>
     </div>

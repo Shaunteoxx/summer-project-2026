@@ -7,7 +7,8 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5"
     />
-    <meta name="theme-color" content="#10151f" />
+    <meta name="theme-color" content="#FBFBF9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0A0A0B" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="Broke No More — know what you can spend today and save for tomorrow." />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -15,9 +16,11 @@
     <title>Broke No More</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Geist for UI + figures, Geist Mono for the keypad. Weights stop at 600:
+         hierarchy comes from size, not weight. -->
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
     />
     <!-- Apply the saved theme before paint to avoid a flash of the wrong mode. -->
     <script src="/theme-init.js"></script>

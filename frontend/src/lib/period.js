@@ -19,7 +19,19 @@ const SHORT_MONTHS = MONTH_NAMES.map((m) => m.slice(0, 3));
 export const MIN_PERIOD_DAYS = 1;
 export const MAX_PERIOD_DAYS = 366;
 
-export const dayFromYmd = (value) => new Date(`${value}T00:00:00.000Z`);
+/**
+ * A UTC midnight Date from a day key.
+ *
+ * Slices to the first 10 characters so a full stored timestamp
+ * ("2026-08-11T00:00:00.000Z") works as well as a bare key ("2026-08-11").
+ * Without it the template produced "…000ZT00:00:00.000Z", an Invalid Date whose
+ * getUTCDate() is NaN and whose month indexes SHORT_MONTHS out of bounds — so
+ * the date rendered as the string "NaN undefined" rather than throwing.
+ * Transaction dates come off the API in the long form, so this is reachable
+ * from any caller that hands one straight through.
+ */
+export const dayFromYmd = (value) =>
+  new Date(`${String(value).slice(0, 10)}T00:00:00.000Z`);
 
 export const ymdOf = (date) => date.toISOString().slice(0, 10);
 

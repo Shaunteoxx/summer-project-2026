@@ -11,7 +11,7 @@ export default function ThemeToggle({ className = "" }) {
       type="button"
       onClick={toggleTheme}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className={`relative flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${className}`}
+      className={`relative flex h-9 w-9 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${className}`}
     >
       <AnimatePresence mode="wait" initial={false}>
         <motion.span
@@ -21,7 +21,7 @@ export default function ThemeToggle({ className = "" }) {
           exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
           transition={{ duration: 0.2 }}
         >
-          {isDark ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+          {isDark ? <Moon className="h-[18px] w-[18px]" /> : <Sun className="h-[18px] w-[18px]" />}
         </motion.span>
       </AnimatePresence>
     </button>

@@ -8,7 +8,6 @@ import {
   Cell,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
@@ -18,6 +17,7 @@ import BottomSheet from "@/components/BottomSheet";
 import SpendingCalendar from "@/components/SpendingCalendar";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useCategories } from "@/hooks/useCategories";
+import CategoryIcon from "@/components/CategoryIcon";
 import { cn, formatMoney, localToday } from "@/lib/utils";
 import {
   formatDay,
@@ -73,8 +73,8 @@ function DayTick({ x, y, payload, days, today, axis, primary }) {
       x={x}
       y={y + 10}
       textAnchor="middle"
-      fontSize={10}
-      fontWeight={isToday ? 700 : 400}
+      fontSize={10.5}
+      fontWeight={isToday ? 600 : 400}
       fill={isToday ? primary : axis}
     >
       {day}
@@ -191,19 +191,19 @@ export default function DailySpendingCard({
   return (
     <motion.div variants={fadeUp} initial="initial" animate="animate">
       <Card>
-        <CardContent className="p-5">
+        <CardContent className="px-[18px] py-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="font-semibold">Daily spending</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <h2 className="text-[15px] font-semibold tracking-[-0.015em]">Daily spending</h2>
+              <p className="mt-0.5 text-[12px] text-ink-3">
                 {subtitle ?? formatPeriodLabel(period)}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-lg font-extrabold leading-none tracking-tight tabular-nums">
+              <p className="num text-[19px] font-medium leading-none">
                 {formatMoney(totalSpent)}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+              <p className="num mt-1 text-[12px] text-ink-3">
                 {formatMoney(avgPerDay)}/day avg
               </p>
             </div>
@@ -211,7 +211,7 @@ export default function DailySpendingCard({
 
           <div className="mt-3 flex items-center justify-between gap-3">
             <div
-              className="flex rounded-lg bg-muted p-0.5"
+              className="flex gap-0.5 rounded-md bg-surface-2 p-[3px]"
               role="group"
               aria-label="Daily spending view"
             >
@@ -229,16 +229,16 @@ export default function DailySpendingCard({
               />
             </div>
             {budgetsAvailable && (
-              <p className="text-xs text-muted-foreground tabular-nums">
+              <p className="num text-[12px] text-ink-3">
                 Today's budget{" "}
-                <span className="font-bold text-foreground">
+                <span className="font-medium text-ink">
                   {formatMoney(todayBudget)}
                 </span>
               </p>
             )}
           </div>
 
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-2 text-[12px] leading-relaxed text-ink-3">
             {view === "chart"
               ? "Tap above a bar for a summary, or tap the bar for that day's transactions."
               : "Tap a day to see its transactions."}
@@ -272,16 +272,13 @@ export default function DailySpendingCard({
                       data={shownDays}
                       margin={{ top: 6, right: 4, left: 0, bottom: 0 }}
                     >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        vertical={false}
-                        stroke={colors.grid}
-                      />
+                      {/* No gridlines — a single baseline instead, per the
+                          chart rules. The Y labels carry the scale. */}
                       <XAxis
                         dataKey="ymd"
                         interval={0}
                         tickLine={false}
-                        axisLine={false}
+                        axisLine={{ stroke: colors.grid }}
                         tick={
                           <DayTick
                             days={shownDays}
@@ -294,7 +291,7 @@ export default function DailySpendingCard({
                       <YAxis
                         tickLine={false}
                         axisLine={false}
-                        fontSize={11}
+                        fontSize={10.5}
                         width={44}
                         stroke={colors.axis}
                         tickFormatter={(v) => `$${v}`}
@@ -363,7 +360,7 @@ export default function DailySpendingCard({
               )}
 
               {/* Legend / context */}
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+              <div className="mt-4 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 border-t border-hairline pt-3.5 text-[11.5px] text-ink-3">
                 {budgetsAvailable &&
                   (view === "chart" ? (
                     <span className="flex items-center gap-1.5">
@@ -375,29 +372,26 @@ export default function DailySpendingCard({
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-sm bg-success/30" />
+                      <span className="h-[9px] w-[9px] rounded-[3px] border border-positive bg-positive/20" />
                       Within budget
                     </span>
                   ))}
                 {anyOver && (
                   <span className="flex items-center gap-1.5">
-                    <span
-                      className="h-2.5 w-2.5 rounded-sm"
-                      style={{ background: colors.over }}
-                    />
+                    <span className="h-[9px] w-[9px] rounded-[3px] border border-negative bg-negative/20" />
                     Over that day's budget
                   </span>
                 )}
               </div>
               {budgetsAvailable && (
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="mt-2.5 text-[12px] leading-relaxed text-ink-3">
                   Your budget adapts daily: remaining income after savings ÷
                   days left.
                 </p>
               )}
             </>
           ) : (
-            <div className="flex h-40 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+            <div className="flex h-40 items-center justify-center px-6 text-center text-[13px] leading-relaxed text-ink-3">
               {emptyMessage}
             </div>
           )}
@@ -412,19 +406,17 @@ export default function DailySpendingCard({
       >
         {selected && (
           <div className="pb-2">
-            <div className="flex items-center justify-between rounded-xl bg-muted/60 p-3">
+            <div className="flex items-center justify-between rounded-md bg-surface-2 p-3.5">
               <div>
-                <p className="text-xs text-muted-foreground">Spent</p>
-                <p className="font-bold tabular-nums">
+                <p className="text-[11.5px] text-ink-3">Spent</p>
+                <p className="num mt-1 text-[19px] font-medium">
                   {formatMoney(selected.amount)}
                 </p>
               </div>
               {selected.budget !== null && (
                 <div className="text-right">
-                  <p className="text-xs text-muted-foreground">
-                    Budget that day
-                  </p>
-                  <p className="font-bold tabular-nums">
+                  <p className="text-[11.5px] text-ink-3">Budget that day</p>
+                  <p className="num mt-1 text-[19px] font-medium">
                     {formatMoney(selected.budget)}
                   </p>
                 </div>
@@ -434,8 +426,8 @@ export default function DailySpendingCard({
             {selected.budget !== null && (
               <p
                 className={cn(
-                  "mt-2 text-sm font-medium",
-                  selected.over ? "text-destructive" : "text-success"
+                  "mt-2.5 text-[13px] font-medium",
+                  selected.over ? "text-negative" : "text-positive"
                 )}
               >
                 {selected.over
@@ -448,39 +440,30 @@ export default function DailySpendingCard({
               {selected.txns.length > 0 ? (
                 selected.txns.map((t) => {
                   const cat = getCategory(t.category);
-                  const Icon = cat.icon;
                   return (
                     <div
                       key={t._id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-border/70 p-3"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-hairline p-3"
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <span
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                          style={{
-                            backgroundColor: `${cat.color}22`,
-                            color: cat.color,
-                          }}
-                        >
-                          <Icon className="h-[18px] w-[18px]" />
-                        </span>
+                        <CategoryIcon category={cat} />
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">
+                          <p className="truncate text-[15px] font-medium tracking-[-0.01em]">
                             {t.description}
                           </p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="mt-0.5 text-meta text-ink-3">
                             {t.category}
                           </p>
                         </div>
                       </div>
-                      <span className="shrink-0 font-bold tabular-nums text-destructive">
+                      <span className="num shrink-0 text-[15px] font-medium text-ink">
                         −{formatMoney(t.amount)}
                       </span>
                     </div>
                   );
                 })
               ) : (
-                <p className="py-2 text-center text-sm text-muted-foreground">
+                <p className="py-2 text-center text-[13px] text-ink-3">
                   No spending logged this day.
                 </p>
               )}
@@ -501,13 +484,13 @@ function PagePicker({ label, spent, index, count, onChange }) {
         onClick={() => step(-1)}
         disabled={index === 0}
         aria-label="Previous month"
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-surface-2 text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 disabled:opacity-30 disabled:hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
       <div className="text-center">
-        <p className="text-sm font-semibold leading-none">{label}</p>
-        <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+        <p className="text-[14.5px] font-semibold leading-none tracking-[-0.01em]">{label}</p>
+        <p className="num mt-1 text-[11.5px] text-ink-3">
           {formatMoney(spent)} · {index + 1} of {count}
         </p>
       </div>
@@ -516,7 +499,7 @@ function PagePicker({ label, spent, index, count, onChange }) {
         onClick={() => step(1)}
         disabled={index === count - 1}
         aria-label="Next month"
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-surface-2 text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 disabled:opacity-30 disabled:hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ChevronRight className="h-4 w-4" />
       </button>
@@ -532,10 +515,11 @@ function ViewToggle({ active, onClick, icon: Icon, label }) {
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        "flex h-7 w-9 items-center justify-center rounded-md transition-colors",
+        "flex h-7 w-9 items-center justify-center rounded-[9px] transition-colors duration-base ease-out",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active
-          ? "bg-card text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
+          ? "bg-surface text-ink shadow-card dark:bg-surface-3"
+          : "text-ink-3 hover:text-ink-2"
       )}
     >
       <Icon className="h-4 w-4" />

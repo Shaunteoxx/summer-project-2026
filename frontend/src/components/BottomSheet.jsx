@@ -124,7 +124,7 @@ export default function BottomSheet({
             aria-label={title ? undefined : "Dialog"}
           >
             <div
-              className={`flex flex-col rounded-t-2xl border-t border-border bg-card shadow-2xl ${
+              className={`flex flex-col rounded-t-2xl border-t border-hairline bg-surface shadow-float ${
                 keyboardInset ? "pb-2" : "pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
               }`}
               // Only constrained while the keyboard is up: a tall form lifted
@@ -141,7 +141,7 @@ export default function BottomSheet({
                   if (keyboardInset) dragControls.start(e);
                 }}
               >
-                <span className="h-1.5 w-10 rounded-full bg-muted-foreground/30" />
+                <span className="h-1 w-9 rounded-full bg-hairline-strong/30" />
               </div>
 
               <div className="flex shrink-0 items-center justify-between gap-3 px-5 pb-1 pt-1">
@@ -154,7 +154,7 @@ export default function BottomSheet({
                   type="button"
                   onClick={onClose}
                   aria-label={closeLabel}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-5 w-5" />
                 </button>

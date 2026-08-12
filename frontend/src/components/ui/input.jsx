@@ -1,12 +1,21 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+/**
+ * 16px minimum font-size is load-bearing on iOS: anything smaller makes Safari
+ * zoom the viewport on focus, which fights the bottom sheet's keyboard inset
+ * handling. Keep it at text-base.
+ */
 const Input = React.forwardRef(({ className, type, ...props }, ref) => (
   <input
     type={type}
     ref={ref}
     className={cn(
-      "flex h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background transition-shadow file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+      "flex h-[46px] w-full rounded-md border border-hairline-strong bg-surface px-3.5 text-base text-ink",
+      "transition-colors duration-base ease-out",
+      "placeholder:text-ink-3",
+      "focus-visible:border-ink focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ink",
+      "disabled:cursor-not-allowed disabled:opacity-40",
       className
     )}
     {...props}

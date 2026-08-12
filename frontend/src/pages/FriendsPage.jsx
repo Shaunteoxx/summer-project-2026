@@ -1,18 +1,10 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import {
-  Search,
-  UserPlus,
-  Check,
-  X,
-  Trophy,
-  Crown,
-} from "lucide-react";
+import { Search, UserPlus } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
 import Avatar from "@/components/Avatar";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -25,7 +17,7 @@ import {
 } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { localToday } from "@/lib/utils";
+import { cn, localToday } from "@/lib/utils";
 import { formatPeriodLabel } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
@@ -105,219 +97,227 @@ export default function FriendsPage() {
     }
   };
 
-  const maxPercent = Math.max(
-    1,
-    ...(comparison?.leaderboard?.map((p) => p.percentageSaved) ?? [1])
-  );
-
   return (
     <PageWrapper>
       <motion.div variants={fadeUp} initial="initial" animate="animate">
-        <h1 className="text-2xl font-extrabold tracking-tight">Friends</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Find friends and compare your savings.
+        <h1 className="text-title-lg">Friends</h1>
+        {/* Everyone is scored on their own budget period, so the header names
+            yours rather than implying a shared window. */}
+        <p className="mt-1 text-[13px] text-ink-3">
+          Savings rate
+          {comparison?.period
+            ? ` · ${formatPeriodLabel(comparison.period, { mode: budgetPeriod.mode })}`
+            : comparison
+              ? " · no period running"
+              : ""}
         </p>
       </motion.div>
 
-      <div className="mt-5 space-y-4">
-        <div className="space-y-4">
-          {/* Search */}
-          <motion.div variants={fadeUp} initial="initial" animate="animate">
-            <Card>
-              <CardContent className="p-5">
-                <h2 className="mb-4 flex items-center gap-2 font-semibold">
-                  <Search className="h-4 w-4 text-primary" /> Find people
-                </h2>
-                <form onSubmit={handleSearch} className="flex gap-2">
-                  <Input
-                    type="search"
-                    aria-label="Search users by username"
-                    placeholder="Search by username"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                  <Button type="submit" disabled={searching}>
-                    {searching ? "…" : "Search"}
-                  </Button>
-                </form>
+      {/* Search sits bare on the canvas. It was a card with its own "Find
+          people" heading, which made one input into a titled section. */}
+      <motion.form
+        variants={fadeUp}
+        initial="initial"
+        animate="animate"
+        onSubmit={handleSearch}
+        className="relative mt-4"
+      >
+        <Search
+          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3"
+          aria-hidden="true"
+        />
+        <Input
+          type="search"
+          aria-label="Search users by username"
+          placeholder="Find someone by username"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="pl-10"
+          disabled={searching}
+        />
+      </motion.form>
 
-                <motion.div
-                  variants={staggerContainer(0.06, 0.05)}
-                  initial="initial"
-                  animate="animate"
-                  className="mt-4 space-y-2"
-                  key={results.length + query}
-                >
-                  {results.map((u) => (
-                    <motion.div
-                      key={u.id}
-                      variants={fadeScaleItem}
-                      className="flex items-center justify-between rounded-lg border border-border/70 p-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar user={u} className="h-9 w-9" />
-                        <span className="font-medium">{u.username}</span>
-                      </div>
-                      {u.status === "friends" ? (
-                        <span className="text-xs font-medium text-primary">Friends</span>
-                      ) : u.status === "pending" ? (
-                        <span className="text-xs text-muted-foreground">Requested</span>
-                      ) : u.status === "incoming" ? (
-                        <span className="text-xs text-muted-foreground">Wants to add you</span>
-                      ) : (
-                        <Button size="sm" variant="outline" className="gap-1" onClick={() => handleSend(u.id)}>
-                          <UserPlus className="h-3.5 w-3.5" /> Add
-                        </Button>
-                      )}
-                    </motion.div>
-                  ))}
-                </motion.div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Incoming requests */}
-          <motion.div variants={fadeUp} initial="initial" animate="animate">
-            <Card>
-              <CardContent className="p-5">
-                <h2 className="mb-4 font-semibold">
-                  Friend requests
-                  {requests.length > 0 && (
-                    <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
-                      {requests.length}
-                    </span>
-                  )}
-                </h2>
-                {requests.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No pending requests.</p>
+      {results.length > 0 && (
+        <ListSection label={`Results · ${results.length}`}>
+          <motion.ul
+            variants={staggerContainer(0.06, 0.05)}
+            initial="initial"
+            animate="animate"
+            key={results.length + query}
+            className="[&>*+*]:border-t [&>*+*]:border-hairline"
+          >
+            {results.map((u) => (
+              <motion.li key={u.id} variants={fadeScaleItem} className="flex items-center gap-3 px-4 py-[13px]">
+                <Avatar user={u} className="h-[34px] w-[34px]" />
+                <span className="min-w-0 flex-1 truncate text-[15px] font-medium tracking-[-0.01em]">
+                  {u.username}
+                </span>
+                {u.status === "friends" ? (
+                  <RowNote>Friends</RowNote>
+                ) : u.status === "pending" ? (
+                  <RowNote>Requested</RowNote>
+                ) : u.status === "incoming" ? (
+                  <RowNote>Wants to add you</RowNote>
                 ) : (
-                  <motion.div
-                    variants={staggerContainer(0.08, 0.05)}
-                    initial="initial"
-                    animate="animate"
-                    className="space-y-2"
-                  >
-                    {requests.map((r) => (
-                      <motion.div
-                        key={r.id}
-                        variants={fadeScaleItem}
-                        className="flex items-center justify-between rounded-lg border border-border/70 p-3"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar user={r} className="h-9 w-9" />
-                          <span className="font-medium">{r.username}</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="icon"
-                            className="h-9 w-9"
-                            aria-label={`Accept ${r.username}'s friend request`}
-                            onClick={() => handleAccept(r.id)}
-                          >
-                            <Check className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-9 w-9"
-                            aria-label={`Decline ${r.username}'s friend request`}
-                            onClick={() => handleDecline(r.id)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </motion.div>
+                  <PillButton onClick={() => handleSend(u.id)}>
+                    <UserPlus className="h-3.5 w-3.5" /> Add
+                  </PillButton>
                 )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
+              </motion.li>
+            ))}
+          </motion.ul>
+        </ListSection>
+      )}
 
-        {/* Comparison leaderboard */}
-        <motion.div variants={fadeUp} initial="initial" animate="animate">
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-1 flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-primary" />
-                <h2 className="font-semibold">Savings Leaderboard</h2>
+      {requests.length > 0 && (
+        <ListSection label={`Requests · ${requests.length}`}>
+          <motion.ul
+            variants={staggerContainer(0.08, 0.05)}
+            initial="initial"
+            animate="animate"
+            className="[&>*+*]:border-t [&>*+*]:border-hairline"
+          >
+            {requests.map((r) => (
+              <motion.li key={r.id} variants={fadeScaleItem} className="flex items-center gap-3 px-4 py-[13px]">
+                <Avatar user={r} className="h-[34px] w-[34px]" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-medium tracking-[-0.01em]">
+                    {r.username}
+                  </span>
+                  <span className="mt-0.5 block truncate text-meta text-ink-3">
+                    Wants to compare
+                  </span>
+                </span>
+                <span className="flex shrink-0 gap-1.5">
+                  <PillButton
+                    variant="outline"
+                    aria-label={`Decline ${r.username}'s friend request`}
+                    onClick={() => handleDecline(r.id)}
+                  >
+                    Decline
+                  </PillButton>
+                  <PillButton
+                    aria-label={`Accept ${r.username}'s friend request`}
+                    onClick={() => handleAccept(r.id)}
+                  >
+                    Accept
+                  </PillButton>
+                </span>
+              </motion.li>
+            ))}
+          </motion.ul>
+        </ListSection>
+      )}
+
+      {/* Leaderboard. The bars are gone: with a rank column and the rate
+          written out, a bar scaled to the leader added a second encoding of
+          the same number and made a list of five people look like a chart. */}
+      <section className="mt-6">
+        <h2 className="mb-2.5 px-0.5 text-overline text-ink-3">Leaderboard</h2>
+        {!comparison ? (
+          <div className="border-y border-hairline bg-surface">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 px-4 py-[13px] [&+&]:border-t [&+&]:border-hairline"
+              >
+                <Skeleton className="h-3 w-4" />
+                <Skeleton className="h-[34px] w-[34px] rounded-full" />
+                <Skeleton className="h-3 flex-1" />
+                <Skeleton className="h-3 w-9" />
               </div>
-              {/* Everyone is scored on their own budget period, so the header
-                  names yours and each row carries its own dates. */}
-              <p className="mb-5 text-sm text-muted-foreground">
-                Savings rate ·{" "}
-                {comparison?.period
-                  ? formatPeriodLabel(comparison.period, { mode: budgetPeriod.mode })
-                  : comparison
-                    ? "no period running"
-                    : ""}
-              </p>
-
-              {!comparison ? (
-                <div className="space-y-4">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i}>
-                      <div className="mb-1 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Skeleton className="h-7 w-7 rounded-full" />
-                          <Skeleton className="h-4 w-24" />
-                        </div>
-                        <Skeleton className="h-4 w-10" />
-                      </div>
-                      <Skeleton className="h-3 w-full rounded-full" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <motion.div
-                  variants={staggerContainer(0.1, 0.1)}
-                  initial="initial"
-                  animate="animate"
-                  className="space-y-3"
-                >
-                  {comparison.leaderboard.map((p, i) => (
-                    <motion.div key={p.id} variants={fadeScaleItem}>
-                      <div className="mb-1 flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 font-medium">
-                          {i === 0 && <Crown className="h-4 w-4 text-yellow-500" />}
-                          <Avatar user={p} className="h-7 w-7" />
-                          {p.username}
-                          {p.isMe && (
-                            <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">
-                              You
-                            </span>
-                          )}
-                        </span>
-                        <span className="font-bold tabular-nums">
-                          {p.percentageSaved}%
-                        </span>
-                      </div>
-                      <div className="h-3 overflow-hidden rounded-full bg-muted">
-                        <motion.div
-                          className={`h-full rounded-full ${
-                            p.isMe ? "bg-primary" : "bg-primary/50"
-                          }`}
-                          initial={{ width: 0 }}
-                          animate={{
-                            width: `${(p.percentageSaved / maxPercent) * 100}%`,
-                          }}
-                          transition={{ duration: 0.9, delay: 0.2 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
-                        />
-                      </div>
-                    </motion.div>
-                  ))}
-                  {comparison.leaderboard.length === 1 && (
-                    <p className="pt-2 text-sm text-muted-foreground">
-                      Add friends to compare your savings with theirs.
-                    </p>
+            ))}
+          </div>
+        ) : (
+          <>
+            <motion.ul
+              variants={staggerContainer(0.06, 0.1)}
+              initial="initial"
+              animate="animate"
+              className="border-y border-hairline bg-surface [&>*+*]:border-t [&>*+*]:border-hairline"
+            >
+              {comparison.leaderboard.map((p, i) => (
+                <motion.li
+                  key={p.id}
+                  variants={fadeScaleItem}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-[13px]",
+                    p.isMe && "bg-surface-2"
                   )}
-                </motion.div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
+                >
+                  <span
+                    className={cn(
+                      "num w-4 shrink-0 text-center text-[12.5px]",
+                      i < 3 ? "font-semibold text-ink-2" : "font-medium text-ink-3"
+                    )}
+                  >
+                    {i + 1}
+                  </span>
+                  <Avatar user={p} className="h-[34px] w-[34px]" />
+                  <span className="min-w-0 flex-1 truncate text-[15px] font-medium tracking-[-0.01em]">
+                    {p.username}
+                    {p.isMe && (
+                      <span className="ml-1.5 text-[11px] font-medium text-ink-3">You</span>
+                    )}
+                  </span>
+                  {/* Green here is the one it's allowed to be: money kept. */}
+                  <span className="num shrink-0 text-[15px] font-medium text-positive">
+                    {p.percentageSaved}%
+                  </span>
+                </motion.li>
+              ))}
+            </motion.ul>
+            {comparison.leaderboard.length === 1 && (
+              <p className="mt-3 px-0.5 text-[13px] leading-relaxed text-ink-3">
+                Add friends to compare your savings with theirs.
+              </p>
+            )}
+          </>
+        )}
+      </section>
     </PageWrapper>
+  );
+}
+
+/** An overline-labelled group of rows in one card. */
+function ListSection({ label, children }) {
+  return (
+    <motion.section
+      variants={fadeUp}
+      initial="initial"
+      animate="animate"
+      className="mt-6"
+    >
+      <h2 className="mb-2.5 px-0.5 text-overline text-ink-3">{label}</h2>
+      <Card className="overflow-hidden">{children}</Card>
+    </motion.section>
+  );
+}
+
+/** A row's trailing status word — not an action, so it isn't a button. */
+function RowNote({ children }) {
+  return <span className="shrink-0 text-meta text-ink-3">{children}</span>;
+}
+
+/**
+ * The compact 30px action button these rows use. Smaller than the app's
+ * standard 46px Button, which would dominate a 56px row.
+ */
+function PillButton({ children, variant, ...props }) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className={cn(
+        "flex h-[30px] shrink-0 items-center gap-1 rounded-[9px] px-2.5 text-[12.5px]",
+        "transition-colors duration-base ease-out",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        variant === "outline"
+          ? "border border-hairline-strong font-medium text-ink-2 hover:bg-surface-2"
+          : "bg-ink font-semibold text-surface hover:bg-ink-2"
+      )}
+    >
+      {children}
+    </button>
   );
 }

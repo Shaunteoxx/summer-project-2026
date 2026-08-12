@@ -53,22 +53,22 @@ export default function LoginPage() {
         transition={{ duration: 0.6, ease: EASE }}
         className="w-full max-w-app"
       >
-        <Card className="border-border/70 shadow-2xl">
+        <Card>
           <CardContent className="flex flex-col items-center gap-6 p-8 text-center">
             <motion.div
               initial={{ scale: 0, rotate: -20 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 14 }}
-              className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30"
+              className="flex h-[52px] w-[52px] items-center justify-center rounded-lg bg-surface-2 text-ink"
             >
-              <Wallet className="h-8 w-8" />
+              <Wallet className="h-6 w-6" />
             </motion.div>
 
             <div className="space-y-2">
-              <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
+              <h1 className="text-title-lg text-ink">
                 Broke No More
               </h1>
-              <p className="mx-auto max-w-xs text-sm leading-relaxed text-muted-foreground">
+              <p className="mx-auto max-w-xs text-[13.5px] leading-relaxed text-ink-3">
                 Know exactly how much you can spend today and how much you need
                 to save for tomorrow.
               </p>
@@ -96,7 +96,7 @@ export default function LoginPage() {
               </Button>
             </div>
 
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11.5px] text-ink-3">
               No sign-up needed · Demo is read-only
             </p>
           </CardContent>

@@ -13,6 +13,10 @@ frontend/.env
 frontend/dist/
 dist/
 
+# Vite transpiles vite.config.js to a temp .mjs beside itself to import it, then
+# deletes it. A killed dev server (Ctrl-C, crash) orphans the file.
+*.timestamp-*.mjs
+
 # Design harness screenshots
 frontend/.shots/
 

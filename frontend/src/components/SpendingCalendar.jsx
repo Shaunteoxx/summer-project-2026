@@ -10,8 +10,10 @@ const SHORT_MONTHS = [
 /**
  * Calendar of daily spending across a budget period. Cell tint mirrors the
  * streak's verdict for the day — green when the day stayed within its own daily
- * budget, red (with a ring, so it isn't color-alone) when it went over. Today
- * wears a bold ring. Tap a day to open its transactions.
+ * budget, red (with a ring, so it isn't color-alone) when it went over. Today is
+ * the one solid cell in the grid, and days still to come are dashed outlines
+ * rather than fills, since there's no verdict to show yet. Tap a day to open its
+ * transactions.
  *
  * A period is any length and may straddle a month boundary, so the grid is
  * aligned to the weekday of its first day rather than to the 1st of a month.
@@ -30,7 +32,7 @@ export default function SpendingCalendar({
 
   return (
     <div>
-      <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-medium text-muted-foreground">
+      <div className="grid grid-cols-7 gap-[5px] text-center text-[9.5px] font-medium uppercase tracking-[0.04em] text-ink-3">
         {DOW.map((d, i) => (
           <span key={i} aria-hidden="true">
             {d}
@@ -38,7 +40,7 @@ export default function SpendingCalendar({
         ))}
       </div>
 
-      <div className="mt-1.5 grid grid-cols-7 gap-1.5">
+      <div className="mt-2 grid grid-cols-7 gap-[5px]">
         {Array.from({ length: offset }, (_, i) => (
           <span key={`pad-${i}`} />
         ))}
@@ -62,31 +64,50 @@ export default function SpendingCalendar({
               onClick={() => onSelectDay(d)}
               aria-label={label}
               className={cn(
-                "flex aspect-square flex-col items-center justify-center rounded-lg transition-colors",
-                !d.isFuture && "hover:bg-accent/60",
+                "flex aspect-square flex-col items-center justify-center rounded-[8px] transition-colors duration-base ease-out",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                !d.isFuture && !d.isToday && "hover:brightness-[0.97]",
+                // Future days in the period are an outline, not a fill: nothing
+                // has happened yet, so there's no verdict to tint.
                 d.isFuture
-                  ? "text-muted-foreground/40"
-                  : d.over
-                    ? "bg-destructive/15 text-destructive ring-1 ring-destructive/40"
-                    : budgetsAvailable
-                      ? "bg-success/10 text-success"
-                      : spentSomething
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground",
-                d.isToday && (d.over ? "ring-2 ring-destructive" : "ring-2 ring-primary")
+                  ? "border border-dashed border-hairline-strong text-ink-3"
+                  : // Today is a solid cell — the one filled shape in the grid.
+                    // It keeps its verdict's colour rather than a neutral ink,
+                    // because "today, and already over" is the single most
+                    // useful thing this calendar can tell you.
+                    d.isToday
+                    ? d.over
+                      ? "bg-negative text-white"
+                      : "bg-ink text-surface"
+                    : d.over
+                      ? // The ring is deliberate: over-budget must not be
+                        // signalled by colour alone.
+                        "bg-negative/[0.12] text-negative ring-1 ring-negative/40"
+                      : budgetsAvailable
+                        ? "bg-positive/[0.12] text-positive"
+                        : spentSomething
+                          ? "bg-surface-2 text-ink"
+                          : "bg-surface-2 text-ink-3"
               )}
             >
               {showMonth && (
-                <span className="text-[8px] font-bold uppercase leading-none opacity-70">
+                <span className="text-[8px] font-semibold uppercase leading-none opacity-70">
                   {SHORT_MONTHS[d.monthIdx]}
                 </span>
               )}
-              <span className="text-xs font-semibold leading-none">{d.day}</span>
+              <span
+                className={cn(
+                  "text-[11px] leading-none",
+                  d.isToday ? "font-semibold" : d.isFuture ? "font-normal" : "font-medium"
+                )}
+              >
+                {d.day}
+              </span>
               {!d.isFuture && (
                 <span
                   className={cn(
-                    "mt-0.5 whitespace-nowrap text-[9px] leading-none tabular-nums",
-                    d.over && "font-bold"
+                    "num mt-0.5 whitespace-nowrap text-[9px] leading-none",
+                    d.over && !d.isToday && "font-semibold"
                   )}
                 >
                   {formatMoney(d.amount)}

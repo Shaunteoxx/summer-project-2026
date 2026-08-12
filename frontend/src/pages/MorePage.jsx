@@ -8,7 +8,6 @@ import {
   Moon,
   LogOut,
   ChevronRight,
-  Pencil,
   Check,
   Trash2,
   AlertTriangle,
@@ -26,6 +25,7 @@ import FieldError from "@/components/FieldError";
 import SwitchRow from "@/components/SwitchRow";
 import AccountsSheet from "@/components/AccountsSheet";
 import RecurringSheet from "@/components/RecurringSheet";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,7 +37,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { AVATARS, avatarSrc } from "@/lib/avatars";
-import { formatMoney, monthName, localToday } from "@/lib/utils";
+import { cn, formatMoney, monthName, localToday } from "@/lib/utils";
 import {
   MAX_PERIOD_DAYS,
   MIN_PERIOD_DAYS,
@@ -55,7 +55,7 @@ import {
   updatePeriod,
   deletePeriod,
 } from "@/api/endpoints";
-import { staggerContainer, fadeUp, fadeScaleItem, SHAKE } from "@/animations/variants";
+import { fadeUp, SHAKE } from "@/animations/variants";
 
 const shortcuts = [
   {
@@ -76,7 +76,7 @@ export default function MorePage() {
   const navigate = useNavigate();
   const { user, refresh, logout, clearSession } = useAuth();
   const period = useBudgetPeriod();
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, setTheme } = useTheme();
   const toast = useToast();
   const guard = useDemoGuard();
   const isDays = period.mode === "days";
@@ -384,225 +384,162 @@ export default function MorePage() {
     <PageWrapper>
       {/* Profile header */}
       <motion.div variants={fadeUp} initial="initial" animate="animate">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3.5">
           <button
             onClick={openEdit}
             aria-label="Edit profile"
-            className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <Avatar user={user} className="h-16 w-16" />
+            <Avatar user={user} className="h-[54px] w-[54px]" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-extrabold tracking-tight">
+            <h1 className="truncate text-[19px] font-semibold tracking-[-0.02em]">
               {user?.username ?? "Your account"}
             </h1>
             {user?.email && (
-              <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+              <p className="mt-0.5 truncate text-meta text-ink-3">{user.email}</p>
             )}
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={openEdit}>
-            <Pencil className="h-3.5 w-3.5" /> Edit
+          <Button
+            variant="outline"
+            onClick={openEdit}
+            className="h-8 shrink-0 rounded-sm px-3.5 text-[13px] font-medium"
+          >
+            Edit
           </Button>
         </div>
       </motion.div>
 
-      {/* Shortcuts */}
-      <motion.div
-        variants={staggerContainer(0.08, 0.1)}
-        initial="initial"
-        animate="animate"
-        className="mt-7 space-y-3"
-      >
-        {shortcuts.map(({ to, label, desc, icon: Icon }) => (
-          <motion.button
+      {/* Browse — Stats and Friends are destinations, not settings, but they
+          live behind this tab, so they read as the first list on the page. */}
+      <Section label="Browse">
+        {shortcuts.map(({ to, label, desc, icon }) => (
+          <Row
             key={to}
-            variants={fadeScaleItem}
-            whileTap={{ scale: 0.98 }}
+            icon={icon}
+            title={label}
+            meta={desc}
             onClick={() => navigate(to)}
-            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left shadow-sm transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-              <Icon className="h-5 w-5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-semibold">{label}</span>
-              <span className="block text-sm text-muted-foreground">{desc}</span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-          </motion.button>
+          />
         ))}
-      </motion.div>
+      </Section>
 
-      {/* Budget */}
-      <motion.div variants={fadeUp} initial="initial" animate="animate" className="mt-7">
-        <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Budget
-        </h2>
-        <div className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
-          <button
-            onClick={openPeriod}
-            className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-              <CalendarRange className="h-5 w-5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-semibold">Budget period</span>
-              <span className="block text-sm text-muted-foreground">
-                {!isDays
-                  ? "Calendar month"
-                  : period.current
-                    ? `${period.current.days} days · ${formatPeriodLabel(period.current)}`
-                    : period.status === "lapsed"
-                      ? "Ended — start the next one"
-                      : "Not set up yet"}
-              </span>
-            </span>
-            {isDays && period.status !== "active" && (
-              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+      {/* Budget — each row's current setting sits at the right edge as a
+          tabular figure, so the section reads as a summary you can scan
+          rather than four descriptions you have to parse. */}
+      <Section label="Budget">
+        <Row
+          icon={CalendarRange}
+          title="Budget period"
+          meta={
+            !isDays
+              ? "Resets on the 1st"
+              : period.current
+                ? formatPeriodLabel(period.current)
+                : period.status === "lapsed"
+                  ? "Ended — start the next one"
+                  : "Not set up yet"
+          }
+          value={
+            isDays && period.status !== "active" ? (
+              <span className="shrink-0 rounded-xs bg-surface-2 px-1.5 py-[3px] text-[11px] font-medium text-ink-2">
                 Action needed
               </span>
-            )}
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-          </button>
-
-          <button
-            onClick={() => {
-              if (guard()) return;
-              setAccountsOpen(true);
-            }}
-            className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-              <Wallet className="h-5 w-5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-semibold">Bank accounts</span>
-              <span className="block text-sm text-muted-foreground">
-                {accountCount === 0
-                  ? "Tag where your money comes and goes"
-                  : `${accountCount} account${accountCount === 1 ? "" : "s"}`}
-              </span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-          </button>
-
-          <button
-            onClick={() => {
-              if (guard()) return;
-              setRecurringOpen(true);
-            }}
-            className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-              <Repeat className="h-5 w-5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-semibold">Repeating entries</span>
-              <span className="block text-sm text-muted-foreground">
-                {rules.length === 0
-                  ? "Add rent and subscriptions once"
-                  : liveRules === rules.length
-                    ? `${rules.length} entr${rules.length === 1 ? "y" : "ies"}, added automatically`
-                    : `${liveRules} of ${rules.length} running`}
-              </span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-          </button>
-
-          <button
-            onClick={openSavings}
-            className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-              <PiggyBank className="h-5 w-5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-semibold">Savings target</span>
-              <span className="block text-sm text-muted-foreground">
-                {isDays
-                  ? period.current
-                    ? `${formatPeriodLabel(period.current)}, reserved before your budget`
-                    : "Start a period to set one"
-                  : repeatSavingsOn
-                    ? `${monthName(now.getMonth())}, repeating each month`
-                    : `${monthName(now.getMonth())}, reserved before your budget`}
-              </span>
-            </span>
-            <span className="shrink-0 font-semibold tabular-nums">
-              {formatMoney(currentSavings)}
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-          </button>
-        </div>
-      </motion.div>
+            ) : (
+              <RowValue>
+                {!isDays ? "Monthly" : `${period.current?.days ?? 0} days`}
+              </RowValue>
+            )
+          }
+          onClick={openPeriod}
+        />
+        <Row
+          icon={Wallet}
+          title="Bank accounts"
+          meta="Tag where money comes and goes"
+          value={<RowValue>{accountCount}</RowValue>}
+          onClick={() => {
+            if (guard()) return;
+            setAccountsOpen(true);
+          }}
+        />
+        <Row
+          icon={Repeat}
+          title="Repeating entries"
+          meta={
+            rules.length === 0
+              ? "Add rent and subscriptions once"
+              : liveRules === rules.length
+                ? "Added automatically"
+                : `${liveRules} of ${rules.length} running`
+          }
+          value={<RowValue>{rules.length}</RowValue>}
+          onClick={() => {
+            if (guard()) return;
+            setRecurringOpen(true);
+          }}
+        />
+        <Row
+          icon={PiggyBank}
+          title="Savings target"
+          meta={
+            isDays
+              ? period.current
+                ? `${formatPeriodLabel(period.current)} · reserved first`
+                : "Start a period to set one"
+              : repeatSavingsOn
+                ? `${monthName(now.getMonth())} · repeats monthly`
+                : `${monthName(now.getMonth())} · reserved first`
+          }
+          value={<RowValue strong>{formatMoney(currentSavings)}</RowValue>}
+          onClick={openSavings}
+        />
+      </Section>
 
       {/* Preferences */}
-      <motion.div variants={fadeUp} initial="initial" animate="animate" className="mt-7">
-        <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Preferences
-        </h2>
-        <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
-          <button
-            onClick={toggleTheme}
-            className="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-              {isDark ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-semibold">Appearance</span>
-              <span className="block text-sm text-muted-foreground">
-                {isDark ? "Dark mode" : "Light mode"}
-              </span>
-            </span>
-            <span
-              className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
-                isDark ? "bg-primary" : "bg-muted"
-              }`}
-              aria-hidden="true"
-            >
-              <motion.span
-                layout
-                transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                className={`absolute top-1 h-5 w-5 rounded-full bg-background shadow ${
-                  isDark ? "right-1" : "left-1"
-                }`}
-              />
-            </span>
-          </button>
-        </div>
-      </motion.div>
+      <Section label="Preferences">
+        <Row
+          icon={isDark ? Moon : Sun}
+          title="Appearance"
+          meta={isDark ? "Dark mode" : "Light mode"}
+          chevron={false}
+          value={
+            <Segmented
+              label="Appearance"
+              options={[
+                { value: "light", label: "Light" },
+                { value: "dark", label: "Dark" },
+              ]}
+              value={isDark ? "dark" : "light"}
+              onChange={setTheme}
+            />
+          }
+        />
+      </Section>
 
       {/* Account */}
-      <motion.div variants={fadeUp} initial="initial" animate="animate" className="mt-7">
-        <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Account
-        </h2>
-        <div className="space-y-3">
-          <button
-            onClick={logout}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-border/70 bg-card p-4 font-semibold transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            <LogOut className="h-5 w-5" />
-            Log out
-          </button>
-          <button
-            onClick={() => {
-              if (guard()) return;
-              setDeleteOpen(true);
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4 font-semibold text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            <Trash2 className="h-5 w-5" />
-            Delete account
-          </button>
-        </div>
-      </motion.div>
+      <Section label="Account">
+        <Row icon={LogOut} title="Log out" chevron={false} onClick={logout} />
+      </Section>
 
-      <p className="mt-6 text-center text-xs text-muted-foreground">
-        Broke No More · Avatars by Twemoji (CC-BY 4.0)
-      </p>
+      {/* Deleting your account is a real action but not a common one. As a
+          full-width red button it had the same visual weight as Log out and
+          more than anything above it; as a text link it stays reachable
+          without shouting. The confirmation sheet is unchanged. */}
+      <div className="mt-[30px] text-center">
+        <button
+          onClick={() => {
+            if (guard()) return;
+            setDeleteOpen(true);
+          }}
+          className="rounded-sm px-2.5 py-1.5 text-[13px] font-medium text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
+        >
+          Delete account
+        </button>
+        <p className="mt-4 text-[11.5px] leading-relaxed text-ink-3">
+          Broke No More · Avatars by Twemoji (CC-BY 4.0)
+        </p>
+      </div>
 
       {/* Edit profile sheet */}
       <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} title="Edit profile">
@@ -640,7 +577,7 @@ export default function MorePage() {
           <motion.div animate={nameShake} className="space-y-2">
             <Label
               htmlFor="display-name"
-              className={nameError ? "text-destructive" : undefined}
+              className={nameError ? "text-negative" : undefined}
             >
               Display name
             </Label>
@@ -653,7 +590,7 @@ export default function MorePage() {
               aria-describedby={nameError ? "display-name-error" : undefined}
               className={
                 nameError
-                  ? "border-destructive focus-visible:ring-destructive"
+                  ? "border-negative focus-visible:border-negative focus-visible:ring-negative"
                   : undefined
               }
               onChange={(e) => {
@@ -664,7 +601,7 @@ export default function MorePage() {
             {nameError ? (
               <FieldError id="display-name-error">{nameError}</FieldError>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[12px] leading-relaxed text-ink-3">
                 3–20 letters, numbers or underscores. Friends find you by this.
               </p>
             )}
@@ -697,7 +634,7 @@ export default function MorePage() {
           {/* Month stepper — days mode edits the running period instead, so
               there's nothing to step through. */}
           <div
-            className={`flex items-center justify-between rounded-xl border border-border bg-muted/40 p-1 ${
+            className={`flex items-center justify-between rounded-md bg-surface-2 p-1 ${
               isDays ? "hidden" : ""
             }`}
           >
@@ -705,18 +642,18 @@ export default function MorePage() {
               type="button"
               onClick={() => stepSavingsMonth(-1)}
               aria-label="Previous month"
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <span className="font-semibold tabular-nums">
+            <span className="num text-[15px] font-semibold">
               {monthName(savingsMonth)} {savingsYear}
             </span>
             <button
               type="button"
               onClick={() => stepSavingsMonth(1)}
               aria-label="Next month"
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
@@ -725,7 +662,7 @@ export default function MorePage() {
           <motion.div animate={savingsShake} className="space-y-2">
             <Label
               htmlFor="monthly-savings"
-              className={savingsError ? "text-destructive" : undefined}
+              className={savingsError ? "text-negative" : undefined}
             >
               Amount to set aside in{" "}
               {isDays ? formatPeriodLabel(period.current) : monthName(savingsMonth)}
@@ -742,7 +679,7 @@ export default function MorePage() {
               aria-describedby={savingsError ? "monthly-savings-error" : undefined}
               className={
                 savingsError
-                  ? "border-destructive focus-visible:ring-destructive"
+                  ? "border-negative focus-visible:border-negative focus-visible:ring-negative"
                   : undefined
               }
               onChange={(e) => {
@@ -753,7 +690,7 @@ export default function MorePage() {
             {savingsError ? (
               <FieldError id="monthly-savings-error">{savingsError}</FieldError>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[12px] leading-relaxed text-ink-3">
                 Reserved from this {isDays ? "period" : "month"}'s income first —
                 your daily budget is what's left, spread over the days remaining.
               </p>
@@ -788,7 +725,7 @@ export default function MorePage() {
         <motion.div animate={periodShake} className="space-y-5">
           {/* Mode toggle */}
           <div
-            className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1"
+            className="grid grid-cols-2 gap-0.5 rounded-md bg-surface-2 p-[3px]"
             role="group"
             aria-label="Budget period mode"
           >
@@ -809,7 +746,7 @@ export default function MorePage() {
           </div>
 
           {!isDays ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[13px] leading-relaxed text-ink-3">
               Your budget runs from the 1st to the last day of each calendar
               month, and your daily budget is what's left spread over the days
               remaining. Switch to <strong>Days</strong> if your allowance covers
@@ -819,14 +756,14 @@ export default function MorePage() {
             <>
               {period.current ? (
                 <div className="space-y-4">
-                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
-                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  <div className="rounded-lg border border-hairline bg-surface-2 p-4">
+                    <p className="text-overline text-ink-3 t-muted-foreground">
                       Running now
                     </p>
                     <p className="mt-1 font-semibold">
                       {formatPeriodLabel(period.current)}
                     </p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
+                    <p className="mt-0.5 text-[13px] text-ink-3">
                       {period.current.days} days ·{" "}
                       {period.current.daysLeft === 0
                         ? "ends today"
@@ -864,7 +801,7 @@ export default function MorePage() {
                         setPeriodError("");
                       }}
                     />
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-[12px] leading-relaxed text-ink-3">
                       Runs to{" "}
                       <strong>
                         {periodStart && Number(periodLength) >= MIN_PERIOD_DAYS
@@ -891,7 +828,7 @@ export default function MorePage() {
                       started by mistake. */}
                   {confirmDeleteId === period.current.id ? (
                     <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-[12px] leading-relaxed text-ink-3">
                         Remove <strong>{formatPeriodLabel(period.current)}</strong>?
                         Its days stop being budgeted and drop out of your streak.
                         <strong> Your transactions are kept</strong> and still
@@ -922,7 +859,7 @@ export default function MorePage() {
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteId(period.current.id)}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-sm py-2 text-[12px] font-semibold text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
                     >
                       <Trash2 className="h-3.5 w-3.5" /> Remove this period
                     </button>
@@ -931,8 +868,8 @@ export default function MorePage() {
               ) : (
                 <div className="space-y-4">
                   {period.status === "lapsed" && period.previous && (
-                    <div className="rounded-xl border border-border bg-muted/40 p-4">
-                      <p className="text-sm text-muted-foreground">
+                    <div className="rounded-lg border border-hairline bg-surface-2 p-4">
+                      <p className="text-[13px] leading-relaxed text-ink-3">
                         Your last period ran{" "}
                         <strong className="text-foreground">
                           {formatPeriodLabel(period.previous)}
@@ -982,8 +919,8 @@ export default function MorePage() {
                           }}
                           className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                             Number(periodLength) === n
-                              ? "border-primary bg-primary/10 text-primary"
-                              : "border-border text-muted-foreground hover:bg-accent"
+                              ? "border-transparent bg-ink text-surface"
+                              : "border-hairline-strong text-ink-2 hover:bg-surface-2"
                           }`}
                         >
                           {n} days
@@ -991,7 +928,7 @@ export default function MorePage() {
                       ))}
                     </div>
                     {periodStart && Number(periodLength) >= MIN_PERIOD_DAYS && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-[12px] leading-relaxed text-ink-3">
                         Runs until{" "}
                         <strong>
                           {formatDay(periodEnd(periodStart, Number(periodLength)), {
@@ -1033,8 +970,8 @@ export default function MorePage() {
               )}
 
               {pastPeriods.length > 0 && (
-                <div className="space-y-2 border-t border-border/60 pt-4">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="space-y-2 border-t border-hairline pt-4">
+                  <p className="text-overline text-ink-3">
                     Past periods
                   </p>
                   <ul className="space-y-1.5">
@@ -1042,7 +979,7 @@ export default function MorePage() {
                       <li key={p.id}>
                         {confirmDeleteId === p.id ? (
                           <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2.5">
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-[12px] leading-relaxed text-ink-3">
                               Remove <strong>{formatPeriodLabel(p)}</strong>? Its
                               days stop being budgeted.{" "}
                               <strong>Transactions are kept.</strong>
@@ -1073,7 +1010,7 @@ export default function MorePage() {
                             <span className="min-w-0 flex-1 truncate">
                               {formatPeriodLabel(p)}
                             </span>
-                            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                            <span className="num shrink-0 text-[12px] text-ink-3">
                               {p.days} days
                               {p.savings > 0 ? ` · ${formatMoney(p.savings)}` : ""}
                             </span>
@@ -1081,7 +1018,7 @@ export default function MorePage() {
                               type="button"
                               onClick={() => setConfirmDeleteId(p.id)}
                               aria-label={`Remove ${formatPeriodLabel(p)}`}
-                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -1105,8 +1042,8 @@ export default function MorePage() {
       >
         <div className="space-y-5">
           <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
-            <p className="text-sm text-muted-foreground">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-negative" />
+            <p className="text-[13px] leading-relaxed text-ink-3">
               This permanently deletes your account, all your transactions and
               your savings history. This <strong>cannot be undone.</strong>
             </p>
@@ -1144,13 +1081,123 @@ function ModeTab({ active, disabled, onClick, label, hint }) {
       aria-pressed={active}
       className={`rounded-lg px-3 py-2 text-center transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         active
-          ? "bg-card font-semibold shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
+          ? "bg-surface font-semibold text-ink shadow-card dark:bg-surface-3"
+          : "text-ink-3 hover:text-ink-2"
       }`}
     >
       <span className="block text-sm">{label}</span>
-      <span className="block text-[11px] text-muted-foreground">{hint}</span>
+      <span className="block text-[11px] text-ink-3">{hint}</span>
     </button>
+  );
+}
+
+/* ── Settings list primitives ───────────────────────────────────────────
+   A labelled group of rows in one card, which is what the whole page is now.
+   Rows are separated by a hairline rather than each being its own card — the
+   old version gave every setting a card, so nothing on the page was quieter
+   than anything else.                                                      */
+
+export function Section({ label, children }) {
+  return (
+    <motion.section
+      variants={fadeUp}
+      initial="initial"
+      animate="animate"
+      className="mt-6"
+    >
+      <h2 className="mb-2.5 px-0.5 text-overline text-ink-3">{label}</h2>
+      <Card className="overflow-hidden [&>*+*]:border-t [&>*+*]:border-hairline">
+        {children}
+      </Card>
+    </motion.section>
+  );
+}
+
+/**
+ * One settings row: a 34px tile, a title with optional meta line, an optional
+ * right-edge value, and a chevron when the row leads somewhere.
+ *
+ * Renders as a button only when it does something — a static row shouldn't be
+ * in the tab order or announce itself as clickable.
+ */
+export function Row({ icon: Icon, title, meta, value, onClick, chevron = true }) {
+  const Tag = onClick ? "button" : "div";
+
+  return (
+    <Tag
+      {...(onClick ? { onClick, type: "button" } : {})}
+      className={cn(
+        "flex w-full items-center gap-3 px-4 py-[13px] text-left",
+        onClick &&
+          "transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      )}
+    >
+      <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-sm bg-surface-2 text-ink-2">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-medium tracking-[-0.01em]">
+          {title}
+        </span>
+        {meta && (
+          <span className="mt-0.5 block truncate text-meta text-ink-3">{meta}</span>
+        )}
+      </span>
+      {value}
+      {chevron && onClick && (
+        <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" />
+      )}
+    </Tag>
+  );
+}
+
+/** The current setting, right-aligned in tabular figures. */
+export function RowValue({ children, strong }) {
+  return (
+    <span
+      className={cn(
+        "num shrink-0",
+        strong ? "text-[14px] font-semibold text-ink" : "text-[13px] font-medium text-ink-2"
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Segmented control. Replaces the theme toggle switch: a switch implies
+ * on/off, but light and dark are two peers — and the labels say which is
+ * which without the user having to work out what "on" meant.
+ */
+export function Segmented({ label, options, value, onChange, className }) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className={cn("flex shrink-0 gap-0.5 rounded-md bg-surface-2 p-[3px]", className)}
+    >
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(o.value)}
+            className={cn(
+              "rounded-[9px] px-3.5 py-1.5 text-[13px] transition-colors duration-base ease-out",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              on
+                ? "bg-surface font-semibold text-ink shadow-card dark:bg-surface-3"
+                : "font-medium text-ink-3"
+            )}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1161,19 +1208,19 @@ function AvatarTile({ selected, label, onClick, children }) {
       onClick={onClick}
       whileTap={{ scale: 0.9 }}
       aria-pressed={selected}
-      className={`relative flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-xl border p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
+      className={`relative flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-sm border p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
         selected
-          ? "border-primary bg-primary/10"
-          : "border-border hover:bg-accent/50"
+          ? "border-ink bg-ink/[0.06]"
+          : "border-hairline-strong hover:bg-surface-2"
       }`}
     >
       {selected && (
-        <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+        <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-ink text-surface">
           <Check className="h-3 w-3" strokeWidth={3} />
         </span>
       )}
       {children}
-      <span className="text-[11px] font-medium leading-tight text-muted-foreground">
+      <span className="text-[11px] font-medium leading-tight text-ink-3">
         {label}
       </span>
     </motion.button>

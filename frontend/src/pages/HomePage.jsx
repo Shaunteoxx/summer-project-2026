@@ -1,69 +1,46 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import {
-  Calculator,
-  PieChart,
-  Receipt,
-  PiggyBank,
-  TrendingUp,
-  ArrowRight,
-  CalendarDays,
-  BarChart3,
-  AlertTriangle,
-} from "lucide-react";
+import { AlertTriangle, ChevronRight } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import StreakCard from "@/components/StreakCard";
-import AccountsCard from "@/components/AccountsCard";
+import CategoryIcon from "@/components/CategoryIcon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchHomeStats } from "@/api/endpoints";
+import { fetchHomeStats, fetchTransactions } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
+import { useCategories } from "@/hooks/useCategories";
 import { formatMoney, localToday } from "@/lib/utils";
-import { formatPeriodLabel } from "@/lib/period";
-import { staggerContainer, fadeUp, fadeScaleItem } from "@/animations/variants";
+import { formatDay } from "@/lib/period";
+import { fadeUp } from "@/animations/variants";
 
-const quickActions = [
-  {
-    to: "/transactions",
-    label: "Add transaction",
-    desc: "Log income or an expense",
-    icon: Receipt,
-  },
-  {
-    to: "/tracker",
-    label: "This period",
-    desc: "Saved vs spent",
-    icon: PieChart,
-  },
-  {
-    to: "/calculator",
-    label: "Daily budget",
-    desc: "What can I spend today?",
-    icon: Calculator,
-  },
-  {
-    to: "/stats",
-    label: "See all months",
-    desc: "Savings vs spending history",
-    icon: BarChart3,
-  },
-];
+/** How many recent entries the home list shows. */
+const RECENT_COUNT = 4;
 
 export default function HomePage() {
   const navigate = useNavigate();
   const toast = useToast();
   const period = useBudgetPeriod();
+  const { getCategory } = useCategories();
   const [stats, setStats] = useState(null);
+  const [recent, setRecent] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchHomeStats(localToday())
-      .then(setStats)
+    Promise.all([
+      fetchHomeStats(localToday()),
+      // The list endpoint sorts newest-first and takes no limit, so slice
+      // client-side. A failure here costs the Recent block, not the page.
+      fetchTransactions().catch(() => []),
+    ])
+      .then(([s, txns]) => {
+        setStats(s);
+        setRecent(Array.isArray(txns) ? txns.slice(0, RECENT_COUNT) : []);
+      })
       .catch(() => {
         setStats(null);
         toast.error("Couldn't load your stats. Please try again.");
@@ -78,142 +55,160 @@ export default function HomePage() {
   const noPeriod = !activePeriod;
   const daysLeft = activePeriod?.daysLeft ?? 0;
   const noun = period.noun;
-  // Negative "left to spend" means the period's income minus its savings target
-  // is already gone — call it out rather than showing a quiet red number.
   const overspent = (stats?.leftToSpend ?? 0) < 0;
+
+  // The pace bar. Fill is how much of the period's budget has gone; the tick is
+  // where you'd be if you spent evenly. Ahead of the tick is trouble, behind it
+  // is fine — both numbers already exist, they were just never compared.
+  const budget = Math.max((stats?.periodIncome ?? 0) - (stats?.periodSavings ?? 0), 0);
+  const spent = stats?.periodExpenses ?? 0;
+  const spentPct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+  const totalDays = activePeriod?.days ?? 0;
+  const elapsedPct =
+    totalDays > 0 ? Math.min(((totalDays - daysLeft) / totalDays) * 100, 100) : 0;
+  const aheadOfPace = spentPct <= elapsedPct;
 
   return (
     <PageWrapper>
-      {/* Greeting */}
+      {/* Greeting — left, with the full date. The hero below is centred; these
+          are two zones on purpose, not one broken column. */}
       <motion.div variants={fadeUp} initial="initial" animate="animate">
-        <p className="text-sm font-medium text-primary">
-          {activePeriod
-            ? formatPeriodLabel(activePeriod, { mode: period.mode })
-            : "No budget period running"}
-        </p>
         {loading ? (
-          <Skeleton className="mt-1.5 h-8 w-56" />
+          <Skeleton className="h-[17px] w-56" />
         ) : (
-          <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight">
+          <h1 className="text-title">
             Welcome back{stats ? `, ${stats.username}` : ""}
           </h1>
         )}
+        <p className="mt-1 text-[13px] text-ink-3">
+          {formatDay(localToday(), { withYear: true })}
+          {activePeriod ? ` · ${daysLeft} ${daysLeft === 1 ? "day" : "days"} left` : ""}
+        </p>
       </motion.div>
 
-      {/* Hero: left to spend */}
+      {/* Hero */}
       <motion.div
         variants={fadeUp}
         initial="initial"
         animate="animate"
-        className="mt-5"
+        className="mt-[34px]"
       >
-        <Card className="relative overflow-hidden border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card">
-          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-primary/20 blur-3xl" />
-          <CardContent className="relative p-6">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-muted-foreground">
-                {noPeriod ? "Nothing budgeted right now" : `Left to spend this ${noun}`}
+        {!loading && noPeriod ? (
+          <div className="text-center">
+            <p className="text-sm text-ink-2">
+              {period.status === "lapsed"
+                ? "Your last budget period has ended."
+                : "No budget period running yet."}
+            </p>
+            <Button className="mt-4 w-full" onClick={() => navigate("/more")}>
+              {period.status === "lapsed" ? "Start next period" : "Set up a period"}
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="text-center">
+              <p className="text-overline text-ink-3">
+                {overspent ? "Over budget" : `Left to spend this ${noun}`}
               </p>
-              {!noPeriod && (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  {daysLeft} {daysLeft === 1 ? "day" : "days"} left
-                </span>
-              )}
-            </div>
-            {!loading && noPeriod ? (
-              <>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {period.status === "lapsed"
-                    ? "Your last budget period has ended. Start the next one to get your daily budget back."
-                    : "Set up a budget period to start tracking a daily budget."}
-                </p>
-                <Button className="mt-4 w-full" onClick={() => navigate("/more")}>
-                  {period.status === "lapsed" ? "Start next period" : "Set up a period"}
-                </Button>
-              </>
-            ) : loading ? (
-              <>
-                <Skeleton className="mt-2 h-12 w-48" />
-                <Skeleton className="mt-4 h-5 w-44" />
-              </>
-            ) : (
-              <>
+              {loading ? (
+                <Skeleton className="mx-auto mt-2 h-[46px] w-44" />
+              ) : (
                 <p
-                  className={`mt-1 text-[2.75rem] font-extrabold leading-tight tracking-tight ${
-                    overspent ? "text-destructive" : "text-foreground"
+                  className={`num-display mt-2 text-display ${
+                    overspent ? "text-negative" : "text-ink"
                   }`}
                 >
                   <AnimatedNumber
-                    value={stats?.leftToSpend ?? 0}
-                    prefix="$"
+                    value={Math.abs(stats?.leftToSpend ?? 0)}
+                    prefix={overspent ? "−$" : "$"}
                     decimals={2}
                   />
                 </p>
-                {overspent && (
-                  <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-destructive">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                    {formatMoney(Math.abs(stats.leftToSpend))} past this {noun}&apos;s
-                    budget — no daily budget until more income lands.
-                  </p>
-                )}
-                <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                  <span className="flex items-center gap-1.5 text-success">
-                    <TrendingUp className="h-4 w-4" />
-                    <AnimatedNumber
-                      value={stats?.periodIncome ?? 0}
-                      prefix="$"
-                      decimals={2}
-                    />
-                    <span className="text-muted-foreground">in</span>
-                  </span>
-                  <span className="flex items-center gap-1.5 text-destructive">
-                    <Receipt className="h-4 w-4" />
-                    <AnimatedNumber
-                      value={stats?.periodExpenses ?? 0}
-                      prefix="$"
-                      decimals={2}
-                    />
-                    <span className="text-muted-foreground">out</span>
-                  </span>
-                  {stats?.periodSavings > 0 && (
-                    <span className="flex items-center gap-1.5 text-primary">
-                      <PiggyBank className="h-4 w-4" />
-                      <AnimatedNumber
-                        value={stats?.periodSavings ?? 0}
-                        prefix="$"
-                        decimals={2}
-                      />
-                      <span className="text-muted-foreground">saved</span>
-                    </span>
-                  )}
-                </div>
-              </>
+              )}
+            </div>
+
+            {/* Pace bar — full width on purpose: the gap between fill and tick
+                is the signal, and it stops being readable on a short bar. */}
+            <div className="relative mt-[22px] h-1 rounded-full bg-surface-3">
+              <div
+                className={`h-full rounded-full ${
+                  overspent ? "bg-negative" : "bg-ink"
+                }`}
+                style={{ width: `${overspent ? 100 : spentPct}%` }}
+              />
+              {totalDays > 0 && (
+                <span
+                  className="absolute -top-1 h-3 w-[1.5px] rounded-full bg-ink-3"
+                  style={{ left: `${elapsedPct}%` }}
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+            {!loading && (
+              <div className="mt-2 flex justify-between text-xs text-ink-3">
+                <span>
+                  <b className="font-medium text-ink-2">{formatMoney(spent)}</b> of{" "}
+                  {formatMoney(budget)} used
+                </span>
+                <span
+                  className={`font-medium ${
+                    overspent
+                      ? "text-negative"
+                      : aheadOfPace
+                        ? "text-positive"
+                        : "text-warning"
+                  }`}
+                >
+                  {overspent
+                    ? `${formatMoney(Math.abs(stats.leftToSpend))} past`
+                    : aheadOfPace
+                      ? "Ahead of pace"
+                      : "Behind pace"}
+                </span>
+              </div>
             )}
-          </CardContent>
-        </Card>
+
+            {overspent && (
+              <div className="mt-[18px] flex items-start gap-2.5 rounded-md bg-negative/[0.08] p-3.5">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-negative" />
+                <p className="text-[12.5px] leading-relaxed text-ink-2">
+                  You&apos;re{" "}
+                  <b className="font-semibold text-negative">
+                    {formatMoney(Math.abs(stats.leftToSpend))}
+                  </b>{" "}
+                  past this {noun}&apos;s budget. No daily budget until more income
+                  lands — or lower this {noun}&apos;s savings target.
+                </p>
+              </div>
+            )}
+          </>
+        )}
       </motion.div>
 
-      {/* Where this period's money physically sits. Hides itself entirely
-          until the user has made an account. */}
-      <div className="mt-4">
-        <AccountsCard />
-      </div>
+      {/* In / Out / Saved — a hairline strip, not three more cards */}
+      {!noPeriod && (
+        <div className="mt-[20px] flex border-y border-hairline text-center ">
+          <StripCell label="In" value={stats?.periodIncome} loading={loading} accent />
+          <span className="my-3 w-px bg-hairline" />
+          <StripCell label="Out" value={stats?.periodExpenses} loading={loading} inset />
+          <span className="my-3 w-px bg-hairline" />
+          <StripCell label="Saved" value={stats?.periodSavings} loading={loading} inset />
+        </div>
+      )}
 
-      {/* Streak */}
+      {/* Today's budget + streak */}
       <div className="mt-4">
         <StreakCard />
       </div>
 
-      {/* Secondary stats */}
+      {/* Totals */}
       <motion.div
-        variants={staggerContainer(0.1, 0.2)}
+        variants={fadeUp}
         initial="initial"
         animate="animate"
-        className="mt-4 grid grid-cols-2 gap-3"
+        className="mt-3 grid grid-cols-2 gap-2.5"
       >
         <StatCard
-          icon={PiggyBank}
           label="Total saved"
           value={stats?.totalSavings ?? 0}
           prefix="$"
@@ -221,73 +216,140 @@ export default function HomePage() {
           loading={loading}
         />
         <StatCard
-          icon={TrendingUp}
           label={`Saved this ${noun}`}
           value={stats?.percentageSaved ?? 0}
           suffix="%"
           decimals={0}
           loading={loading}
+          accent
         />
       </motion.div>
 
-      {/* Quick actions */}
-      <motion.div
-        variants={staggerContainer(0.08, 0.35)}
-        initial="initial"
-        animate="animate"
-        className="mt-8"
-      >
-        <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Quick actions
-        </h2>
-        <div className="space-y-3">
-          {quickActions.map(({ to, label, desc, icon: Icon }) => (
-            <motion.button
-              key={to}
-              variants={fadeScaleItem}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => navigate(to)}
-              className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left shadow-sm transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      {/* Recent — replaces the old Quick actions block, three of whose four
+          links went to tabs already one tap away. "What did I just spend" is
+          the actual reason people open a manual tracker. */}
+      <section className="mt-4">
+        <header className="mb-2.5 flex items-baseline justify-between">
+          <h2 className="text-overline text-ink-3">Recent</h2>
+          <button
+            onClick={() => navigate("/transactions")}
+            className="rounded-sm text-[12.5px] font-medium text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            See all
+          </button>
+        </header>
+
+        {loading ? (
+          <div className="-mx-4 border-y border-hairline bg-surface">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 px-4 py-3.5 [&+&]:border-t [&+&]:border-hairline"
+              >
+                <Skeleton className="h-[34px] w-[34px] rounded-sm" />
+                <div className="flex-1">
+                  <Skeleton className="h-[11px] w-1/2" />
+                  <Skeleton className="mt-2 h-[9px] w-2/3" />
+                </div>
+                <Skeleton className="h-3 w-14" />
+              </div>
+            ))}
+          </div>
+        ) : recent.length === 0 ? (
+          <div className="rounded-lg border border-hairline bg-surface p-5 text-center">
+            <p className="text-sm text-ink-2">Nothing logged yet.</p>
+            <Button
+              variant="ghost"
+              className="mt-3"
+              onClick={() => navigate("/transactions", { state: { openAdd: "expense" } })}
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-                <Icon className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-semibold">{label}</span>
-                <span className="block text-sm text-muted-foreground">{desc}</span>
-              </span>
-              <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </motion.button>
-          ))}
-        </div>
-      </motion.div>
+              Add your first entry
+            </Button>
+          </div>
+        ) : (
+          <ul className="-mx-4 border-y border-hairline bg-surface">
+            {recent.map((t) => {
+              const income = t.type === "income";
+              const category = getCategory(t.category);
+              return (
+                <li key={t._id ?? t.id} className="border-t border-hairline first:border-t-0">
+                  <button
+                    onClick={() => navigate("/transactions")}
+                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    <CategoryIcon category={category} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[15px] font-medium tracking-tight">
+                        {t.description || t.category}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[12.5px] text-ink-3">
+                        {formatDay(t.date)} · {t.category}
+                      </span>
+                    </span>
+                    {/* Expenses are ink, not red. Spending is the normal case in
+                        a spending tracker; red has to still mean "over". */}
+                    <span
+                      className={`num shrink-0 text-[15px] font-medium ${
+                        income ? "text-positive" : "text-ink"
+                      }`}
+                    >
+                      {income ? "+" : "−"}
+                      {formatMoney(t.amount)}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
     </PageWrapper>
   );
 }
 
-function StatCard({ icon: Icon, label, value, prefix, suffix, decimals, loading }) {
+function StripCell({ label, value, loading, accent }) {
   return (
-    <motion.div variants={fadeScaleItem}>
-      <Card className="h-full">
-        <CardContent className="flex flex-col gap-2 p-4">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-            <Icon className="h-[18px] w-[18px]" />
-          </span>
-          {loading ? (
-            <Skeleton className="mt-1 h-8 w-24" />
-          ) : (
-            <div className="mt-1 text-2xl font-extrabold tracking-tight">
-              <AnimatedNumber
-                value={value}
-                prefix={prefix}
-                suffix={suffix}
-                decimals={decimals}
-              />
-            </div>
-          )}
-          <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        </CardContent>
-      </Card>
-    </motion.div>
+    <div className={`flex-1 py-2`}>
+      <p className="text-[10.5px] font-medium uppercase tracking-[0.07em] text-ink-3">
+        {label}
+      </p>
+      {loading ? (
+        <Skeleton className="mt-2 h-3.5 w-20" />
+      ) : (
+        <p
+          className={`num mt-1 text-[17px] font-medium ${
+            accent ? "text-positive" : "text-ink"
+          }`}
+        >
+          <AnimatedNumber value={value ?? 0} prefix="$" decimals={2} />
+        </p>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ label, value, prefix, suffix, decimals, loading, accent }) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <p className="text-[12.5px] text-ink-3">{label}</p>
+        {loading ? (
+          <Skeleton className="mt-2 h-[19px] w-24" />
+        ) : (
+          <p
+            className={`num mt-1.5 text-[22px] font-medium ${
+              accent ? "text-positive" : "text-ink"
+            }`}
+          >
+            <AnimatedNumber
+              value={value}
+              prefix={prefix}
+              suffix={suffix}
+              decimals={decimals}
+            />
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

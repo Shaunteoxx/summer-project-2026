@@ -1,5 +1,36 @@
 import { clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+/**
+ * tailwind-merge has to be told about the custom type scale in
+ * tailwind.config.js, because it cannot tell a font size named `caption` from a
+ * colour named `caption`. Left to guess, it reads `text-caption text-ink-2` as
+ * two classes fighting over the same property and drops the first — so every
+ * <Label> rendered at the inherited 16px instead of 13px, and every
+ * <CardDescription> at 16px instead of 12.5px, with the token nowhere in the
+ * DOM to explain why. Any `text-*` size token added to tailwind.config.js has
+ * to be listed here too.
+ */
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [
+        {
+          text: [
+            "overline",
+            "meta",
+            "caption",
+            "body",
+            "amount",
+            "title",
+            "title-lg",
+            "display",
+          ],
+        },
+      ],
+    },
+  },
+});
 
 export function cn(...inputs) {
   return twMerge(clsx(inputs));

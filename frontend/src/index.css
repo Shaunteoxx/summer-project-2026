@@ -1,85 +1,141 @@
-/* Inter is loaded from index.html with preconnect (faster than a CSS @import chain). */
+/* Geist + Geist Mono are loaded from index.html with preconnect. */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+   Design tokens — the "quiet premium" system.
+
+   Two naming layers on purpose:
+     · the semantic names (--ink, --surface, --positive) are what new code uses
+     · the shadcn names (--background, --card, --primary) are aliases onto them
+   The aliases mean every existing `bg-card` / `text-muted-foreground` in the
+   app picks up the new palette without being touched. Note --primary is now
+   INK, not green: that single alias is what stops green being decoration and
+   frees it to mean money.
+   ==========================================================================*/
+
 @layer base {
-  /* ── Light theme ──────────────────────────────────────── */
   :root {
-    --background: 150 30% 98%;
-    --foreground: 160 32% 12%;
+    /* ── Surfaces ──────────────────────────────────────────────────────────
+       Warm near-white canvas, pure-white cards. No gradient wash — the
+       3-step surface ramp creates depth, not shadows.                      */
+    --canvas: 60 20% 98%;         /* #FBFBF9 */
+    --surface: 0 0% 100%;         /* #FFFFFF */
+    --surface-2: 60 11% 95%;      /* #F3F3F0  inputs, chips, wells         */
+    --surface-3: 60 9% 91%;       /* #EAEAE6  pressed state                */
 
-    --card: 0 0% 100%;
-    --card-foreground: 160 32% 12%;
+    /* ── Hairlines — borders do the work shadows used to ──────────────── */
+    --hairline: 60 9% 90%;        /* #E7E7E2 */
+    --hairline-strong: 60 7% 84%; /* #D8D8D2 */
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 160 32% 12%;
+    /* ── Ink ───────────────────────────────────────────────────────────────
+       Darker than a typical quiet-premium grey ramp, deliberately. ink-3
+       carries dates, categories and account names at 12.5px — body copy,
+       which owes WCAG AA. A prettier #9B9FA3 measures 2.66:1 on white and
+       fails outright. Worst pair here (ink-3 on surface-2) is 4.55:1.     */
+    --ink: 220 6% 10%;            /* #17181A  17.8:1 */
+    --ink-2: 213 5% 35%;          /* #55595E   7.1:1 */
+    --ink-3: 213 4% 44%;          /* #6B6F74   5.1:1 */
 
-    --primary: 152 56% 38%;
-    --primary-foreground: 0 0% 100%;
+    /* ── Semantics ─────────────────────────────────────────────────────────
+       ONE green: money arriving or money kept. Never "brand".
+       Red means over budget. It does NOT mean "this is an expense".       */
+    --positive: 160 78% 27%;      /* #0F7A56  5.3:1 */
+    --negative: 4 62% 44%;        /* #B4342A  6.1:1 */
+    --warning: 32 89% 30%;        /* #8F5008  6.3:1 */
 
-    --secondary: 150 25% 94%;
-    --secondary-foreground: 160 30% 18%;
+    /* ── Category / data palette ───────────────────────────────────────────
+       Generated in OKLCH at fixed L and C so all eight are PERCEPTUALLY
+       matched — HSL lightness is not perceptual, which is why the old
+       hand-picked palette read as a paint spill. Contrast against white
+       spans 3.57–3.90 (spread 0.33); the old set spanned 1.31.
+       Hues 150–185 are skipped: that band belongs to --positive.          */
+    --cat-food: 10 55% 55%;                              /* #CC624E  oklch(.620 0.140 32) */
+    --cat-transport: 36 85% 39%;                         /* #B9740F  oklch(.620 0.132 68) */
+    --cat-shopping: 90 49% 40%;                          /* #659734  oklch(.620 0.140 132) */
+    --cat-entertainment: 177 78% 34%;                     /* #139A94  oklch(.620 0.104 190) */
+    --cat-travel: 199 84% 44%;                            /* #1290CC  oklch(.620 0.133 238) */
+    --cat-allowance: 241 54% 66%;                         /* #7A79D7  oklch(.620 0.140 282) */
+    --cat-job: 286 39% 57%;                               /* #A968BC  oklch(.620 0.140 318) */
+    --cat-gifts: 331 46% 57%;                             /* #C45F8F  oklch(.620 0.140 352) */
 
-    --muted: 150 20% 95%;
-    --muted-foreground: 155 10% 40%;
+    /* ── Chart ink ─────────────────────────────────────────────────────────
+       Axis labels are 10.5px TEXT, so they take ink-3 and inherit its AA
+       rating. Only grid and neutral may go lighter — neither carries
+       information on its own.                                             */
+    --chart-axis: 213 4% 44%;
+    --chart-grid: 60 9% 90%;
+    --chart-neutral: 60 5% 78%;   /* the "spent" arc / bar */
 
-    --accent: 152 45% 92%;
-    --accent-foreground: 160 40% 18%;
+    /* ── Elevation — two shadows in the whole system. Cards are flat. ─── */
+    --shadow-card: 0 1px 2px hsl(210 11% 7% / 0.04);
+    --shadow-float: 0 16px 40px -12px hsl(210 11% 7% / 0.20),
+                    0 2px 8px hsl(210 11% 7% / 0.06);
 
-    --success: 152 56% 36%;
+    /* ── shadcn aliases ─────────────────────────────────────────────────── */
+    --background: var(--canvas);
+    --foreground: var(--ink);
+    --card: var(--surface);
+    --card-foreground: var(--ink);
+    --popover: var(--surface);
+    --popover-foreground: var(--ink);
+    --primary: var(--ink);              /* ← neutral, not green */
+    --primary-foreground: var(--surface);
+    --secondary: var(--surface-2);
+    --secondary-foreground: var(--ink);
+    --muted: var(--surface-2);
+    --muted-foreground: var(--ink-3);
+    --accent: var(--surface-2);
+    --accent-foreground: var(--ink);
+    --success: var(--positive);
     --success-foreground: 0 0% 100%;
-
-    --destructive: 352 70% 50%;
+    --destructive: var(--negative);
     --destructive-foreground: 0 0% 100%;
-
-    --border: 150 18% 88%;
-    --input: 150 18% 88%;
-    --ring: 152 56% 38%;
-
-    /* Decorative gradient glows for the app background */
-    --glow-1: 152 56% 88%;
-    --glow-2: 152 56% 90%;
-
-    --radius: 1rem;
+    --border: var(--hairline);
+    --input: var(--hairline-strong);
+    --ring: var(--ink);
   }
 
-  /* ── Dark theme (OLED-friendly, emerald accent) ──────── */
   .dark {
-    --background: 222 32% 7%;
-    --foreground: 210 24% 95%;
+    /* True-neutral near-black. No blue cast — dark mode is the same product
+       at a lower brightness, not a different one. */
+    --canvas: 240 5% 4%;          /* #0A0A0B */
+    --surface: 240 5% 8%;         /* #141416 */
+    --surface-2: 240 5% 12%;      /* #1D1D20 */
+    --surface-3: 240 5% 16%;      /* #26262A */
 
-    --card: 222 26% 11%;
-    --card-foreground: 210 24% 95%;
+    --hairline: 240 4% 14%;       /* #232326 */
+    --hairline-strong: 240 5% 20%;/* #303035 */
 
-    --popover: 222 28% 10%;
-    --popover-foreground: 210 24% 95%;
+    --ink: 60 4% 95%;             /* #F4F4F3  16.7:1 */
+    --ink-2: 228 3% 68%;          /* #ABACB0   8.1:1 */
+    --ink-3: 230 3% 55%;          /* #8A8B90   5.4:1 */
 
-    --primary: 152 62% 46%;
-    --primary-foreground: 160 60% 6%;
+    --positive: 157 60% 55%;      /* #45D19C   9.5:1 */
+    --negative: 4 76% 63%;        /* #E9635A   5.6:1 */
+    --warning: 38 85% 62%;        /* #F0B24A   9.8:1 */
 
-    --secondary: 222 20% 16%;
-    --secondary-foreground: 210 20% 92%;
+    --cat-food: 10 98% 75%;                              /* #FE9580  oklch(.775 0.140 32) */
+    --cat-transport: 33 85% 61%;                         /* #F0A346  oklch(.775 0.132 68) */
+    --cat-shopping: 92 47% 59%;                          /* #94C866  oklch(.775 0.140 132) */
+    --cat-entertainment: 177 75% 47%;                     /* #1ED0C8  oklch(.775 0.104 190) */
+    --cat-travel: 202 98% 68%;                            /* #5DC1FD  oklch(.775 0.133 238) */
+    --cat-allowance: 238 95% 83%;                         /* #AAADFD  oklch(.775 0.140 282) */
+    --cat-job: 286 73% 77%;                               /* #DB98EF  oklch(.775 0.140 318) */
+    --cat-gifts: 333 90% 77%;                             /* #F98EBF  oklch(.775 0.140 352) */
 
-    --muted: 222 20% 15%;
-    --muted-foreground: 215 14% 62%;
+    --chart-axis: 230 3% 55%;
+    --chart-grid: 240 4% 14%;
+    --chart-neutral: 240 4% 26%;
 
-    --accent: 222 24% 18%;
-    --accent-foreground: 152 60% 70%;
+    --shadow-card: 0 0 0 0 transparent;
+    --shadow-float: 0 20px 48px -12px hsl(0 0% 0% / 0.7),
+                    0 2px 8px hsl(0 0% 0% / 0.4);
 
-    --success: 152 62% 48%;
     --success-foreground: 160 60% 6%;
-
-    --destructive: 352 75% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 220 18% 20%;
-    --input: 220 16% 22%;
-    --ring: 152 62% 50%;
-
-    --glow-1: 152 70% 24%;
-    --glow-2: 200 70% 20%;
+    --primary-foreground: var(--surface);
   }
 }
 
@@ -90,18 +146,25 @@
 
   html {
     scroll-behavior: smooth;
-    /* Prevent iOS text-size auto-inflation on rotate */
     -webkit-text-size-adjust: 100%;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "cv11", "ss01";
-    /* Avoid pull-to-refresh / rubber-band fighting the bottom nav */
     overscroll-behavior-y: none;
   }
 
-  /* Respect users who prefer less motion */
+  /* Every digit in the app is lining + tabular. Money must never reflow or
+     drift out of column as values change — this is the cheapest credibility
+     win available in a finance UI, so it's set once, globally. */
+  body,
+  input,
+  button,
+  select,
+  textarea {
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -115,28 +178,52 @@
 }
 
 @layer components {
-  /* App background: soft emerald gradient wash, adapts to theme */
+  /* Flat canvas. Was two fixed radial emerald glows; they tinted the edges of
+     every white card and slid under content as you scrolled. */
   .app-bg {
-    background:
-      radial-gradient(1100px 540px at 100% -8%, hsl(var(--glow-1) / 0.55) 0%, transparent 55%),
-      radial-gradient(900px 480px at -10% 108%, hsl(var(--glow-2) / 0.5) 0%, transparent 52%),
-      hsl(var(--background));
-    background-attachment: fixed;
+    background: hsl(var(--canvas));
   }
 
-  /* Frosted surface used by the top bar and bottom nav */
+  /* Frosted bars. 92% rather than the old 80% — reads as glass without the
+     muddy over-blur. */
   .surface-blur {
-    @apply bg-background/80 backdrop-blur-xl backdrop-saturate-150;
+    background: hsl(var(--surface) / 0.92);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  /* Negative tracking scales with size, so $48.60 and $4,820.50 keep the same
+     optical density. */
+  .num {
+    font-variant-numeric: lining-nums tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .num-display {
+    font-variant-numeric: lining-nums tabular-nums;
+    letter-spacing: -0.035em;
+    font-weight: 500;
+  }
+
+  /* Sunken well: inputs, chips, keypad keys. */
+  .well {
+    background: hsl(var(--surface-2));
+    border-radius: 12px;
+  }
+
+  /* Section label. 11px caps, ink-3. */
+  .overline {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: hsl(var(--ink-3));
   }
 }
 
 @layer utilities {
-  /* Tabular numbers for animated counters so they don't jitter */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
-
-  /* Safe-area helpers for notched / home-indicator devices */
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }

@@ -27,6 +27,10 @@ vi.mock("@/api/endpoints", () => ({
   removeTransaction: vi.fn(),
   fetchTransfers: () => Promise.resolve(mockTransfers),
   removeTransfer: (...args) => removeTransfer(...args),
+  // Account activity sits above the list on this page. It has its own suite;
+  // here it just needs to resolve, and with no accounts created it renders
+  // nothing anyway.
+  fetchAccountTotals: () => Promise.resolve({ period: null, accounts: [], totals: {} }),
 }));
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { savingsByMonth: {} } }),
@@ -99,13 +103,24 @@ vi.mock("@/hooks/useCategories", async () => {
   };
 });
 
+import { MemoryRouter } from "react-router-dom";
+
 import TransactionsPage from "@/pages/TransactionsPage";
 
+// The page reads router state so the app-shell add button can ask it to open
+// the sheet. Rendering it bare would throw, so give it the Router it has in
+// the real app. `initialEntries` lets a test arrive "via the + button".
+const renderPage = (state) =>
+  render(
+    <MemoryRouter initialEntries={[{ pathname: "/transactions", state }]}>
+      <TransactionsPage />
+    </MemoryRouter>
+  );
+
 /** Open the expense sheet and hand back its scope. */
-const openExpenseSheet = async (user) => {
-  render(<TransactionsPage />);
-  await user.click(screen.getByRole("button", { name: /^Expense$/ }));
-  return within(screen.getByRole("dialog"));
+const openExpenseSheet = async () => {
+  renderPage({ openAdd: "expense" });
+  return within(await screen.findByRole("dialog"));
 };
 
 const submitted = () => addTransaction.mock.calls.at(-1)[0];
@@ -142,7 +157,7 @@ beforeEach(() => {
 describe("optional description", () => {
   it("saves the category name when the description is left blank", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
     await user.click(sheet.getByLabelText(/^Amount/));
@@ -159,7 +174,7 @@ describe("optional description", () => {
 
   it("shows the fallback in the placeholder, so it isn't a surprise", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     expect(sheet.getByLabelText("Description")).toHaveAttribute(
       "placeholder",
@@ -174,7 +189,7 @@ describe("optional description", () => {
 
   it("prefers what you typed over the fallback", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
     await user.type(sheet.getByLabelText("Description"), "Chicken rice");
@@ -188,7 +203,7 @@ describe("optional description", () => {
 
   it("still refuses a submit with no category", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await user.click(screen.getByRole("button", { name: "Add expense" }));
     expect(sheet.getByText("Choose a category.")).toBeInTheDocument();
@@ -199,7 +214,7 @@ describe("optional description", () => {
 describe("moving between fields", () => {
   it("hands over to the description when a category is picked", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
     expect(sheet.getByLabelText("Description")).toHaveFocus();
@@ -207,7 +222,7 @@ describe("moving between fields", () => {
 
   it("doesn't grab focus back when a category is corrected later on", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
     await user.type(sheet.getByLabelText("Description"), "Chicken rice");
@@ -223,7 +238,7 @@ describe("moving between fields", () => {
 
   it("opens the keypad from the description's return key on a phone", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
     await user.type(sheet.getByLabelText("Description"), "Chicken rice{Enter}");
@@ -235,7 +250,7 @@ describe("moving between fields", () => {
   it("moves to the amount field instead when there's a real keyboard", async () => {
     coarse = false;
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
     await user.type(sheet.getByLabelText("Description"), "Chicken rice{Enter}");
@@ -248,7 +263,7 @@ describe("moving between fields", () => {
 describe("adding a category", () => {
   it("offers New on the label line rather than as a tile in the grid", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     // As a tile it claimed a whole row whenever the category count was already
     // a multiple of three, which is what this guards against.
@@ -263,7 +278,7 @@ describe("adding a category", () => {
   it("hands a newly created category over to the description too", async () => {
     addCategory.mockResolvedValue({ name: "Groceries", type: "expense", color: "#888" });
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await user.click(sheet.getByRole("button", { name: "New" }));
     await user.type(sheet.getByPlaceholderText("Category name"), "Groceries");
@@ -290,7 +305,7 @@ describe("tagging entries with an account", () => {
 
   it("shows no account UI at all before you make one", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     expect(sheet.queryByText("Paid from")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Filter by account")).not.toBeInTheDocument();
@@ -302,7 +317,7 @@ describe("tagging entries with an account", () => {
   it("sends the chosen account with the transaction", async () => {
     mockAccounts = twoAccounts;
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await user.click(sheet.getByRole("button", { name: /DBS/ }));
     await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
@@ -316,7 +331,7 @@ describe("tagging entries with an account", () => {
   it("preselects the first account so it costs no extra tap", async () => {
     mockAccounts = twoAccounts;
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     expect(sheet.getByRole("button", { name: /Trust/ })).toHaveAttribute(
       "aria-pressed",
@@ -327,28 +342,21 @@ describe("tagging entries with an account", () => {
   it("asks where income landed rather than where it came from", async () => {
     mockAccounts = twoAccounts;
     const user = userEvent.setup();
-    render(<TransactionsPage />);
-    await user.click(screen.getByRole("button", { name: /^Income$/ }));
+    // Arrive as the + button does — on Expense — then flip the sheet's own
+    // toggle, which is the only route to income now the page buttons are gone.
+    renderPage({ openAdd: "expense" });
+    const sheet = within(await screen.findByRole("dialog"));
+    expect(sheet.getByText("Paid from")).toBeInTheDocument();
 
-    const sheet = within(screen.getByRole("dialog"));
+    await user.click(sheet.getByRole("button", { name: "Income" }));
+
     expect(sheet.getByText("Paid into")).toBeInTheDocument();
     expect(sheet.queryByText("Paid from")).not.toBeInTheDocument();
   });
 
-  it("offers the transfer action only with two accounts to move between", async () => {
-    mockAccounts = [twoAccounts[0]];
-    const { unmount } = render(<TransactionsPage />);
-    expect(
-      screen.queryByRole("button", { name: /Move money between accounts/ })
-    ).not.toBeInTheDocument();
-    unmount();
-
-    mockAccounts = twoAccounts;
-    render(<TransactionsPage />);
-    expect(
-      screen.getByRole("button", { name: /Move money between accounts/ })
-    ).toBeInTheDocument();
-  });
+  // "offers the transfer action only with two accounts" moved to
+  // AccountsCard.test.jsx — the button now lives in the Account activity card,
+  // beside the accounts it moves between, and that card is stubbed out here.
 });
 
 describe("transfers in the ledger", () => {
@@ -374,7 +382,7 @@ describe("transfers in the ledger", () => {
   };
 
   const show = async () => {
-    render(<TransactionsPage />);
+    renderPage();
     return screen.findByText("Lunch");
   };
 
@@ -394,8 +402,11 @@ describe("transfers in the ledger", () => {
     mockTransfers = [move];
     await show();
 
-    // The expense is signed; the transfer deliberately isn't.
-    expect(screen.getByText(/^−\$12\.00$/)).toBeInTheDocument();
+    // The expense is signed; the transfer deliberately isn't. Each day now
+    // carries its own net in the group header, so an amount string can appear
+    // twice on the page — scope the signed check to the entry rows.
+    const rows = screen.getAllByRole("listitem");
+    expect(rows.some((r) => within(r).queryByText(/^−\$12\.00$/))).toBe(true);
     expect(screen.getByText("$50.00")).toBeInTheDocument();
   });
 
@@ -424,7 +435,7 @@ describe("transfers in the ledger", () => {
     mockTransactions = [];
     mockTransfers = [move];
     const user = userEvent.setup();
-    render(<TransactionsPage />);
+    renderPage();
     await screen.findByText("$50.00");
 
     // The money left DBS and arrived in Trust, so it belongs to both.
@@ -522,7 +533,7 @@ describe("editing an entry", () => {
   /** Tap the row and hand back the editor's scope. */
   const openEditor = async (user, row = expense) => {
     mockTransactions = [row];
-    render(<TransactionsPage />);
+    renderPage();
     await user.click(
       await screen.findByRole("button", { name: `Edit ${row.description}` })
     );
@@ -655,20 +666,32 @@ describe("editing an entry", () => {
     await user.type(sheet.getByLabelText("Amount"), "8.5");
     await save(user);
 
-    expect(await screen.findByText(/^−\$8\.50$/)).toBeInTheDocument();
+    // The row and its day header both carry the corrected figure now.
+    await screen.findAllByText(/^−\$8\.50$/);
+    const rows = screen.getAllByRole("listitem");
+    expect(rows.some((r) => within(r).queryByText(/^−\$8\.50$/))).toBe(true);
     // The balance summary above the ledger reads from the same list.
     expect(screen.getByText("Lunch")).toBeInTheDocument();
   });
 
-  it("goes back to adding after an edit, rather than staying on the row", async () => {
+  it("lets go of the row it was editing when the sheet closes", async () => {
+    // The page used to carry its own Expense button, so this checked that
+    // pressing it after an edit gave a blank form rather than the last row.
+    // Adding now starts from the app-shell button, so what's left to pin is
+    // the half that lives here: closing must drop `editing`, or the next open
+    // would inherit it.
     const user = userEvent.setup();
     await openEditor(user);
+    expect(screen.getByRole("dialog", { name: "Edit expense" })).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Close dialog" }));
 
-    await user.click(screen.getByRole("button", { name: /^Expense$/ }));
-
-    const sheet = within(screen.getByRole("dialog"));
-    expect(screen.getByRole("dialog", { name: "Add expense" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    );
+    // A fresh arrival is an add, with nothing carried over.
+    const sheet = await openExpenseSheet();
+    expect(screen.getByRole("dialog", { name: "New entry" })).toBeInTheDocument();
     expect(sheet.getByLabelText("Description")).toHaveValue("");
     expect(sheet.getByLabelText("Amount")).toHaveValue(null);
   });
@@ -691,7 +714,7 @@ describe("repeating an entry as you add it", () => {
 
   it("starts the rule after this entry, so the month isn't logged twice", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await fillExpense(user, sheet);
     fireEvent.change(sheet.getByLabelText("Date"), {
@@ -715,7 +738,7 @@ describe("repeating an entry as you add it", () => {
 
   it("says which day and which month before you commit to it", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     fireEvent.change(sheet.getByLabelText("Date"), {
       target: { value: "2026-08-15" },
@@ -729,7 +752,7 @@ describe("repeating an entry as you add it", () => {
 
   it("warns about short months only when the day is late enough to shift", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await user.click(sheet.getByRole("checkbox", { name: /Repeat monthly/ }));
     fireEvent.change(sheet.getByLabelText("Date"), {
@@ -745,7 +768,7 @@ describe("repeating an entry as you add it", () => {
 
   it("adds the entry and nothing else when the box is left alone", async () => {
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await fillExpense(user, sheet);
     await user.click(screen.getByRole("button", { name: "Add expense" }));
@@ -757,7 +780,7 @@ describe("repeating an entry as you add it", () => {
   it("keeps the entry when the rule can't be saved", async () => {
     addRule.mockRejectedValue({ response: { data: { message: "nope" } } });
     const user = userEvent.setup();
-    const sheet = await openExpenseSheet(user);
+    const sheet = await openExpenseSheet();
 
     await fillExpense(user, sheet);
     await user.click(sheet.getByRole("checkbox", { name: /Repeat monthly/ }));
@@ -781,7 +804,7 @@ describe("repeating an entry as you add it", () => {
       },
     ];
     const user = userEvent.setup();
-    render(<TransactionsPage />);
+    renderPage();
     await user.click(await screen.findByRole("button", { name: "Edit Lunch" }));
 
     const sheet = within(screen.getByRole("dialog"));

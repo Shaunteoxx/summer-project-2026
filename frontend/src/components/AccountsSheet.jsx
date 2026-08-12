@@ -86,7 +86,7 @@ export default function AccountsSheet({ open, onClose }) {
   return (
     <BottomSheet open={open} onClose={onClose} title="Bank accounts">
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[13px] leading-relaxed text-ink-3">
           Tag each entry with the account it came from or went into. Your budget
           still covers everything together — this is about where the money sits.
         </p>
@@ -96,18 +96,18 @@ export default function AccountsSheet({ open, onClose }) {
             {accounts.map((a) => (
               <li
                 key={a.id}
-                className={`flex items-center justify-between gap-2 rounded-xl border border-border p-2.5 ${
+                className={`flex items-center justify-between gap-2 rounded-lg border border-hairline p-2.5 ${
                   a.archived ? "opacity-60" : ""
                 }`}
               >
                 <span className="flex min-w-0 items-center gap-2.5">
                   <span
-                    className="h-3.5 w-3.5 shrink-0 rounded-full"
+                    className="h-3 w-3 shrink-0 rounded-[4px]"
                     style={{ background: a.color }}
                   />
                   <span className="truncate text-sm font-medium">{a.name}</span>
                   {a.archived && (
-                    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                    <span className="shrink-0 rounded-xs bg-surface-2 px-1.5 py-[3px] text-[11px] font-medium text-ink-2">
                       Archived
                     </span>
                   )}
@@ -119,7 +119,7 @@ export default function AccountsSheet({ open, onClose }) {
                       type="button"
                       onClick={() => handleDelete(a)}
                       aria-label={`Confirm removing ${a.name}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-destructive transition-colors hover:bg-destructive/10"
+                      className="flex h-8 w-8 items-center justify-center rounded-sm text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08]"
                     >
                       <Check className="h-4 w-4" />
                     </button>
@@ -127,7 +127,7 @@ export default function AccountsSheet({ open, onClose }) {
                       type="button"
                       onClick={() => setConfirmId(null)}
                       aria-label="Cancel"
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent"
+                      className="flex h-8 w-8 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -140,7 +140,7 @@ export default function AccountsSheet({ open, onClose }) {
                       aria-label={
                         a.archived ? `Restore ${a.name}` : `Archive ${a.name}`
                       }
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      className="flex h-8 w-8 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink"
                     >
                       {a.archived ? (
                         <ArchiveRestore className="h-4 w-4" />
@@ -152,7 +152,7 @@ export default function AccountsSheet({ open, onClose }) {
                       type="button"
                       onClick={() => setConfirmId(a.id)}
                       aria-label={`Remove ${a.name}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      className="flex h-8 w-8 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -164,7 +164,7 @@ export default function AccountsSheet({ open, onClose }) {
         )}
 
         {adding ? (
-          <div className="space-y-3 rounded-xl border border-border p-3">
+          <div className="space-y-3 rounded-lg border border-hairline bg-surface-2 p-3">
             <div className="space-y-2">
               <Label htmlFor="account-name">Account name</Label>
               <Input
@@ -189,7 +189,7 @@ export default function AccountsSheet({ open, onClose }) {
                   onClick={() => setColor(col)}
                   aria-label={`Colour ${col}`}
                   aria-pressed={color === col}
-                  className={`h-8 w-8 rounded-full border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
+                  className={`h-8 w-8 rounded-sm border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
                     color === col ? "border-foreground" : "border-transparent"
                   }`}
                   style={{ backgroundColor: col }}

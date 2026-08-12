@@ -10,49 +10,32 @@ import { applyKey, evaluate, formatExpression, roundMoney, stateFromValue } from
 const MAX_AMOUNT = 1e9;
 
 /**
- * Colour carries the transaction type, matching how the ledger renders amounts:
- * income green with a +, expenses red with a −. The tinted card and glow are
- * the same treatment the balance and daily-budget cards use.
+ * The sign carries the transaction type; the colour barely does. Income is
+ * green because green means money arriving, but an expense is INK, not red —
+ * spending is the normal case in a spending tracker, and red has to still mean
+ * "over budget" when it turns up somewhere that matters.
+ *
+ * The tinted card, the border and the blurred glow are all gone with it. The
+ * panel used to be a red-tinted display in a red border above a red confirm
+ * button, which made entering a $4 coffee look like an error report.
  */
 const TONES = {
-  success: {
-    sign: "+",
-    card: "border-success/30 from-success/15",
-    glow: "bg-success/25",
-    text: "text-success",
-  },
-  destructive: {
-    sign: "−",
-    card: "border-destructive/30 from-destructive/15",
-    glow: "bg-destructive/25",
-    text: "text-destructive",
-  },
+  success: { sign: "+", text: "text-positive" },
+  destructive: { sign: "−", text: "text-ink" },
 };
 
 /**
- * Keys are deliberately hueless. Green and red both carry meaning in this app —
- * income and expense — so tinting keys either way makes a semantic claim the
- * keypad isn't entitled to make. Tone-tinting them was tried and rejected: at
- * any opacity strong enough to read, the whole pad went pink on an expense and
- * looked like an error state.
- *
- * Both tiers derive from `foreground` rather than `muted` so they're one
- * family. `--muted` is hue 150, which puts a mint cast on light-mode keys —
- * fine as a global brand neutral, wrong here, where the sheet is plain white
- * and the keys would be the only tinted surface in the panel, sitting next to a
- * red display. Deriving from `foreground` also self-corrects across themes:
- * darker than the card in light mode, lighter in dark.
- *
- * That leaves the display tint and the Use button as the panel's only colour,
- * and the Use button as its only solid fill.
+ * Keys are hueless, and now sit on the surface ramp rather than on opacities of
+ * `foreground`: digits on surface-2, operators one step up on surface-3, and
+ * `=` in solid ink because it is the one key that resolves the expression.
+ * Three tiers, one ramp — the keypad reads as depth without a single shadow.
  */
 const KEY_TONES = {
-  digit: "bg-foreground/[0.06] text-foreground shadow-sm hover:bg-foreground/10",
-  operator:
-    "bg-foreground/[0.13] text-foreground shadow-sm hover:bg-foreground/[0.18] text-2xl font-bold",
-  // Legible rather than loud: clearing is secondary, but muted-foreground on a
-  // muted key washed out badly on screen.
-  utility: "bg-foreground/[0.06] text-foreground/80 shadow-sm hover:bg-foreground/10",
+  digit: "bg-surface-2 text-ink hover:bg-surface-3",
+  operator: "bg-surface-3 text-ink hover:bg-hairline-strong",
+  equals: "bg-ink text-surface hover:bg-ink-2",
+  // Legible rather than loud: clearing is secondary, but not a whisper.
+  utility: "bg-surface-2 text-ink-2 hover:bg-surface-3",
 };
 
 // 4 columns × 5 rows. Spans are chosen so every row fills exactly 4 columns.
@@ -74,7 +57,7 @@ const KEYS = [
   { key: "+", tone: "operator", ariaLabel: "Plus" },
   { key: "0", span: 2 },
   { key: ".", ariaLabel: "Decimal point" },
-  { key: "=", tone: "operator", ariaLabel: "Equals" },
+  { key: "=", tone: "equals", ariaLabel: "Equals" },
 ];
 
 /** Hardware-keyboard equivalents, for anyone using this on a desktop. */
@@ -92,9 +75,9 @@ const PHYSICAL_KEYS = {
 
 /** Shrink the result as it grows so −$1,000,000,000.00 still fits a small phone. */
 function resultSizeClass(text) {
-  if (text.length > 14) return "text-2xl";
-  if (text.length > 11) return "text-3xl";
-  return "text-[2.5rem]";
+  if (text.length > 14) return "text-[26px]";
+  if (text.length > 11) return "text-[32px]";
+  return "text-[40px]";
 }
 
 /**
@@ -197,38 +180,27 @@ export default function AmountCalculator({ initialValue, tone, onApply, onCancel
       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       className="space-y-4 outline-none"
     >
-      {/* Display — the tinted-card-and-glow treatment the balance and
-          daily-budget cards use, so the keypad reads as part of the app. */}
-      <div
-        className={cn(
-          "relative overflow-hidden rounded-2xl border bg-gradient-to-br via-card to-card px-5 py-4",
-          palette.card
-        )}
-      >
-        <div
-          aria-hidden="true"
-          className={cn(
-            "pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full blur-3xl",
-            palette.glow
-          )}
-        />
+      {/* Display. Bare on the sheet's surface: the keys below carry the only
+          fills in the panel, so a background here would flatten them. The
+          expression line is Geist Mono, matching the keys it came from. */}
+      <div className="pb-1">
         <div
           ref={expressionRef}
           aria-hidden="true"
-          className="relative min-h-[1.25rem] overflow-x-auto whitespace-nowrap text-right text-sm tabular-nums text-muted-foreground [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="min-h-[1.25rem] overflow-x-auto whitespace-nowrap text-right font-mono text-[13px] text-ink-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {expression || " "}
+          {expression || " "}
         </div>
         <div
           role="status"
           aria-live="polite"
           className={cn(
-            "relative text-right font-extrabold leading-tight tracking-tight tabular-nums",
+            "num-display text-right leading-tight",
             resultSizeClass(resultText),
             rounded === null || isPartialZero
-              ? "text-muted-foreground"
+              ? "text-ink-3"
               : blockedReason !== null || rounded < 0
-                ? "text-destructive"
+                ? "text-negative"
                 : palette.text
           )}
         >
@@ -237,7 +209,7 @@ export default function AmountCalculator({ initialValue, tone, onApply, onCancel
       </div>
 
       {blockedReason !== null && (
-        <p role="alert" className="text-sm font-medium text-destructive">
+        <p role="alert" className="text-[13px] font-medium text-negative">
           {blockedReason}
         </p>
       )}
@@ -255,7 +227,7 @@ export default function AmountCalculator({ initialValue, tone, onApply, onCancel
             className={cn(
               // Keys sit on a shadow that flattens on press, so a tap reads as
               // pushing something down rather than just changing colour.
-              "flex h-[52px] cursor-pointer select-none items-center justify-center rounded-2xl text-xl font-semibold tabular-nums shadow-sm transition-colors active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+              "flex h-[52px] cursor-pointer select-none items-center justify-center rounded-sm font-mono text-[19px] font-medium transition-colors duration-micro ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
               KEY_TONES[keyTone],
               span === 2 && "col-span-2"
             )}
@@ -270,9 +242,10 @@ export default function AmountCalculator({ initialValue, tone, onApply, onCancel
         <Button type="button" variant="ghost" onClick={onCancel} className="flex-1">
           Cancel
         </Button>
+        {/* Ink, not the transaction's colour: a red "Use $4.50" made logging
+            an ordinary expense look like a destructive action. */}
         <Button
           type="button"
-          variant={tone}
           onClick={handleApply}
           disabled={!canApply}
           className="flex-[2]"

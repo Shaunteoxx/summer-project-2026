@@ -1,63 +1,58 @@
-// Shared Framer Motion variants. Default easing is easeOut, durations 0.4s–0.8s.
+// Shared Framer Motion variants.
+//
+// Retuned for a daily-use tool. The previous set moved a lot: pages slid 24px,
+// list items slid in 24px horizontally, cards scaled from 0.92, buttons lifted
+// on hover. Opened six times a day that reads as fussy rather than polished.
+// Now: mostly opacity, translations of 4–6px, and durations under 300ms.
 
-export const EASE = [0.16, 1, 0.3, 1]; // smooth easeOut-style curve
+export const EASE = [0.32, 0.72, 0, 1]; // iOS-flavoured ease-out
 
-// Page transition: fade + slide up
-export const pageVariants = {
-  initial: { opacity: 0, y: 24 },
-  animate: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.5, ease: EASE },
-  },
-  exit: {
-    opacity: 0,
-    y: -16,
-    transition: { duration: 0.3, ease: EASE },
-  },
+export const DUR = {
+  micro: 0.12,
+  base: 0.18,
+  enter: 0.26,
+  sheet: 0.34,
 };
 
-// Container that staggers its children (e.g. transaction list, card grids)
-export const staggerContainer = (stagger = 0.08, delayChildren = 0.1) => ({
+// Page transition: opacity carries it, 6px of travel gives direction.
+export const pageVariants = {
+  initial: { opacity: 0, y: 6 },
+  animate: { opacity: 1, y: 0, transition: { duration: DUR.enter, ease: EASE } },
+  exit: { opacity: 0, y: -4, transition: { duration: DUR.base, ease: EASE } },
+};
+
+// Container that staggers its children. Defaults are tight — a long list
+// should finish arriving in well under half a second, so cap the stagger at
+// the first handful of items at the call site.
+export const staggerContainer = (stagger = 0.024, delayChildren = 0.04) => ({
   initial: {},
-  animate: {
-    transition: { staggerChildren: stagger, delayChildren },
-  },
+  animate: { transition: { staggerChildren: stagger, delayChildren } },
 });
 
-// List item slide-in (used per transaction card)
+// List item. Fade only: a horizontal slide on every transaction row made the
+// ledger feel like it was assembling itself.
 export const slideInItem = {
-  initial: { opacity: 0, x: -24 },
-  animate: {
-    opacity: 1,
-    x: 0,
-    transition: { duration: 0.5, ease: EASE },
-  },
+  initial: { opacity: 0, y: 4 },
+  animate: { opacity: 1, y: 0, transition: { duration: DUR.enter, ease: EASE } },
 };
 
-// Fade + scale in (friend cards, comparison cards)
+// Cards / tiles. Scale removed; 4px of lift reads as "arriving" without the
+// zoom.
 export const fadeScaleItem = {
-  initial: { opacity: 0, scale: 0.92 },
-  animate: {
-    opacity: 1,
-    scale: 1,
-    transition: { duration: 0.5, ease: EASE },
-  },
+  initial: { opacity: 0, y: 4 },
+  animate: { opacity: 1, y: 0, transition: { duration: DUR.enter, ease: EASE } },
+};
+
+// Generic fade-up for sections.
+export const fadeUp = {
+  initial: { opacity: 0, y: 6 },
+  animate: { opacity: 1, y: 0, transition: { duration: DUR.enter, ease: EASE } },
 };
 
 // Horizontal shake to flag an invalid field on submit. Trigger imperatively
-// with useAnimationControls().start(SHAKE) so it can replay on each attempt.
+// with useAnimationControls().start(SHAKE) so it replays on each attempt.
+// Kept punchy — this one is supposed to interrupt you.
 export const SHAKE = {
-  x: [0, -8, 8, -6, 6, -3, 3, 0],
-  transition: { duration: 0.45, ease: "easeInOut" },
-};
-
-// Generic fade-up for stat cards / sections
-export const fadeUp = {
-  initial: { opacity: 0, y: 20 },
-  animate: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.6, ease: EASE },
-  },
+  x: [0, -7, 7, -5, 5, -2, 2, 0],
+  transition: { duration: 0.4, ease: "easeInOut" },
 };

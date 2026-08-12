@@ -109,7 +109,7 @@ export default function TransferSheet({ open, onClose, onTransferred }) {
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <AccountRow label="From" value={from} onChange={pickFrom} accounts={accounts} />
 
-          <div className="flex justify-center text-muted-foreground">
+          <div className="flex justify-center text-ink-3">
             <ArrowRight className="h-4 w-4 rotate-90" />
           </div>
 
@@ -128,12 +128,12 @@ export default function TransferSheet({ open, onClose, onTransferred }) {
                       ? `Amount, ${amountDisplay} dollars. Opens calculator.`
                       : "Amount, not set. Opens calculator."
                   }
-                  className="flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-card px-3 py-2 text-base transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-11 w-full items-center justify-between gap-2 rounded-md border border-hairline-strong bg-surface px-3 py-2 text-base transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <span
                     className={cn(
                       "truncate tabular-nums",
-                      !amountDisplay && "text-muted-foreground"
+                      !amountDisplay && "text-ink-3"
                     )}
                   >
                     {amountDisplay || "0.00"}
@@ -201,7 +201,7 @@ function AccountRow({ label, value, onChange, accounts }) {
               className={`flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 selected
                   ? "border-transparent"
-                  : "border-border text-muted-foreground hover:bg-accent/50"
+                  : "border-hairline-strong text-ink-2 hover:bg-surface-2"
               }`}
               style={
                 selected
