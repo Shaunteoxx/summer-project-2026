@@ -127,12 +127,19 @@ export default function BottomSheet({
               className={`flex flex-col rounded-t-2xl border-t border-hairline bg-surface shadow-float ${
                 keyboardInset ? "pb-2" : "pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
               }`}
-              // Only constrained while the keyboard is up: a tall form lifted
-              // clear of it would otherwise run off the top of the screen.
-              // Without a keyboard the sheet sizes to its content, as before.
-              style={
-                keyboardInset ? { maxHeight: `${visibleHeight - 8}px` } : undefined
-              }
+              // Always capped, never sized to its content. A sheet that grows
+              // past the viewport doesn't scroll — it grows off the *top*,
+              // where there is nothing to scroll with, because the scroller
+              // below never gets shorter than what's inside it. That is how a
+              // form with enough custom categories in it loses its title, its
+              // close button and its amount, with no way to reach them.
+              //
+              // With the keyboard up the cap is the measured strip left above
+              // it; otherwise it's 92dvh, leaving the backdrop visible so the
+              // sheet still reads as a sheet rather than a full screen.
+              style={{
+                maxHeight: keyboardInset ? `${visibleHeight - 8}px` : "92dvh",
+              }}
             >
               {/* Drag handle */}
               <div

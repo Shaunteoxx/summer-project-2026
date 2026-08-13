@@ -16,6 +16,7 @@ import {
   CalendarRange,
   Wallet,
   Repeat,
+  Tag,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -24,6 +25,7 @@ import BottomSheet from "@/components/BottomSheet";
 import FieldError from "@/components/FieldError";
 import SwitchRow from "@/components/SwitchRow";
 import AccountsSheet from "@/components/AccountsSheet";
+import CategoriesSheet from "@/components/CategoriesSheet";
 import RecurringSheet from "@/components/RecurringSheet";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useCategories } from "@/hooks/useCategories";
 import { useRecurring } from "@/hooks/useRecurring";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
@@ -82,6 +85,7 @@ export default function MorePage() {
   const isDays = period.mode === "days";
   const { active: activeAccounts } = useAccounts();
   const accountCount = activeAccounts.length;
+  const { custom: customCategories } = useCategories();
   const { rules, addRule, updateRule, removeRule } = useRecurring();
   const liveRules = rules.filter((r) => !r.paused).length;
   // `history` from the API is every period; the running one is rendered
@@ -130,6 +134,7 @@ export default function MorePage() {
   const periodShake = useAnimationControls();
 
   const [accountsOpen, setAccountsOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -464,6 +469,16 @@ export default function MorePage() {
           }}
         />
         <Row
+          icon={Tag}
+          title="Categories"
+          meta="Your own, on top of the built-in ones"
+          value={<RowValue>{customCategories.length}</RowValue>}
+          onClick={() => {
+            if (guard()) return;
+            setCategoriesOpen(true);
+          }}
+        />
+        <Row
           icon={Repeat}
           title="Repeating entries"
           meta={
@@ -614,6 +629,11 @@ export default function MorePage() {
       </BottomSheet>
 
       <AccountsSheet open={accountsOpen} onClose={() => setAccountsOpen(false)} />
+
+      <CategoriesSheet
+        open={categoriesOpen}
+        onClose={() => setCategoriesOpen(false)}
+      />
 
       <RecurringSheet
         open={recurringOpen}

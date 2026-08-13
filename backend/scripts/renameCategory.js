@@ -24,6 +24,12 @@
  * Dry run first. It prints the same counts without writing, so the number of
  * rows about to change is known before anything changes.
  */
+// Standalone scripts don't go through index.js, which is where the server
+// loads its .env — without this the script would silently fall back to the
+// development defaults in config/env.js and rename rows in the wrong database.
+// A MONGO_URI already in the environment still wins, which is how this gets
+// pointed at production for one command without editing .env.
+import "dotenv/config";
 import mongoose from "mongoose";
 
 import { env } from "../config/env.js";

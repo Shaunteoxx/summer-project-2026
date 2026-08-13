@@ -79,19 +79,23 @@ vi.mock("@/hooks/useBudgetPeriod", () => ({
 // stays; nothing here flips it.
 vi.mock("@/hooks/useCoarsePointer", () => ({ useCoarsePointer: () => true }));
 
+// The picker changes shape with the number of categories, and the delete list
+// only exists once you have your own, so both are per-test knobs.
+let mockExpenseCategories = ["F & B", "Transport"];
+let mockCustom = [];
 vi.mock("@/hooks/useCategories", async () => {
   const { Tag } = await import("lucide-react");
   const cat = (name) => ({ name, type: "expense", color: "#888", icon: Tag });
   return {
     useCategories: () => ({
       categoriesByType: {
-        expense: [cat("F & B"), cat("Transport")],
+        expense: mockExpenseCategories.map(cat),
         income: [cat("Allowance")],
       },
       getCategory: (name) => cat(name),
       addCategory: (...args) => addCategory(...args),
       removeCategory: vi.fn(),
-      custom: [],
+      custom: mockCustom,
     }),
   };
 });
@@ -168,6 +172,8 @@ const pickAccount = async (user, name) => {
 };
 
 beforeEach(() => {
+  mockExpenseCategories = ["F & B", "Transport"];
+  mockCustom = [];
   mockAccounts = [];
   mockTransactions = [];
   mockTransfers = [];
@@ -343,18 +349,83 @@ describe("an empty ledger", () => {
 });
 
 describe("adding a category", () => {
-  it("offers New as the last tile in the category grid", async () => {
+  // Six across, so twelve is two full rows. A third row is 81px the sheet
+  // does not have on a short phone — with eight custom categories the old
+  // grid pushed it to 1113px inside an 844px viewport, and the top ran off
+  // the screen where nothing could scroll it back.
+  describe("when there are more categories than the grid can hold", () => {
+    const many = (n) => Array.from({ length: n }, (_, i) => `Category ${i + 1}`);
+
+    it("keeps the grid at twelve", async () => {
+      mockExpenseCategories = many(12);
+      const sheet = await openExpenseSheet();
+
+      expect(sheet.getByRole("button", { name: "Category 12" })).toBeInTheDocument();
+      expect(
+        sheet.queryByRole("button", { name: /Choose a category/ })
+      ).not.toBeInTheDocument();
+    });
+
+    it("collapses to a field and a list at thirteen", async () => {
+      mockExpenseCategories = many(13);
+      const user = userEvent.setup();
+      const sheet = await openExpenseSheet();
+
+      // Nothing is on screen until you ask for it — that is the whole point.
+      expect(sheet.queryByRole("button", { name: "Category 13" })).not.toBeInTheDocument();
+      const field = sheet.getByRole("button", { name: /Choose a category/ });
+
+      await user.click(field);
+      await user.click(sheet.getByRole("button", { name: "Category 13" }));
+
+      // The field reads back what was picked, and the list closes behind it.
+      expect(sheet.getByRole("button", { name: /Category 13/ })).toBeInTheDocument();
+      expect(sheet.queryByRole("button", { name: "Category 12" })).not.toBeInTheDocument();
+    });
+
+    it("still saves the category the list chose", async () => {
+      mockExpenseCategories = many(13);
+      const user = userEvent.setup();
+      const sheet = await openExpenseSheet();
+
+      await user.click(sheet.getByRole("button", { name: /Choose a category/ }));
+      await user.click(sheet.getByRole("button", { name: "Category 7" }));
+      await enterAmount(user, sheet, "4");
+      await user.click(screen.getByRole("button", { name: "Add expense" }));
+
+      expect(submitted()).toMatchObject({ category: "Category 7" });
+    });
+  });
+
+  it("offers New on the Category label line", async () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    // A create affordance shaped like the things it creates, sitting where
-    // the next category would go, needs no explaining.
+    // Not a tile in the grid: past twelve categories the grid becomes a list,
+    // and a create affordance shaped like a category tile has nowhere to go.
+    // On the label line it reads the same in both modes.
     const newButton = sheet.getByRole("button", { name: "New" });
     expect(newButton).toHaveAttribute("aria-expanded", "false");
 
     await user.click(newButton);
     expect(newButton).toHaveAttribute("aria-expanded", "true");
     expect(sheet.getByPlaceholderText("Category name")).toBeInTheDocument();
+  });
+
+  // Managing categories is a different job from using them, and it is not this
+  // sheet's job at all. Deleting lives on More → Categories, beside Bank
+  // accounts and Repeating entries. It briefly lived in this panel, which meant
+  // pressing a button labelled "New" in order to remove something.
+  it("creates categories but never deletes them", async () => {
+    mockCustom = [{ id: "c1", name: "Gym", type: "expense", color: "#888" }];
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet();
+
+    await user.click(sheet.getByRole("button", { name: "New" }));
+
+    expect(sheet.getByPlaceholderText("Category name")).toBeInTheDocument();
+    expect(sheet.queryByText("Your categories")).not.toBeInTheDocument();
+    expect(sheet.queryByRole("button", { name: "Remove Gym" })).not.toBeInTheDocument();
   });
 
   it("selects a newly created category, the same as tapping an existing tile", async () => {

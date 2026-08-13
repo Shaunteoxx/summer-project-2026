@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, useAnimationControls } from "framer-motion";
-import { Plus, X, Wallet, ChevronDown } from "lucide-react";
+import { Plus, Wallet, ChevronDown, Check, Tag } from "lucide-react";
 
 import AmountCalculator from "@/components/AmountCalculator";
 import BottomSheet from "@/components/BottomSheet";
@@ -17,6 +17,14 @@ import { useRecurring } from "@/hooks/useRecurring";
 import { cn, formatMoney, localToday, ordinal } from "@/lib/utils";
 import { CUSTOM_COLOR_OPTIONS } from "@/lib/categories";
 import { SHAKE } from "@/animations/variants";
+
+/**
+ * How many categories the six-across grid will show before the picker
+ * collapses to a field and a list. Two full rows: a third row is 81px the
+ * sheet doesn't have on a short phone, and by then the tiles are being read
+ * as names rather than recognised as icons.
+ */
+const CATEGORY_GRID_MAX = 12;
 
 const emptyForm = (accountId = "") => ({
   description: "",
@@ -118,7 +126,7 @@ export default function AddTransactionSheet({
   const isEdit = Boolean(editing);
   const toast = useToast();
   const guard = useDemoGuard();
-  const { categoriesByType, addCategory, removeCategory, custom } = useCategories();
+  const { categoriesByType, addCategory } = useCategories();
   const {
     active: accounts,
     hasAccounts,
@@ -155,6 +163,8 @@ export default function AddTransactionSheet({
   // case is confirming it rather than choosing. The chips are one tap away,
   // expanded inline the same way the new-category panel is.
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
+  // Only used in list mode; the grid is always open.
+  const [categoryListOpen, setCategoryListOpen] = useState(false);
 
   // Inline "create custom category" panel state.
   const [showNewCategory, setShowNewCategory] = useState(false);
@@ -191,6 +201,14 @@ export default function AddTransactionSheet({
   const pickableAccounts = taggedAccount ? [...accounts, taggedAccount] : accounts;
   const selectedAccount = form.accountId ? getAccount(form.accountId) : null;
 
+  // The grid is six across, so twelve is exactly two rows — the most it can
+  // show without the sheet getting taller than the screen it opens on. Past
+  // that it becomes a field and a list, which costs one tap and a fixed 44px
+  // however many categories you have.
+  const categoryList = categoriesByType[type] ?? [];
+  const useCategoryGrid = categoryList.length <= CATEGORY_GRID_MAX;
+  const selectedCategory = categoryList.find((c) => c.name === form.category);
+
   const resetNewCategory = () => {
     setShowNewCategory(false);
     setNewCategoryName("");
@@ -208,6 +226,7 @@ export default function AddTransactionSheet({
     resetNewCategory();
     setCalcOpen(false);
     setAccountPickerOpen(false);
+    setCategoryListOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, editing]);
 
@@ -272,16 +291,6 @@ export default function AddTransactionSheet({
     }
   };
 
-  const handleRemoveCategory = async (id, name) => {
-    if (guard()) return;
-    try {
-      await removeCategory(id);
-      setForm((f) => (f.category === name ? { ...f, category: "" } : f));
-      toast.info(`Removed “${name}”`);
-    } catch {
-      toast.error("Couldn't remove category.");
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -511,15 +520,33 @@ export default function AddTransactionSheet({
         {/* Category picker */}
         <div className="space-y-2">
           <motion.div animate={shakeControls.category} className="space-y-2">
-            <p
-              className={`text-overline ${errors.category ? "text-negative" : "text-ink-3"}`}
-            >
-              Category
-            </p>
-            {/* Six across, tile above label. "New" is the last tile rather
-                than a link on the label line: at six columns the built-ins and
-                the dashed tile land on one row, and a create affordance that
-                looks like the things it creates needs no explaining. */}
+            {/* "New" sits on the label line, not in the grid. As a tile it
+                works right up until the grid becomes a list — and it has to,
+                once there are more categories than fit — at which point a
+                create affordance shaped like a category tile has nowhere to
+                live. On the label line it reads the same in both modes. */}
+            <div className="flex items-center justify-between gap-2">
+              <p
+                className={`text-overline ${errors.category ? "text-negative" : "text-ink-3"}`}
+              >
+                Category
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowNewCategory((v) => !v)}
+                aria-expanded={showNewCategory}
+                className={`-my-1 flex h-8 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  showNewCategory
+                    ? "bg-ink/[0.06] text-ink"
+                    : "text-ink-3 hover:bg-surface-2 hover:text-ink"
+                }`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New
+              </button>
+            </div>
+
+            {useCategoryGrid ? (
             <div
               className={`grid grid-cols-6 gap-[7px] ${
                 errors.category
@@ -574,40 +601,103 @@ export default function AddTransactionSheet({
                 </button>
               );
             })}
-              {/* Dashed until it's open, then filled ink — the same "you are
-                  here" the category tiles use for selection. */}
-              <button
-                type="button"
-                onClick={() => setShowNewCategory((v) => !v)}
-                aria-expanded={showNewCategory}
-                className="group flex flex-col items-center gap-1.5 rounded-[11px] text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-              >
-                <span
-                  className={`grid aspect-square w-full place-items-center rounded-[11px] transition-colors duration-base ease-out ${
-                    showNewCategory
-                      ? "bg-ink text-surface"
-                      : "border border-dashed border-hairline-strong text-ink-2 group-hover:bg-surface-2"
-                  }`}
-                >
-                  <Plus className="h-4 w-4" strokeWidth={2.2} />
-                </span>
-                <span
-                  className={`block h-[22px] w-full text-center text-[9px] leading-[1.1] ${
-                    showNewCategory ? "font-semibold text-ink" : "font-medium text-ink-3"
-                  }`}
-                >
-                  New
-                </span>
-              </button>
             </div>
+            ) : (
+              /* Past two rows the grid stops paying for itself: it costs a
+                 row of 81px per six categories, and at that size the icon has
+                 stopped being the thing you recognise — you're reading the
+                 names anyway. So it collapses to the value plus a list, the
+                 same shape the account field below uses. */
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCategoryListOpen((v) => !v)}
+                  aria-expanded={categoryListOpen}
+                  aria-invalid={Boolean(errors.category)}
+                  aria-describedby={errors.category ? "tx-category-error" : undefined}
+                  className={cn(
+                    "flex h-11 w-full items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    errors.category && "ring-2 ring-negative"
+                  )}
+                >
+                  {selectedCategory ? (
+                    <span
+                      className="grid h-6 w-6 shrink-0 place-items-center rounded-[7px]"
+                      style={{
+                        backgroundColor: `${selectedCategory.color}26`,
+                        color: selectedCategory.color,
+                      }}
+                    >
+                      <selectedCategory.icon className="h-3.5 w-3.5" />
+                    </span>
+                  ) : (
+                    <Tag className="h-[15px] w-[15px] shrink-0 text-ink-3" />
+                  )}
+                  <span
+                    className={cn(
+                      "min-w-0 flex-1 truncate text-left font-medium",
+                      !selectedCategory && "font-normal text-ink-3"
+                    )}
+                  >
+                    {selectedCategory ? selectedCategory.name : "Choose a category"}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ink-3" />
+                </button>
+
+                {categoryListOpen && (
+                  <ul
+                    // Capped and scrolled in place. The sheet scrolls too, but
+                    // a list that pushed the amount and the submit button off
+                    // screen every time it opened would make choosing a
+                    // category cost a scroll back up.
+                    className="max-h-[248px] space-y-0.5 overflow-y-auto overscroll-contain rounded-xl bg-surface-2 p-2"
+                  >
+                    {(categoriesByType[type] ?? []).map((c) => {
+                      const Icon = c.icon;
+                      const selected = form.category === c.name;
+                      return (
+                        <li key={c.name}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              selectCategory(c.name);
+                              setCategoryListOpen(false);
+                            }}
+                            aria-pressed={selected}
+                            className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                              selected
+                                ? "bg-surface font-semibold text-ink shadow-card"
+                                : "font-medium text-ink-2 hover:bg-surface"
+                            }`}
+                          >
+                            <span
+                              className="grid h-6 w-6 shrink-0 place-items-center rounded-[7px]"
+                              style={{
+                                backgroundColor: `${c.color}26`,
+                                color: c.color,
+                              }}
+                            >
+                              <Icon className="h-3.5 w-3.5" />
+                            </span>
+                            <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                            {selected && <Check className="h-4 w-4 shrink-0" />}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </>
+            )}
             {errors.category && (
               <FieldError id="tx-category-error">{errors.category}</FieldError>
             )}
           </motion.div>
 
-          {/* Creating a category never leaves the sheet — you're here because
-              nothing in the grid fits the entry you're part-way through
-              writing, and a trip to a settings screen would lose it. */}
+          {/* Create only. Deleting lives on More → Categories, with the
+              accounts and repeating entries — the same shape of thing, used
+              here and managed there. It briefly lived in this panel, which
+              meant pressing a button labelled "New" to remove something. */}
           {showNewCategory && (
             <div className="rounded-xl bg-surface-2 p-4">
               <p className="text-[13.5px] font-semibold tracking-[-0.01em]">
@@ -663,39 +753,6 @@ export default function AddTransactionSheet({
               </div>
             </div>
           )}
-
-          {/* Manage custom categories — always visible when any exist */}
-          {custom.filter((c) => c.type === type).length > 0 && (
-            <div className="space-y-1.5 rounded-lg border border-hairline p-3">
-              <p className="text-overline text-ink-3">
-                Your categories
-              </p>
-              {custom
-                .filter((c) => c.type === type)
-                .map((c) => (
-                  <div
-                    key={c.id}
-                    className="flex items-center justify-between gap-2 text-sm"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span
-                        className="h-3 w-3 shrink-0 rounded-full"
-                        style={{ background: c.color }}
-                      />
-                      <span className="truncate">{c.name}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveCategory(c.id, c.name)}
-                      aria-label={`Remove ${c.name}`}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-            </div>
-          )}
         </div>
 
         {/* Three fields, no labels above them. The description carries the
@@ -721,13 +778,22 @@ export default function AddTransactionSheet({
           />
           {/* Two up only when there's an account to put beside the date.
               Without one, a half-width date field with empty space next to it
-              reads as a control that failed to render. */}
+              reads as a control that failed to render.
+
+              `minmax(0,1fr)`, not `1fr`. A grid track is `minmax(auto,1fr)` by
+              default, and `auto` floors at the item's min-content width —
+              which for a native date input on iOS is the rendered date plus
+              the calendar button, wider than half this sheet. The track grew
+              to fit it and the account field beside it got sat on. The
+              `min-w-0` on each child is the same fix one level down. */}
           <div
             className={`grid items-start gap-2.5 ${
-              hasAccounts || taggedAccount ? "grid-cols-2" : "grid-cols-1"
+              hasAccounts || taggedAccount
+                ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+                : "grid-cols-1"
             }`}
           >
-            <motion.div animate={shakeControls.date}>
+            <motion.div animate={shakeControls.date} className="min-w-0">
               <Input
                 id="date"
                 type="date"
@@ -736,11 +802,10 @@ export default function AddTransactionSheet({
                 required
                 aria-invalid={Boolean(errors.date)}
                 aria-describedby={errors.date ? "tx-date-error" : undefined}
-                className={
-                  errors.date
-                    ? "border-destructive focus-visible:ring-destructive"
-                    : undefined
-                }
+                className={cn(
+                  "min-w-0",
+                  errors.date && "border-destructive focus-visible:ring-destructive"
+                )}
                 onChange={(e) => updateForm({ date: e.target.value })}
               />
               {errors.date && (
@@ -761,7 +826,7 @@ export default function AddTransactionSheet({
                 aria-label={`${type === "income" ? "Paid into" : "Paid from"}: ${
                   selectedAccount ? selectedAccount.name : "no account"
                 }. Choose account`}
-                className="flex h-11 w-full items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-11 w-full min-w-0 items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {selectedAccount ? (
                   <span

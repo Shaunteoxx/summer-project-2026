@@ -68,7 +68,11 @@ describe("keeping the sheet clear of the keyboard", () => {
       </BottomSheet>
     );
     expect(sheet().style.bottom).toBe("");
-    expect(panel().style.maxHeight).toBe("");
+    // Capped even with no keyboard. A sheet that sized to its content grew off
+    // the top of the screen once it had enough in it — where there is nothing
+    // to scroll with, because the scroller inside never gets shorter than what
+    // it holds. 92dvh keeps the backdrop visible so it still reads as a sheet.
+    expect(panel().style.maxHeight).toBe("92dvh");
   });
 
   it("lifts by exactly what the keyboard covers", () => {
@@ -114,7 +118,8 @@ describe("keeping the sheet clear of the keyboard", () => {
     viewport.openKeyboard(300);
     viewport.close();
     expect(sheet().style.bottom).toBe("");
-    expect(panel().style.maxHeight).toBe("");
+    // Back to the resting cap, not to uncapped.
+    expect(panel().style.maxHeight).toBe("92dvh");
   });
 
   it("ignores shifts too small to be a keyboard", () => {
