@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
-  Minus,
   Trash2,
   X,
   Receipt,
@@ -20,6 +19,7 @@ import PageWrapper from "@/components/PageWrapper";
 import AccountsCard from "@/components/AccountsCard";
 import AddTransactionSheet from "@/components/AddTransactionSheet";
 import BottomSheet from "@/components/BottomSheet";
+import EmptyState from "@/components/EmptyState";
 import TransferSheet from "@/components/TransferSheet";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import CategoryIcon from "@/components/CategoryIcon";
@@ -41,7 +41,7 @@ import { addDaysYmd, formatDay, formatPeriodLabel } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
-import { staggerContainer, slideInItem, fadeUp } from "@/animations/variants";
+import { fadeUp } from "@/animations/variants";
 
 const DELETE_GRACE_MS = 10000;
 
@@ -66,10 +66,18 @@ export default function TransactionsPage() {
   // The add button lives in the app shell, so it navigates here and asks for
   // the sheet rather than opening it itself — the sheet needs this page's
   // categories, accounts and optimistic-insert handlers.
-  const { state: navState } = useLocation();
+  //
+  // The request is consumed once and then wiped off the history entry. Router
+  // state lives in history.state, which survives a reload — leave it there and
+  // every refresh of /transactions re-opens the add sheet over the ledger, long
+  // after the tap that asked for it.
+  const { state: navState, pathname } = useLocation();
+  const navigate = useNavigate();
   useEffect(() => {
-    if (navState?.openAdd) setFormType(navState.openAdd);
-  }, [navState]);
+    if (!navState?.openAdd) return;
+    setFormType(navState.openAdd);
+    navigate(pathname, { replace: true, state: null });
+  }, [navState, pathname, navigate]);
   // The row the sheet is editing, or null. Mutually exclusive with formType —
   // the sheet is one sheet, and it is either adding or correcting.
   const [editing, setEditing] = useState(null);
@@ -390,7 +398,14 @@ export default function TransactionsPage() {
               placeholder="Search description or category"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="px-9"
+              // WebKit draws its own clear button inside a search field, which
+              // lands right under the one below — two crosses, a few pixels
+              // apart, as soon as there's anything to clear. The custom one
+              // stays because it's the one that matches the rest of the app
+              // and is a real 28px target; the browser's is turned off here.
+              // Only here: the friends search has no button of its own, so its
+              // native cross is the only way to clear it.
+              className="px-9 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
             />
             {query && (
               <button
@@ -497,18 +512,25 @@ export default function TransactionsPage() {
             ))}
           </div>
         ) : !hasEntries ? (
-          <Card>
-            <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
-              <span className="flex h-[52px] w-[52px] items-center justify-center rounded-md bg-surface-2 text-ink-3">
-                <Receipt className="h-6 w-6" />
-              </span>
-              <p className="text-[13px] leading-relaxed text-ink-3">
-                Nothing logged yet this {budgetPeriod.noun}.
-                <br />
-                Add income or an expense above.
-              </p>
-            </CardContent>
-          </Card>
+          // The same shape Home uses for the same situation, rather than a
+          // card: a border drawn around an absence gives the emptiest thing on
+          // the page the most weight. It also says what to do and offers the
+          // button to do it — the old copy pointed "above" at controls that
+          // are hidden while the ledger is empty.
+          <EmptyState
+            icon={Receipt}
+            title="Nothing logged yet"
+            body="Your first entry takes about four taps. Amount, category, done."
+            action={
+              <Button
+                className="mt-[22px] w-auto px-5"
+                onClick={() => setFormType("expense")}
+              >
+                <Plus className="h-[17px] w-[17px]" />
+                Add your first entry
+              </Button>
+            }
+          />
         ) : visible.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
@@ -544,33 +566,36 @@ export default function TransactionsPage() {
              card — a card per entry gave every $4 coffee the same weight as the
              day it belongs to, and the repetition is what made the list read as
              noisy rather than as a register. */
-          <motion.div
-            variants={staggerContainer(0.06, 0.05)}
-            initial="initial"
-            animate="animate"
-          >
-            <AnimatePresence initial={false}>
-              {days.map(({ key, entries, net, counted, label }) => (
-                <motion.section key={key} layout className="mt-4 first:mt-0">
-                  <header className="flex items-baseline justify-between gap-3 pb-2">
-                    <h2 className="text-overline text-ink-3">{label}</h2>
-                    <span
-                      className={cn(
-                        "num text-[12px] font-medium",
-                        counted && net > 0 ? "text-positive" : "text-ink-3"
-                      )}
-                    >
-                      {!counted
-                        ? "—"
-                        : net > 0
-                          ? `+${formatMoney(net)}`
-                          : net < 0
-                            ? `−${formatMoney(-net)}`
-                            : formatMoney(0)}
-                    </span>
-                  </header>
+          <div>
+            {days.map(({ key, entries, net, counted, label }) => (
+              <section key={key} className="mt-4 first:mt-0">
+                <header className="flex items-baseline justify-between gap-3 pb-2">
+                  <h2 className="text-overline text-ink-3">{label}</h2>
+                  <span
+                    className={cn(
+                      "num text-[12px] font-medium",
+                      counted && net > 0 ? "text-positive" : "text-ink-3"
+                    )}
+                  >
+                    {!counted
+                      ? "—"
+                      : net > 0
+                        ? `+${formatMoney(net)}`
+                        : net < 0
+                          ? `−${formatMoney(-net)}`
+                          : formatMoney(0)}
+                  </span>
+                </header>
 
-                  <ul className="-mx-4 border-y border-hairline bg-surface [&>*+*]:border-t [&>*+*]:border-hairline">
+                {/* The presence boundary is *inside* the day, around the rows
+                    only. Put it around the days instead and a day that stops
+                    matching the search stays mounted for as long as its rows
+                    take to fade — so typing leaves a trail of headers with a
+                    row-shaped hole under each. A day that no longer matches
+                    isn't leaving, it was never in this result: it goes at
+                    once, and only a row you actually deleted animates out. */}
+                <ul className="-mx-4 border-y border-hairline bg-surface [&>*+*]:border-t [&>*+*]:border-hairline">
+                  <AnimatePresence initial={false}>
                     {entries.map((entry) => {
                       if (entry.kind === "transfer") {
                         const m = entry.row;
@@ -588,11 +613,15 @@ export default function TransactionsPage() {
                       const cat = getCategory(t.category);
                       const account = getAccount(t.accountId);
                       const isIncome = t.type === "income";
+                      // No entrance animation, and no `layout`. A row you just
+                      // added has to be readable the instant it lands — it
+                      // mounted mid-fade often enough that the ledger showed a
+                      // blank row until the next reload. Only the exit is
+                      // animated, because a delete is undoable and the slide is
+                      // what says so.
                       return (
                         <motion.li
                           key={t._id}
-                          variants={slideInItem}
-                          layout
                           exit={{ opacity: 0, x: 24, transition: { duration: 0.25 } }}
                           className="flex items-center gap-1 px-4 py-[13px]"
                         >
@@ -647,11 +676,11 @@ export default function TransactionsPage() {
                         </motion.li>
                       );
                     })}
-                  </ul>
-                </motion.section>
-              ))}
-            </AnimatePresence>
-          </motion.div>
+                  </AnimatePresence>
+                </ul>
+              </section>
+            ))}
+          </div>
         )}
       </div>
     </PageWrapper>
@@ -662,8 +691,6 @@ export default function TransactionsPage() {
 function TransferRow({ transfer, from, to, onDelete }) {
   return (
     <motion.li
-      variants={slideInItem}
-      layout
       exit={{ opacity: 0, x: 24, transition: { duration: 0.25 } }}
       className="flex items-center gap-1 px-4 py-[13px]"
     >

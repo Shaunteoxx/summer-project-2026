@@ -146,7 +146,7 @@ export default function BottomSheet({
 
               <div className="flex shrink-0 items-center justify-between gap-3 px-5 pb-1 pt-1">
                 {title ? (
-                  <h2 id={titleId} className="text-lg font-semibold">{title}</h2>
+                  <h2 id={titleId} className="text-title">{title}</h2>
                 ) : (
                   <span />
                 )}

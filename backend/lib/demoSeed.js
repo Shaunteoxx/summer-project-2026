@@ -73,9 +73,9 @@ function genMonth(userId, year, month, lastDay, rand, spendScale = 1, accounts =
   if (lastDay >= 15) add("income", "Job", "Part-time shift", 250, 15);
   if (lastDay >= 20 && rand() > 0.5) add("income", "Gifts", "Birthday money", 50, 20);
 
-  // --- Food & Drinks: most days ---
+  // --- F & B: most days ---
   for (let d = 2; d <= lastDay; d += 1 + Math.floor(rand() * 2)) {
-    add("expense", "Food & Drinks", pick(FOOD, rand), 4 + rand() * 9, d);
+    add("expense", "F & B", pick(FOOD, rand), 4 + rand() * 9, d);
   }
   // --- Transport: a few times a week ---
   for (let d = 3; d <= lastDay; d += 3 + Math.floor(rand() * 2)) {

@@ -17,7 +17,7 @@ import { roundMoney } from "./validation.js";
 // The categories every user has, on top of their own. Adding one here is all it
 // should ever take: transactions, edits and repeating rules all read this.
 export const FIXED_CATEGORIES = {
-  expense: ["Food & Drinks", "Transport", "Shopping", "Entertainment", "Travel"],
+  expense: ["F & B", "Transport", "Shopping", "Entertainment", "Travel"],
   income: ["Allowance", "Job", "Gifts"],
 };
 

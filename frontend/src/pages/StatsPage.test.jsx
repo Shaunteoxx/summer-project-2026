@@ -51,7 +51,7 @@ const summary = (year, month, totalIncome, totalExpenses) => ({
       : 0,
 });
 
-const txn = (date, amount, category = "Food & Drinks") => ({
+const txn = (date, amount, category = "F & B") => ({
   _id: date + amount,
   date: `${date}T00:00:00.000Z`,
   type: "expense",

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { motion, useReducedMotion } from "framer-motion";
 import { ArrowLeftRight, Receipt } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -28,6 +28,21 @@ export default function PlanPage() {
   const [stats, setStats] = useState(null);
   const [streak, setStreak] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Home's pace verdict links here. Centre the card it was talking about rather
+  // than dropping the reader at the top of the page to find it themselves —
+  // and wait for the data, or we'd scroll to a skeleton and land in the wrong
+  // place once the real content changes the page height.
+  const { state: navState } = useLocation();
+  const paceRef = useRef(null);
+  const reduceMotion = useReducedMotion();
+  useEffect(() => {
+    if (navState?.focus !== "pace" || loading || !paceRef.current) return;
+    paceRef.current.scrollIntoView({
+      block: "center",
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  }, [navState, loading, reduceMotion]);
 
   useEffect(() => {
     Promise.all([
@@ -135,17 +150,19 @@ export default function PlanPage() {
               daysAfterToday={daysAfterToday}
               noun={noun}
             />
-            <PaceForecastCard
-              income={income}
-              savings={savings}
-              spentSoFar={spentSoFar}
-              periodDays={periodDays}
-              dayOfPeriod={dayOfPeriod}
-              periodEndYmd={period?.end}
-              daysAfterToday={daysAfterToday}
-              todayBudget={todayBudget}
-              noun={noun}
-            />
+            <div ref={paceRef}>
+              <PaceForecastCard
+                income={income}
+                savings={savings}
+                spentSoFar={spentSoFar}
+                periodDays={periodDays}
+                dayOfPeriod={dayOfPeriod}
+                periodEndYmd={period?.end}
+                daysAfterToday={daysAfterToday}
+                todayBudget={todayBudget}
+                noun={noun}
+              />
+            </div>
             <GoalDailyCard
               income={income}
               savings={savings}

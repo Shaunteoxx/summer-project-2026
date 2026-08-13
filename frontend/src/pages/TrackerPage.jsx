@@ -370,7 +370,7 @@ export function SavedVsSpentCard({
                 slack ends up in the gap after the ring, where it reads as
                 breathing room rather than as a hole in the middle of a row. */}
             <div className="mx-auto min-w-0">
-            <dl className="grid min-w-0 grid-cols-[minmax(0,max-content)_max-content] items-baseline gap-x-5 gap-y-1">
+            <dl className="grid grid-cols-[auto_auto] items-baseline gap-x-5 gap-y-1">
               {/* "Saved", not "Saved so far": at 19px the amount needs the room,
                   and the pair reads as the card's own title now that it has
                   none. The period it covers is in the page header. */}
@@ -379,7 +379,7 @@ export function SavedVsSpentCard({
                 ["Spent", spent, colors.spent],
               ].map(([label, value, swatch]) => (
                 <Fragment key={label}>
-                  <dt className="flex min-w-0 items-center gap-2">
+                  <dt className="flex items-center gap-2">
                     <span
                       className="h-[9px] w-[9px] shrink-0 rounded-[3px]"
                       style={{ background: swatch }}
@@ -440,21 +440,20 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
         </h2>
 
         {byCategory.length > 0 ? (
-          /* Both donuts are 128 — one ring size in the system, not two — and the
-             gap is tight. Every pixel the ring doesn't take is a pixel of gutter
-             between a category and its amount, and the app's real labels
-             ("Food & Drinks") are far longer than the mockup's ("Food"). */
+          /* The gap is tight: every pixel the ring doesn't take is a pixel of
+             gutter between a category and its amount, and the app's real labels
+             ("Entertainment") run longer than the mockup's ("Fun"). */
           <div className="mt-4 flex items-center gap-4 ml-3">
-            <div className="relative h-32 w-32 shrink-0">
-              <PieChart width={128} height={128} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+            <div className="relative h-28 w-28 shrink-0">
+              <PieChart width={112} height={112} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                 <Pie
                   data={byCategory}
                   dataKey="value"
                   nameKey="name"
-                  cx={64}
-                  cy={64}
-                  innerRadius={50.5}
-                  outerRadius={63.5}
+                  cx={56}
+                  cy={56}
+                  innerRadius={43.5}
+                  outerRadius={55.5}
                   paddingAngle={0}
                   startAngle={90}
                   endAngle={-270}
@@ -484,16 +483,16 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
                 as a column, but sit next to their labels rather than at the far
                 edge. Long custom category names shrink and truncate rather than
                 pushing the amounts out of alignment. */}
-            <dl className="mx-auto grid min-w-0 grid-cols-[minmax(0,max-content)_max-content] items-center gap-x-8 gap-y-[9px]">
+            <dl className="mx-auto grid grid-cols-[auto_auto] items-center gap-x-8 gap-y-[9px]">
               {byCategory.map((c) => (
                 <Fragment key={c.name}>
-                  <dt className="flex min-w-0 items-center gap-2">
+                  <dt className="flex items-center gap-2">
                     <span
                       className="h-[7px] w-[7px] shrink-0 rounded-[20px]"
                       style={{ background: c.color }}
                       aria-hidden="true"
                     />
-                    <span className="truncate text-meta text-[12px] text-ink-2">{c.name}</span>
+                    <span className="max-w-[104px] truncate text-meta text-[12px] text-ink-2">{c.name}</span>
                   </dt>
                   <dd className="num text-right text-meta text-[12px] font-medium text-ink">
                     {formatMoney(c.value)}

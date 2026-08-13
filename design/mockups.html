@@ -354,7 +354,7 @@ const totals=()=>`<div class="gut" style="margin-top:12px;display:grid;grid-temp
   <div class="num" style="font-size:22px;font-weight:500;margin-top:6px">$1,208.75</div></div>
   <div class="card" style="padding:15px 16px"><div style="font-size:12.5px;color:var(--ink-3)">Saved this month</div>
   <div class="num" style="font-size:22px;font-weight:500;margin-top:6px;color:var(--positive)">77%</div></div></div>`;
-const TX=[['food','Chicken rice','Today · Food &amp; Drinks · Trust','−$4.50',''],
+const TX=[['food','Chicken rice','Today · F &amp; B · Trust','−$4.50',''],
           ['transport','Grab to school','Today · Transport · Trust','−$8.20',''],
           ['shopping','Uniqlo tee','Yesterday · Shopping · Trust','−$29.90',''],
           ['allowance','Monthly allowance','1 Aug · Allowance · DBS','+$1,240.00','var(--positive)']];
@@ -394,7 +394,7 @@ document.getElementById('pal-light').innerHTML=[['canvas','#FBFBF9'],['surface',
   ['ink','#17181A'],['ink-2','#55595E'],['ink-3','#6B6F74'],['positive','#0F7A56'],['negative','#B4342A'],['warning','#8F5008']].map(x=>sw(...x)).join('');
 document.getElementById('pal-dark').innerHTML=[['canvas · dark','#0A0A0B'],['surface · dark','#141416'],['surface-2 · dark','#1D1D20'],['hairline · dark','#232326'],
   ['ink · dark','#F4F4F3'],['ink-2 · dark','#ABACB0'],['ink-3 · dark','#8A8B90'],['positive · dark','#45D19C'],['negative · dark','#E9635A'],['warning · dark','#F0B24A']].map(x=>sw(...x)).join('');
-document.getElementById('pal-cat').innerHTML=[['Food &amp; Drinks','#CC624E'],['Transport','#B9740F'],['Shopping','#659734'],['Entertainment','#139A94'],
+document.getElementById('pal-cat').innerHTML=[['F &amp; B','#CC624E'],['Transport','#B9740F'],['Shopping','#659734'],['Entertainment','#139A94'],
   ['Travel','#1290CC'],['Allowance','#7A79D7'],['Job','#A968BC'],['Gifts','#C45F8F']].map(x=>sw(...x)).join('');
 document.getElementById('typescale').innerHTML=[
  ['display','46 / 500 / −.035em<br>tabular · hero amount only','<div style="font-size:46px;font-weight:500;letter-spacing:-.035em;line-height:1">$652.60</div>'],
@@ -402,7 +402,7 @@ document.getElementById('typescale').innerHTML=[
  ['title','19 / 600 / −.02em<br>card + sheet titles','<div style="font-size:19px;font-weight:600;letter-spacing:-.02em">Account activity</div>'],
  ['amount','19 / 500 / −.02em<br>secondary figures','<div style="font-size:19px;font-weight:500;letter-spacing:-.02em">$1,240.00</div>'],
  ['body','15 / 400 · rows 500','<div style="font-size:15px">Know exactly how much you can spend today.</div>'],
- ['meta','12.5 / 400 · ink-3','<div style="font-size:12.5px;color:#9C9DA2">11 Aug · Food &amp; Drinks · Trust</div>'],
+ ['meta','12.5 / 400 · ink-3','<div style="font-size:12.5px;color:#9C9DA2">11 Aug · F &amp; B · Trust</div>'],
  ['overline','11 / 500 / +.07em caps','<div style="font-size:11px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:#9C9DA2">Left to spend</div>'],
  ['mono','Geist Mono · keypad only','<div style="font-family:\'Geist Mono\',monospace;font-size:21px;font-weight:500">7 8 9 ÷</div>'],
 ].map(([n,sp,ex])=>`<div class="trow"><div class="spec"><b>${n}</b>${sp}</div><div>${ex}</div></div>`).join('');
@@ -428,7 +428,7 @@ F('f-components',frame('light',`<div class="scroll">${bar()}
       <span class="badge" style="background:var(--surface-2);color:var(--ink-2)">Paused</span></div></div>
   </div>
   <div style="margin-top:22px">${ol('&nbsp;&nbsp;&nbsp;&nbsp;Rows')}${listRows(
-    row({tile:catTile('food'),title:'Chicken rice',meta:'Food &amp; Drinks · Trust',value:'<div class="num ramt">−$4.50</div>',chev:false})+
+    row({tile:catTile('food'),title:'Chicken rice',meta:'F &amp; B · Trust',value:'<div class="num ramt">−$4.50</div>',chev:false})+
     row({tile:plainTile('cal'),title:'Budget period',meta:'Resets on the 1st',value:val('Monthly')})
   )}</div>
   <div class="gut" style="margin-top:22px">${ol('Toasts')}<div style="display:flex;flex-direction:column;gap:9px;margin-top:10px">
@@ -490,7 +490,7 @@ const txRow=(c,t,m,a,col,rep)=>`<div class="row">${c==='transfer'?`<div class="t
 const txnBody=()=>pageTitle('Transactions','1–31 August · this period · 14 entries')+
   `<div class="gut" style="margin-top:18px">${acctCard()}</div>`+search()+
   `<div class="gut" style="margin-top:10px">${seg(['All','Expenses','Income'],0)}</div>`+
-  day('Today · 11 Aug','−$12.70',txRow('food','Chicken rice','Food &amp; Drinks · Trust','−$4.50')+txRow('transport','Grab to school','Transport · Trust','−$8.20'))+
+  day('Today · 11 Aug','−$12.70',txRow('food','Chicken rice','F &amp; B · Trust','−$4.50')+txRow('transport','Grab to school','Transport · Trust','−$8.20'))+
   day('Yesterday · 10 Aug','−$29.90',txRow('shopping','Uniqlo tee','Shopping · Trust','−$29.90'))+
   day('8 Aug','−$10.90',txRow('entertainment','Spotify','Entertainment · DBS · Repeats monthly','−$10.90','',1))+
   day('4 Aug','—',txRow('transfer','DBS → Trust','Transfer · doesn\'t touch your budget','$400.00','var(--ink-3)'))+

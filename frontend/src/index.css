@@ -178,11 +178,10 @@
 }
 
 @layer components {
-  /* Flat canvas. Was two fixed radial emerald glows; they tinted the edges of
-     every white card and slid under content as you scrolled. */
-  .app-bg {
-    background: hsl(var(--canvas));
-  }
+  /* `.app-bg` lived here — two fixed radial emerald glows, then a flat canvas
+     colour once those went. Its last caller was the login screen, which now
+     uses `bg-canvas` like every other full-height surface, so a utility that
+     aliased one token is one indirection nobody needs. */
 
   /* Frosted bars. 92% rather than the old 80% — reads as glass without the
      muddy over-blur. */

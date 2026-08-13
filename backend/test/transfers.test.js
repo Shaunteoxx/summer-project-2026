@@ -60,7 +60,7 @@ const addTxn = (token, accountId, type, amount, date = todayYmd()) =>
     description: "Test",
     amount,
     type,
-    category: type === "income" ? "Allowance" : "Food & Drinks",
+    category: type === "income" ? "Allowance" : "F & B",
     date,
     accountId,
   });
@@ -256,7 +256,7 @@ describe("per-account totals", () => {
       description: "Cash lunch",
       amount: 12,
       type: "expense",
-      category: "Food & Drinks",
+      category: "F & B",
       date: todayYmd(),
     });
 

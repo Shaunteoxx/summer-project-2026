@@ -139,7 +139,7 @@ describe("history is not rewritten", () => {
     date: new Date(`${date}T00:00:00.000Z`),
     type,
     amount,
-    category: type === "income" ? "Allowance" : "Food & Drinks",
+    category: type === "income" ? "Allowance" : "F & B",
   });
 
   // May's spending sits between the two budgets it could be judged against:

@@ -16,7 +16,7 @@ const transactionSchema = new mongoose.Schema(
       enum: ["income", "expense"],
       required: true,
     },
-    // Spending/earning category label, e.g. "Food & Drinks" or "Allowance".
+    // Spending/earning category label, e.g. "F & B" or "Allowance".
     category: { type: String, required: true, trim: true, maxlength: 40 },
     date: { type: Date, required: true, default: Date.now },
     month: { type: Number, required: true, min: 0, max: 11 },

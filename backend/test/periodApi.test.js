@@ -91,7 +91,7 @@ const addTxn = (userId, ymd, type, amount) => {
     description: `${type} ${ymd}`,
     amount,
     type,
-    category: type === "income" ? "Allowance" : "Food & Drinks",
+    category: type === "income" ? "Allowance" : "F & B",
     date,
     month: date.getUTCMonth(),
     year: date.getUTCFullYear(),

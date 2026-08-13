@@ -19,7 +19,7 @@ Built with **React + Vite**, **Node + Express**, and **MongoDB**, with Google OA
 - **Transactions**
   - Add income / expenses from a bottom sheet (type fixed by an Income/Expense button)
   - **Few-tap entry** — the **description is optional** and falls back to the category name (the placeholder shows exactly what will be saved), the date defaults to today, and the sheet hands you along: picking a category focuses the description, and its return key opens the amount keypad. Everything stays visible and editable, so fixing a mis-tapped category is still one tap
-  - **Categories** — fixed set (Food & Drinks, Transport, Shopping, Entertainment, Travel · Allowance, Job, Gifts) plus **user-created custom categories** with their own colour
+  - **Categories** — fixed set (F & B, Transport, Shopping, Entertainment, Travel · Allowance, Job, Gifts) plus **user-created custom categories** with their own colour
   - **Search** by description or category, **filter** by All / Expenses / Income
   - Optimistic delete with a **10-second undo**
 - **Plan** — four **live planners** driven by your real month data (so every number matches the homepage): a **dynamic daily budget** that updates the moment you log an expense, a **what-if purchase** planner, **pace & forecast** projections, and **goal ↔ daily-cap** conversion

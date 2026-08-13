@@ -28,12 +28,24 @@ import {
  *
  * Each category pairs a colour with an icon and a label, so nothing ever
  * depends on colour alone.
+ *
+ * `short` is the label for the six-across picker in the entry sheet, where a
+ * tile is about 53px wide. Only names that can't fit carry one — and only names
+ * that are a single unbreakable word need it at all, since anything with a
+ * space wraps to the second line on its own. It is a display label and nothing
+ * more: `name` is what gets stored, searched and shown everywhere else.
  */
 export const EXPENSE_CATEGORIES = [
-  { name: "Food & Drinks", icon: Utensils, color: "#CC624E", token: "food" },
+  { name: "F & B", icon: Utensils, color: "#CC624E", token: "food" },
   { name: "Transport", icon: Bus, color: "#B9740F", token: "transport" },
   { name: "Shopping", icon: ShoppingBag, color: "#659734", token: "shopping" },
-  { name: "Entertainment", icon: Clapperboard, color: "#139A94", token: "entertainment" },
+  {
+    name: "Entertainment",
+    short: "Fun",
+    icon: Clapperboard,
+    color: "#139A94",
+    token: "entertainment",
+  },
   { name: "Travel", icon: Plane, color: "#1290CC", token: "travel" },
 ];
 
@@ -45,7 +57,7 @@ export const INCOME_CATEGORIES = [
 
 /** Dark-mode variants, lifted to oklch(.775 .100 h) so they hold on #141416. */
 export const CATEGORY_COLORS_DARK = {
-  "Food & Drinks": "#FE9580",
+  "F & B": "#FE9580",
   Transport: "#F0A346",
   Shopping: "#94C866",
   Entertainment: "#1ED0C8",

@@ -60,7 +60,7 @@ const addTxn = async (token, overrides = {}) => {
     description: "Lunch",
     amount: 12,
     type: "expense",
-    category: "Food & Drinks",
+    category: "F & B",
     date: todayYmd(),
     ...overrides,
   });
@@ -118,7 +118,7 @@ describe("editing a transaction", () => {
     assert.equal(status, 200);
     assert.equal(body.amount, 8.5);
     assert.equal(body.description, "Lunch with Ben");
-    assert.equal(body.category, "Food & Drinks");
+    assert.equal(body.category, "F & B");
     assert.equal(body.type, "expense");
     assert.equal(body.date, created.date);
   });
@@ -207,7 +207,7 @@ describe("editing a transaction", () => {
     const after = await Transaction.findById(created._id);
     assert.equal(after.amount, 12);
     assert.equal(after.description, "Lunch");
-    assert.equal(after.category, "Food & Drinks");
+    assert.equal(after.category, "F & B");
   });
 
   it("refuses to flip an expense into income", async () => {

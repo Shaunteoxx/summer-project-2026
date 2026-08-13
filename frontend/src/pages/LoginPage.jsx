@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Wallet, Eye, Loader2 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
@@ -46,61 +45,68 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="app-bg flex min-h-[100dvh] flex-col items-center justify-center px-5 pb-safe pt-safe">
+    // Left-aligned and uncarded. A card here framed the only thing on the
+    // screen, which is what made this read as a dialog rather than as the front
+    // door — and the app behind it has no card wrapping a whole page either.
+    // The column is capped near the mockup's 326px measure so the headline
+    // keeps its three-line shape on a phone and doesn't stretch on a desktop.
+    <div className="flex min-h-[100dvh] flex-col justify-center bg-canvas px-8 pb-safe pt-safe">
       <motion.div
-        initial={{ opacity: 0, y: 30, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.6, ease: EASE }}
-        className="w-full max-w-app"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: EASE }}
+        className="mx-auto w-full max-w-[22rem]"
       >
-        <Card>
-          <CardContent className="flex flex-col items-center gap-6 p-8 text-center">
-            <motion.div
-              initial={{ scale: 0, rotate: -20 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 14 }}
-              className="flex h-[52px] w-[52px] items-center justify-center rounded-lg bg-surface-2 text-ink"
-            >
-              <Wallet className="h-6 w-6" />
-            </motion.div>
+        {/* The wordmark, not a wallet icon: this is the one screen where the
+            brand is the subject, and the same mark the cold-start loader
+            shows — so the app doesn't introduce itself twice with two
+            different faces. */}
+        <div
+          role="img"
+          aria-label="Broke No More"
+          className="grid h-14 w-14 place-items-center rounded-[18px] bg-ink text-[28px] font-semibold tracking-[-0.05em] text-surface"
+        >
+          B
+        </div>
 
-            <div className="space-y-2">
-              <h1 className="text-title-lg text-ink">
-                Broke No More
-              </h1>
-              <p className="mx-auto max-w-xs text-[13.5px] leading-relaxed text-ink-3">
-                Know exactly how much you can spend today and how much you need
-                to save for tomorrow.
-              </p>
-            </div>
+        {/* The headline is the promise, not the product name. Someone who has
+            just landed needs to know what this does; the name is on the mark
+            above and in the tab. */}
+        <h1 className="mt-[26px] text-[30px] font-semibold leading-[1.15] tracking-[-0.03em]">
+          Know exactly what you can spend today.
+        </h1>
+        <p className="mt-3.5 text-[14.5px] leading-relaxed text-ink-3">
+          Set a savings target, log what you spend, and the app works out the
+          rest — one number, every day.
+        </p>
 
-            <div className="w-full space-y-3">
-              <Button size="lg" className="w-full gap-3" onClick={handleGoogle}>
-                <GoogleIcon />
-                Sign in with Google
-              </Button>
+        <div className="mt-9 flex flex-col gap-2.5">
+          <Button className="h-[50px] w-full gap-3" onClick={handleGoogle}>
+            <GoogleIcon />
+            Continue with Google
+          </Button>
 
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full gap-2"
-                onClick={handleDemo}
-                disabled={demoLoading}
-              >
-                {demoLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-                {demoLoading ? "Loading demo…" : "Explore the demo"}
-              </Button>
-            </div>
+          {/* Filled surface-2 rather than an outline: two outlined buttons
+              stacked read as equal choices, and signing in is the one that
+              keeps your data. */}
+          <Button
+            variant="secondary"
+            className="h-[50px] w-full gap-2"
+            onClick={handleDemo}
+            disabled={demoLoading}
+          >
+            {demoLoading ? (
+              <Loader2 className="h-[17px] w-[17px] animate-spin" />
+            ) : (
+              <Eye className="h-[17px] w-[17px]" />
+            )}
+            {demoLoading ? "Loading demo…" : "Try the demo"}
+          </Button>
+        </div>
 
-            <p className="text-[11.5px] text-ink-3">
-              No sign-up needed · Demo is read-only
-            </p>
-          </CardContent>
-        </Card>
+        <p className="mt-[22px] text-center text-[11.5px] leading-relaxed text-ink-3">
+          The demo is read-only. Nothing you do in it is saved.
+        </p>
       </motion.div>
     </div>
   );

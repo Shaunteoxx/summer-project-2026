@@ -135,7 +135,7 @@ export default function AccountsCard({ onTransfer = null }) {
 
           {/* One sentence instead of three reconciliation rows. */}
           <p className="mt-3 border-t border-hairline pt-3 text-[11.5px] leading-relaxed text-ink-3">
-            Less {formatMoney(totals.reserved)} reserved for savings,{" "}
+            Minus {formatMoney(totals.reserved)} for savings,{" "}
             {overspent ? (
               <>
                 you&apos;re{" "}
@@ -146,7 +146,7 @@ export default function AccountsCard({ onTransfer = null }) {
               </>
             ) : (
               <>
-                that&apos;s your{" "}
+                that&apos;s {" "}
                 <b className="font-medium text-ink-2">
                   {formatMoney(totals.leftToSpend)}
                 </b>{" "}

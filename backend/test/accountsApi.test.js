@@ -57,7 +57,7 @@ const addTxn = (token, accountId, type = "expense", amount = 10) =>
     description: "Test",
     amount,
     type,
-    category: type === "income" ? "Allowance" : "Food & Drinks",
+    category: type === "income" ? "Allowance" : "F & B",
     date: todayYmd(),
     ...(accountId === undefined ? {} : { accountId }),
   });

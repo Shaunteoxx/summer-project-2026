@@ -103,7 +103,7 @@ describe("account activity", () => {
 
     expect(cellsFor("Total")).toEqual(["$800.00", "$448.00"]);
     // 800 − 448 = 352, less the 200 reserve, leaves 152.
-    expect(screen.getByText(/Less \$200\.00 reserved for savings/)).toBeInTheDocument();
+    expect(screen.getByText(/Minus \$200\.00 for savings/)).toBeInTheDocument();
     expect(screen.getByText("$152.00")).toBeInTheDocument();
   });
 

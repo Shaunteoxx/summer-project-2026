@@ -729,19 +729,21 @@ export default function MorePage() {
             role="group"
             aria-label="Budget period mode"
           >
+            {/* One line each. The hints that used to sit under these labels
+                ("Calendar", "Custom length") said less than the paragraph
+                right below, and made this the only two-line segmented control
+                in the app. */}
             <ModeTab
               active={!isDays}
               disabled={savingPeriod}
               onClick={() => switchMode("month")}
               label="Month"
-              hint="Calendar"
             />
             <ModeTab
               active={isDays}
               disabled={savingPeriod}
               onClick={() => switchMode("days")}
               label="Days"
-              hint="Custom length"
             />
           </div>
 
@@ -756,14 +758,15 @@ export default function MorePage() {
             <>
               {period.current ? (
                 <div className="space-y-4">
-                  <div className="rounded-lg border border-hairline bg-surface-2 p-4">
-                    <p className="text-overline text-ink-3 t-muted-foreground">
-                      Running now
-                    </p>
-                    <p className="mt-1 font-semibold">
+                  {/* A well, not a bordered card: it states what's running, it
+                      isn't a control, and a border would give it the same
+                      weight as the fields underneath that are. */}
+                  <div className="rounded-xl bg-surface-2 p-4">
+                    <p className="text-overline text-ink-3">Running now</p>
+                    <p className="mt-1.5 text-[15px] font-semibold tracking-[-0.01em]">
                       {formatPeriodLabel(period.current)}
                     </p>
-                    <p className="mt-0.5 text-[13px] text-ink-3">
+                    <p className="mt-0.5 text-[12.5px] text-ink-3">
                       {period.current.days} days ·{" "}
                       {period.current.daysLeft === 0
                         ? "ends today"
@@ -787,20 +790,15 @@ export default function MorePage() {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="period-length">Length in days</Label>
-                    <Input
-                      id="period-length"
-                      type="number"
-                      inputMode="numeric"
-                      min={MIN_PERIOD_DAYS}
-                      max={MAX_PERIOD_DAYS}
-                      value={periodLength}
-                      onChange={(e) => {
-                        setPeriodLength(e.target.value);
-                        setPeriodError("");
-                      }}
-                    />
+                  <LengthField
+                    id="period-length"
+                    value={periodLength}
+                    disabled={savingPeriod}
+                    onChange={(v) => {
+                      setPeriodLength(v);
+                      setPeriodError("");
+                    }}
+                  >
                     <p className="text-[12px] leading-relaxed text-ink-3">
                       Runs to{" "}
                       <strong>
@@ -810,9 +808,9 @@ export default function MorePage() {
                             })
                           : "—"}
                       </strong>
-                      . Your daily budget is recalculated from what's left.
+                      . Your daily budget is recalculated from what&apos;s left.
                     </p>
-                  </div>
+                  </LengthField>
 
                   {periodError && <FieldError>{periodError}</FieldError>}
 
@@ -859,9 +857,9 @@ export default function MorePage() {
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteId(period.current.id)}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-sm py-2 text-[12px] font-semibold text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
+                      className="w-full rounded-sm py-3 text-center text-[13px] font-medium text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
                     >
-                      <Trash2 className="h-3.5 w-3.5" /> Remove this period
+                      Remove this period
                     </button>
                   )}
                 </div>
@@ -894,39 +892,15 @@ export default function MorePage() {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="period-new-length">Length in days</Label>
-                    <Input
-                      id="period-new-length"
-                      type="number"
-                      inputMode="numeric"
-                      min={MIN_PERIOD_DAYS}
-                      max={MAX_PERIOD_DAYS}
-                      value={periodLength}
-                      onChange={(e) => {
-                        setPeriodLength(e.target.value);
-                        setPeriodError("");
-                      }}
-                    />
-                    <div className="flex flex-wrap gap-1.5">
-                      {[7, 14, 15, 30].map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => {
-                            setPeriodLength(String(n));
-                            setPeriodError("");
-                          }}
-                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                            Number(periodLength) === n
-                              ? "border-transparent bg-ink text-surface"
-                              : "border-hairline-strong text-ink-2 hover:bg-surface-2"
-                          }`}
-                        >
-                          {n} days
-                        </button>
-                      ))}
-                    </div>
+                  <LengthField
+                    id="period-new-length"
+                    value={periodLength}
+                    disabled={savingPeriod}
+                    onChange={(v) => {
+                      setPeriodLength(v);
+                      setPeriodError("");
+                    }}
+                  >
                     {periodStart && Number(periodLength) >= MIN_PERIOD_DAYS && (
                       <p className="text-[12px] leading-relaxed text-ink-3">
                         Runs until{" "}
@@ -938,7 +912,7 @@ export default function MorePage() {
                         .
                       </p>
                     )}
-                  </div>
+                  </LengthField>
 
                   <div className="space-y-2">
                     <Label htmlFor="period-target">Savings target (optional)</Label>
@@ -1072,22 +1046,65 @@ export default function MorePage() {
   );
 }
 
-function ModeTab({ active, disabled, onClick, label, hint }) {
+function ModeTab({ active, disabled, onClick, label }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       aria-pressed={active}
-      className={`rounded-lg px-3 py-2 text-center transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      className={`rounded-[9px] px-3 py-1.5 text-center text-[13px] transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         active
           ? "bg-surface font-semibold text-ink shadow-card dark:bg-surface-3"
-          : "text-ink-3 hover:text-ink-2"
+          : "font-medium text-ink-3 hover:text-ink-2"
       }`}
     >
-      <span className="block text-sm">{label}</span>
-      <span className="block text-[11px] text-ink-3">{hint}</span>
+      {label}
     </button>
+  );
+}
+
+/**
+ * Length in days, with the four lengths people actually use one tap away.
+ *
+ * Shared by both branches of the sheet. It used to exist only on the "start a
+ * new period" form, so changing the length of a running one meant clearing a
+ * number field and typing — the harder half of the same job.
+ */
+function LengthField({ id, value, onChange, disabled, children }) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>Length in days</Label>
+      <Input
+        id={id}
+        type="number"
+        inputMode="numeric"
+        min={MIN_PERIOD_DAYS}
+        max={MAX_PERIOD_DAYS}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <div className="flex flex-wrap gap-1.5">
+        {[7, 14, 15, 30].map((n) => (
+          <button
+            key={n}
+            type="button"
+            disabled={disabled}
+            aria-pressed={Number(value) === n}
+            onClick={() => onChange(String(n))}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              Number(value) === n
+                ? "border-transparent bg-ink text-surface"
+                : "border-hairline-strong text-ink-2 hover:bg-surface-2"
+            }`}
+          >
+            {n} days
+          </button>
+        ))}
+      </div>
+      {children}
+    </div>
   );
 }
 

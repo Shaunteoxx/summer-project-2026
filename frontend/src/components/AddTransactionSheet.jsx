@@ -1,17 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, useAnimationControls } from "framer-motion";
-import { Plus, Check, X, Calculator } from "lucide-react";
+import { Plus, X, Wallet, ChevronDown } from "lucide-react";
 
 import AmountCalculator from "@/components/AmountCalculator";
 import BottomSheet from "@/components/BottomSheet";
 import FieldError from "@/components/FieldError";
+import SwitchRow from "@/components/SwitchRow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { addTransaction, updateTransaction } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useRecurring } from "@/hooks/useRecurring";
@@ -92,6 +91,10 @@ const formFrom = (transaction) => ({
  * successful save is handed back through onAdded/onUpdated rather than written
  * from here — only the page knows which window it is currently listing.
  *
+ * Laid out amount-first: the figure is the hero at 44px, then the category
+ * grid, then the three facts that are usually already right (description, date,
+ * account). Nothing is labelled twice — each control reads as its own value.
+ *
  * In keypad mode the dismiss affordances (X, Escape, drag-down) step back to
  * the form instead of discarding a half-filled entry.
  */
@@ -115,9 +118,6 @@ export default function AddTransactionSheet({
   const isEdit = Boolean(editing);
   const toast = useToast();
   const guard = useDemoGuard();
-  // On phones the keypad replaces the OS keyboard entirely, so it can't be
-  // missed. On desktop the field stays a plain typeable input.
-  const touchFirst = useCoarsePointer();
   const { categoriesByType, addCategory, removeCategory, custom } = useCategories();
   const {
     active: accounts,
@@ -149,8 +149,12 @@ export default function AddTransactionSheet({
     amount: useAnimationControls(),
     date: useAnimationControls(),
   };
-  // Focus target for the category -> description hand-off.
-  const descriptionRef = useRef(null);
+
+  // The account row reads as a field showing what's tagged, because that's how
+  // it's used — the default is remembered and usually right, so the common
+  // case is confirming it rather than choosing. The chips are one tap away,
+  // expanded inline the same way the new-category panel is.
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
 
   // Inline "create custom category" panel state.
   const [showNewCategory, setShowNewCategory] = useState(false);
@@ -168,13 +172,14 @@ export default function AddTransactionSheet({
     });
   };
 
-  // On touch the keypad is the only source of this value, so it's always a
-  // clean number or empty — safe to render at a fixed 2dp.
+  // The keypad is the only source of this value now, so it's always a clean
+  // number or empty — safe to render at a fixed 2dp.
   const amountNumber = Number(form.amount);
-  const amountDisplay =
-    form.amount !== "" && Number.isFinite(amountNumber)
-      ? amountNumber.toFixed(2)
-      : "";
+  const amountSet = form.amount !== "" && Number.isFinite(amountNumber);
+  const amountDisplay = amountSet ? amountNumber.toFixed(2) : "0.00";
+  // The sign rides the number, as on the Home hero: this is the figure the
+  // entry is, not a sum with an operator applied to it later.
+  const amountSign = amountSet ? (type === "income" ? "+" : "−") : "";
 
   // An older entry can be tagged to an account that has since been archived.
   // List it beside the active ones so the tag reads as it is rather than as
@@ -184,6 +189,7 @@ export default function AddTransactionSheet({
       ? getAccount(form.accountId)
       : null;
   const pickableAccounts = taggedAccount ? [...accounts, taggedAccount] : accounts;
+  const selectedAccount = form.accountId ? getAccount(form.accountId) : null;
 
   const resetNewCategory = () => {
     setShowNewCategory(false);
@@ -201,6 +207,7 @@ export default function AddTransactionSheet({
     setRepeat(false);
     resetNewCategory();
     setCalcOpen(false);
+    setAccountPickerOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, editing]);
 
@@ -217,35 +224,29 @@ export default function AddTransactionSheet({
   };
 
   /**
-   * Selecting a category hands over to the description, so the common path is
-   * one run down the sheet instead of a tap per field. Only when the
-   * description is still empty: going back to fix a mis-tapped category must
-   * not yank focus out of something already typed.
+   * Selecting a category does exactly that, and nothing else.
+   *
+   * It used to hand focus straight to the description to save a tap. In
+   * practice that jerked the OS keyboard up over the sheet mid-scroll on every
+   * category tap — including the taps that were only correcting a mis-tap —
+   * which cost more in disruption than the tap it saved. The fields below are
+   * one press each; the user makes those presses when they want them.
    */
-  const selectCategory = (name) => {
-    updateForm({ category: name });
-    if (form.description.trim()) return;
-    // Synchronously, inside the tap: iOS Safari only raises the keyboard for a
-    // focus() call that happens within the user gesture, so deferring this to
-    // a frame later would move the cursor without opening anything to type on.
-    descriptionRef.current?.focus({ preventScroll: true });
-  };
+  const selectCategory = (name) => updateForm({ category: name });
 
   /**
-   * The description's return key hands over to the amount rather than
-   * submitting a form that has no amount in it yet.
+   * The description's return key just puts the keyboard away.
+   *
+   * It must not fall through to the browser's implicit submit — the amount
+   * isn't filled in yet at this point, so that would only ever bounce the form
+   * back with errors. It doesn't jump on to the amount either: that's one
+   * button sitting right there, and moving focus for the user is what made
+   * this form feel like it was fighting them.
    */
   const handleDescriptionKeyDown = (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    if (!touchFirst) {
-      document.getElementById("amount")?.focus();
-      return;
-    }
-    // Drop the OS keyboard before the in-app keypad slides in, or the two
-    // stack and the pad opens underneath it.
     e.currentTarget.blur();
-    setCalcOpen(true);
   };
 
   const handleAddCategory = async () => {
@@ -286,7 +287,7 @@ export default function AddTransactionSheet({
     e.preventDefault();
 
     // Typing is the slowest step in this form, so the description is optional
-    // and falls back to the category — "Food & Drinks" reads fine in the
+    // and falls back to the category — "F & B" reads fine in the
     // ledger, and the placeholder shows what will be saved before you submit.
     const description = form.description.trim() || form.category;
     const amount = Number(form.amount);
@@ -466,139 +467,161 @@ export default function AddTransactionSheet({
           </div>
         )}
 
-        {/* Account picker. Hidden entirely for anyone who hasn't made an
-            account, so the form is exactly as it was for them. */}
-        {(hasAccounts || taggedAccount) && (
-          <div className="space-y-2">
-            <Label id="tx-account-label">
-              {type === "income" ? "Paid into" : "Paid from"}
-            </Label>
-            <div
-              role="group"
-              aria-labelledby="tx-account-label"
-              className="flex flex-wrap gap-2"
-            >
-              {pickableAccounts.map((a) => {
-                const selected = form.accountId === a.id;
-                return (
-                  <button
-                    type="button"
-                    key={a.id}
-                    // Tapping the selected chip clears it. Without that a
-                    // mis-tag is unfixable: there is no "none" chip, and every
-                    // other tap only ever moves the tag somewhere else.
-                    onClick={() =>
-                      updateForm({ accountId: selected ? "" : a.id })
-                    }
-                    aria-pressed={selected}
-                    className={`flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
-                      selected
-                        ? "border-transparent"
-                        : "border-hairline-strong text-ink-2 hover:bg-surface-2"
-                    }`}
-                    style={
-                      selected
-                        ? { backgroundColor: `${a.color}22`, borderColor: a.color }
-                        : undefined
-                    }
-                  >
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ background: a.color }}
-                    />
-                    {a.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {/* The amount is the hero of this sheet. It's the one field that is
+            never optional and never guessable, and at 44px it's legible from
+            the moment the sheet lands — which is what the old 44px-tall input,
+            sharing a row with the date, was not.
+
+            One control on every device, not a keypad on phones and a text
+            input on desktop: the keypad takes digits, operators, backspace and
+            Enter from a hardware keyboard, so there is nothing left for the
+            plain input to be better at. */}
+        <motion.div animate={shakeControls.amount} className="text-center">
+          <p
+            className={`text-overline ${errors.amount ? "text-negative" : "text-ink-3"}`}
+          >
+            Amount
+          </p>
+          <button
+            type="button"
+            id="amount"
+            onClick={() => setCalcOpen(true)}
+            aria-label={
+              amountSet
+                ? `Amount, ${amountDisplay} dollars. Opens calculator.`
+                : "Amount, not set. Opens calculator."
+            }
+            aria-invalid={Boolean(errors.amount)}
+            aria-describedby={errors.amount ? "tx-amount-error" : undefined}
+            className={cn(
+              "num-display mt-1.5 w-full rounded-md py-1 text-[44px] leading-[1.1] transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              !amountSet && "text-ink-3",
+              amountSet && type === "income" && "text-positive"
+            )}
+          >
+            {amountSign}${amountDisplay}
+          </button>
+          {errors.amount && (
+            <FieldError id="tx-amount-error" className="justify-center">
+              {errors.amount}
+            </FieldError>
+          )}
+        </motion.div>
 
         {/* Category picker */}
         <div className="space-y-2">
           <motion.div animate={shakeControls.category} className="space-y-2">
-            {/* "New" sits on the label line rather than in the grid: as a
-                tile it took a whole row to itself whenever the category
-                count was already a multiple of three. */}
-            <div className="flex items-center justify-between gap-2">
-              <Label className={errors.category ? "text-negative" : undefined}>
-                Category
-              </Label>
-              <button
-                type="button"
-                onClick={() => setShowNewCategory((v) => !v)}
-                aria-expanded={showNewCategory}
-                className={`-my-1 flex h-8 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                  showNewCategory
-                    ? "bg-ink/[0.06] text-ink"
-                    : "text-ink-3 hover:bg-surface-2 hover:text-ink"
-                }`}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                New
-              </button>
-            </div>
+            <p
+              className={`text-overline ${errors.category ? "text-negative" : "text-ink-3"}`}
+            >
+              Category
+            </p>
+            {/* Six across, tile above label. "New" is the last tile rather
+                than a link on the label line: at six columns the built-ins and
+                the dashed tile land on one row, and a create affordance that
+                looks like the things it creates needs no explaining. */}
             <div
-              className={`grid grid-cols-3 gap-2 ${
+              className={`grid grid-cols-6 gap-[7px] ${
                 errors.category
-                  ? "rounded-sm ring-2 ring-negative ring-offset-2 ring-offset-surface"
+                  ? "rounded-sm ring-2 ring-negative ring-offset-4 ring-offset-surface"
                   : ""
               }`}
             >
             {(categoriesByType[type] ?? []).map((c) => {
               const Icon = c.icon;
-              const selected = form.category === c.name;
+              const selected = !showNewCategory && form.category === c.name;
               return (
                 <button
                   type="button"
                   key={c.name}
                   onClick={() => selectCategory(c.name)}
                   aria-pressed={selected}
-                  className={`relative flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-sm border p-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
-                    selected ? "border-transparent" : "border-hairline-strong hover:bg-surface-2"
-                  }`}
-                  style={
-                    selected
-                      ? { backgroundColor: `${c.color}22`, borderColor: c.color }
-                      : undefined
-                  }
+                  // The tile may show a short label; the full name is what the
+                  // entry is filed under, so that's what it announces.
+                  aria-label={c.name}
+                  className="group flex flex-col items-center gap-1.5 rounded-[11px] text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                 >
-                  {selected && (
-                    <span
-                      className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full text-white"
-                      style={{ backgroundColor: c.color }}
-                    >
-                      <Check className="h-3 w-3" strokeWidth={3} />
-                    </span>
-                  )}
                   <span
-                    className="flex h-9 w-9 items-center justify-center rounded-full"
-                    style={{ backgroundColor: `${c.color}22`, color: c.color }}
+                    className={`grid aspect-square w-full place-items-center rounded-[11px] transition-colors duration-base ease-out ${
+                      selected ? "" : "bg-surface-2 group-hover:bg-surface-3"
+                    }`}
+                    style={
+                      selected
+                        ? {
+                            backgroundColor: `${c.color}26`,
+                            boxShadow: `0 0 0 1.5px ${c.color}`,
+                            color: c.color,
+                          }
+                        : { color: c.color }
+                    }
                   >
-                    <Icon className="h-[18px] w-[18px]" />
+                    <Icon
+                      className="h-[17px] w-[17px]"
+                      strokeWidth={selected ? 2.2 : 2}
+                    />
                   </span>
-                  <span className="text-[11px] font-medium leading-tight">
-                    {c.name}
+                  {/* Fixed height and full width: the names here are the real
+                      ones ("Entertainment", not "Fun"), so they wrap to two
+                      lines and would otherwise both overflow their column and
+                      leave the tiles beside them sitting at different heights. */}
+                  <span
+                    className={`block h-[22px] w-full overflow-hidden text-center text-[9px] leading-[1.1] ${
+                      selected ? "font-semibold text-ink" : "font-medium text-ink-3"
+                    }`}
+                  >
+                    {c.short ?? c.name}
                   </span>
                 </button>
               );
             })}
+              {/* Dashed until it's open, then filled ink — the same "you are
+                  here" the category tiles use for selection. */}
+              <button
+                type="button"
+                onClick={() => setShowNewCategory((v) => !v)}
+                aria-expanded={showNewCategory}
+                className="group flex flex-col items-center gap-1.5 rounded-[11px] text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+              >
+                <span
+                  className={`grid aspect-square w-full place-items-center rounded-[11px] transition-colors duration-base ease-out ${
+                    showNewCategory
+                      ? "bg-ink text-surface"
+                      : "border border-dashed border-hairline-strong text-ink-2 group-hover:bg-surface-2"
+                  }`}
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2.2} />
+                </span>
+                <span
+                  className={`block h-[22px] w-full text-center text-[9px] leading-[1.1] ${
+                    showNewCategory ? "font-semibold text-ink" : "font-medium text-ink-3"
+                  }`}
+                >
+                  New
+                </span>
+              </button>
             </div>
             {errors.category && (
               <FieldError id="tx-category-error">{errors.category}</FieldError>
             )}
           </motion.div>
 
-          {/* Custom category creator + manager */}
+          {/* Creating a category never leaves the sheet — you're here because
+              nothing in the grid fits the entry you're part-way through
+              writing, and a trip to a settings screen would lose it. */}
           {showNewCategory && (
-            <div className="space-y-3 rounded-lg border border-hairline bg-surface-2 p-3">
+            <div className="rounded-xl bg-surface-2 p-4">
+              <p className="text-[13.5px] font-semibold tracking-[-0.01em]">
+                New category
+              </p>
               <Input
                 placeholder="Category name"
                 value={newCategoryName}
                 maxLength={24}
                 onChange={(e) => setNewCategoryName(e.target.value)}
+                className="mt-2.5 bg-surface"
               />
-              <div className="flex flex-wrap gap-2">
+              <p className="mb-2 mt-3.5 text-overline text-ink-3">Colour</p>
+              <div className="flex flex-wrap gap-2.5">
                 {CUSTOM_COLOR_OPTIONS.map((col) => (
                   <button
                     type="button"
@@ -606,26 +629,36 @@ export default function AddTransactionSheet({
                     onClick={() => setNewCategoryColor(col)}
                     aria-label={`Colour ${col}`}
                     aria-pressed={newCategoryColor === col}
-                    className={`h-8 w-8 rounded-full border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
-                      newCategoryColor === col
-                        ? "border-foreground"
-                        : "border-transparent"
-                    }`}
-                    style={{ backgroundColor: col }}
+                    // Ringed in ink with a gap in the panel's own surface, so
+                    // the marker reads at every hue — a border in the swatch
+                    // colour disappears on the swatch it's marking.
+                    className="h-[30px] w-[30px] rounded-[9px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-2"
+                    style={{
+                      backgroundColor: col,
+                      boxShadow:
+                        newCategoryColor === col
+                          ? "0 0 0 2px hsl(var(--surface-2)), 0 0 0 3.5px hsl(var(--ink))"
+                          : undefined,
+                    }}
                   />
                 ))}
               </div>
-              <div className="flex gap-2">
+              <div className="mt-4 flex gap-2.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={resetNewCategory}
+                  className="h-10 flex-1 bg-surface text-sm"
+                >
+                  Cancel
+                </Button>
                 <Button
                   type="button"
                   onClick={handleAddCategory}
                   disabled={!newCategoryName.trim() || savingCategory}
-                  className="flex-1"
+                  className="h-10 flex-1 text-sm"
                 >
-                  {savingCategory ? "Adding…" : "Add category"}
-                </Button>
-                <Button type="button" variant="outline" onClick={resetNewCategory}>
-                  Cancel
+                  {savingCategory ? "Creating…" : "Create"}
                 </Button>
               </div>
             </div>
@@ -665,14 +698,14 @@ export default function AddTransactionSheet({
           )}
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-baseline justify-between gap-2">
-            <Label htmlFor="description">Description</Label>
-            <span className="text-[12px] text-ink-3">Optional</span>
-          </div>
+        {/* Three fields, no labels above them. The description carries the
+            name that will be saved as its placeholder, and the date and
+            account show their own values — a label over each would be a third
+            row of text saying what the row already says. */}
+        <div className="space-y-2.5">
           <Input
             id="description"
-            ref={descriptionRef}
+            aria-label="Description"
             // Once a category is picked the placeholder becomes the name
             // that will actually be saved, so the fallback is visible
             // rather than a surprise in the ledger.
@@ -682,113 +715,116 @@ export default function AddTransactionSheet({
             }
             value={form.description}
             maxLength={120}
-            enterKeyHint="next"
+            enterKeyHint="done"
             onKeyDown={handleDescriptionKeyDown}
             onChange={(e) => updateForm({ description: e.target.value })}
           />
-        </div>
-        <div className="grid grid-cols-2 items-start gap-3">
-          <motion.div animate={shakeControls.amount} className="space-y-2">
-            <Label
-              htmlFor="amount"
-              className={errors.amount ? "text-negative" : undefined}
-            >
-              Amount
-            </Label>
-            {/* On a phone the keypad is the only way in, so this is a button
-                rather than a text field — honest to screen readers, and it
-                can't be missed. The keypad covers everything the OS decimal
-                pad does plus operators, so nothing is lost. Desktop, which
-                has a real keyboard, keeps a plain typeable input. */}
-            {touchFirst ? (
+          {/* Two up only when there's an account to put beside the date.
+              Without one, a half-width date field with empty space next to it
+              reads as a control that failed to render. */}
+          <div
+            className={`grid items-start gap-2.5 ${
+              hasAccounts || taggedAccount ? "grid-cols-2" : "grid-cols-1"
+            }`}
+          >
+            <motion.div animate={shakeControls.date}>
+              <Input
+                id="date"
+                type="date"
+                aria-label="Date"
+                value={form.date}
+                required
+                aria-invalid={Boolean(errors.date)}
+                aria-describedby={errors.date ? "tx-date-error" : undefined}
+                className={
+                  errors.date
+                    ? "border-destructive focus-visible:ring-destructive"
+                    : undefined
+                }
+                onChange={(e) => updateForm({ date: e.target.value })}
+              />
+              {errors.date && (
+                <FieldError id="tx-date-error">{errors.date}</FieldError>
+              )}
+            </motion.div>
+
+            {/* The account sits beside the date because it's the same kind of
+                thing: a fact about the entry that is almost always already
+                right. It reads as its value, and opens the chips when it
+                isn't. Hidden entirely for anyone with no accounts, so the
+                form is exactly as it was for them. */}
+            {(hasAccounts || taggedAccount) && (
               <button
                 type="button"
-                id="amount"
-                onClick={() => setCalcOpen(true)}
-                aria-label={
-                  amountDisplay
-                    ? `Amount, ${amountDisplay} dollars. Opens calculator.`
-                    : "Amount, not set. Opens calculator."
-                }
-                aria-invalid={Boolean(errors.amount)}
-                aria-describedby={errors.amount ? "tx-amount-error" : undefined}
-                className={cn(
-                  "flex h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-hairline-strong bg-surface px-3 py-2 text-base ring-offset-background transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  errors.amount && "border-negative focus-visible:ring-negative"
-                )}
+                onClick={() => setAccountPickerOpen((v) => !v)}
+                aria-expanded={accountPickerOpen}
+                aria-label={`${type === "income" ? "Paid into" : "Paid from"}: ${
+                  selectedAccount ? selectedAccount.name : "no account"
+                }. Choose account`}
+                className="flex h-11 w-full items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
+                {selectedAccount ? (
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ background: selectedAccount.color }}
+                  />
+                ) : (
+                  <Wallet className="h-[15px] w-[15px] shrink-0 text-ink-3" />
+                )}
                 <span
                   className={cn(
-                    "truncate tabular-nums",
-                    !amountDisplay && "text-ink-3"
+                    "min-w-0 flex-1 truncate text-left font-medium",
+                    !selectedAccount && "font-normal text-ink-3"
                   )}
                 >
-                  {amountDisplay || "0.00"}
+                  {selectedAccount ? selectedAccount.name : "No account"}
                 </span>
-                <Calculator className="h-[18px] w-[18px] shrink-0 text-ink-2" />
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ink-3" />
               </button>
-            ) : (
-              <div className="relative">
-                <Input
-                  id="amount"
-                  type="number"
-                  inputMode="decimal"
-                  min="0.01"
-                  max="1000000000"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={form.amount}
-                  required
-                  aria-invalid={Boolean(errors.amount)}
-                  aria-describedby={errors.amount ? "tx-amount-error" : undefined}
-                  className={cn(
-                    // Drop the desktop spinner arrows — they render in the
-                    // same spot as the keypad button.
-                    "pr-11 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
-                    errors.amount &&
-                      "border-destructive focus-visible:ring-destructive"
-                  )}
-                  onChange={(e) => updateForm({ amount: e.target.value })}
-                />
-                <button
-                  type="button"
-                  onClick={() => setCalcOpen(true)}
-                  aria-label="Open calculator"
-                  className="absolute inset-y-0 right-0 flex w-11 cursor-pointer items-center justify-center rounded-r-md text-ink-2 transition-colors duration-base ease-out hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-                >
-                  <Calculator className="h-[18px] w-[18px]" />
-                </button>
-              </div>
             )}
-            {errors.amount && (
-              <FieldError id="tx-amount-error">{errors.amount}</FieldError>
-            )}
-          </motion.div>
-          <motion.div animate={shakeControls.date} className="space-y-2">
-            <Label
-              htmlFor="date"
-              className={errors.date ? "text-negative" : undefined}
+          </div>
+
+          {accountPickerOpen && (hasAccounts || taggedAccount) && (
+            <div
+              role="group"
+              aria-label={type === "income" ? "Paid into" : "Paid from"}
+              className="flex flex-wrap gap-2 rounded-xl bg-surface-2 p-3"
             >
-              Date
-            </Label>
-            <Input
-              id="date"
-              type="date"
-              value={form.date}
-              required
-              aria-invalid={Boolean(errors.date)}
-              aria-describedby={errors.date ? "tx-date-error" : undefined}
-              className={
-                errors.date
-                  ? "border-destructive focus-visible:ring-destructive"
-                  : undefined
-              }
-              onChange={(e) => updateForm({ date: e.target.value })}
-            />
-            {errors.date && (
-              <FieldError id="tx-date-error">{errors.date}</FieldError>
-            )}
-          </motion.div>
+              {pickableAccounts.map((a) => {
+                const selected = form.accountId === a.id;
+                return (
+                  <button
+                    type="button"
+                    key={a.id}
+                    // Tapping the selected chip clears it. Without that a
+                    // mis-tag is unfixable: there is no "none" chip, and every
+                    // other tap only ever moves the tag somewhere else.
+                    onClick={() => {
+                      updateForm({ accountId: selected ? "" : a.id });
+                      setAccountPickerOpen(false);
+                    }}
+                    aria-pressed={selected}
+                    className={`flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-2 ${
+                      selected
+                        ? "border-transparent"
+                        : "border-hairline-strong bg-surface text-ink-2 hover:bg-surface-3"
+                    }`}
+                    style={
+                      selected
+                        ? { backgroundColor: `${a.color}22`, borderColor: a.color }
+                        : undefined
+                    }
+                  >
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ background: a.color }}
+                    />
+                    {a.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
         {/* Rent and subscriptions are realised at the moment you log them, not
             later in a settings screen — so the offer to repeat sits here,
@@ -796,22 +832,16 @@ export default function AddTransactionSheet({
             entry doesn't offer it: that entry has already happened, and its
             rule (if any) is managed on the More page. */}
         {!isEdit && (
-          <div className="rounded-lg border border-hairline p-3">
-            <label className="flex cursor-pointer items-center justify-between gap-3">
-              <span className="text-sm font-medium">Repeat monthly</span>
-              <input
-                type="checkbox"
-                checked={repeat}
-                onChange={(e) => setRepeat(e.target.checked)}
-                className="h-5 w-5 shrink-0 cursor-pointer accent-primary"
-              />
-            </label>
-            {repeat && repeatPlan(form.date) && (
-              <p className="mt-2 text-[12px] leading-relaxed text-ink-3">
-                {repeatPlan(form.date).caption}
-              </p>
-            )}
-          </div>
+          <SwitchRow
+            checked={repeat}
+            onChange={setRepeat}
+            label="Repeat monthly"
+            description={
+              repeat && repeatPlan(form.date)
+                ? repeatPlan(form.date).caption
+                : undefined
+            }
+          />
         )}
 
         {formError && (
@@ -823,9 +853,12 @@ export default function AddTransactionSheet({
             {formError}
           </p>
         )}
+        {/* Ink, not green or red. Confirming the form isn't a destructive act
+            and doesn't need warning about, and colouring it by entry type made
+            the same button mean two different things on two taps. Red is
+            reserved for being over budget. */}
         <Button
           type="submit"
-          variant={type === "income" ? "success" : "destructive"}
           className="w-full"
           aria-describedby={formError ? "transaction-form-error" : undefined}
           disabled={submitting}

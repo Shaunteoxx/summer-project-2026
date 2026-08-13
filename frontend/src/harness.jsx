@@ -59,6 +59,7 @@ import {
   LogOut as _out,
   Search as _search,
   ArrowLeftRight as _swap,
+  ChevronRight as _chev,
 } from "lucide-react";
 
 /** Icons for the More harness view, matching the page's own set. */
@@ -451,7 +452,7 @@ function LedgerView() {
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#C26B6B22] text-[#C26B6B]">*</span>
               <div className="min-w-0">
                 <p className="truncate font-semibold">Chicken rice</p>
-                <p className="text-xs text-muted-foreground">6 Aug - Food &amp; Drinks - Trust</p>
+                <p className="text-xs text-muted-foreground">6 Aug - F &amp; B - Trust</p>
               </div>
             </div>
             <span className="font-bold tabular-nums text-destructive">-$4.50</span>
@@ -490,7 +491,7 @@ function TrackerView() {
   const saved = 952.6;
   const spent = 287.4;
   const cats = [
-    ["Food & Drinks", 98.4, "#CC624E", "#FE9580"],
+    ["F & B", 98.4, "#CC624E", "#FE9580"],
     ["Shopping", 74.9, "#659734", "#94C866"],
     ["Transport", 52.2, "#B9740F", "#F0A346"],
     ["Entertainment", 34.5, "#139A94", "#1ED0C8"],
@@ -769,7 +770,7 @@ function DailyView() {
     v === 0
       ? []
       : [{ _id: `t${i}`, type: "expense", amount: v, date: `${ymd(i)}T00:00:00.000Z`,
-           category: "Food & Drinks", description: "Lunch" }]
+           category: "F & B", description: "Lunch" }]
   );
 
   localStorage.setItem("spendingView", params.get("chart") === "1" ? "chart" : "calendar");
@@ -854,7 +855,7 @@ function FriendsView() {
 function LedgerGroupedView() {
   const days = [
     ["Today · 11 Aug", "−$12.70", null, [
-      ["food", "Chicken rice", "Food & Drinks · Trust", "−$4.50"],
+      ["food", "Chicken rice", "F & B · Trust", "−$4.50"],
       ["transport", "Grab to school", "Transport · Trust", "−$8.20"],
     ]],
     ["Yesterday · 10 Aug", "−$29.90", null, [
@@ -921,6 +922,92 @@ function LedgerGroupedView() {
   );
 }
 
+/**
+ * Home's hero and pace bar. Mirrors the page's markup so the two-line caption
+ * can be checked for wrapping at phone width. `?over=1` shows the overspent
+ * state, `?fast=1` the over-pace one.
+ */
+function TrackingLabel({ pct, rightInset = 0, className = "", children }) {
+  const ref = React.useRef(null);
+  const [half, setHalf] = React.useState(0);
+  React.useLayoutEffect(() => {
+    if (ref.current) setHalf(ref.current.offsetWidth / 2);
+  }, [children]);
+  return (
+    <span
+      ref={ref}
+      className={`absolute top-0 -translate-x-1/2 whitespace-nowrap ${className}`}
+      style={{
+        left: `clamp(${half}px, ${pct}%, calc(100% - ${half + rightInset}px))`,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function HeroView() {
+  const budget = 940, totalDays = 31, daysLeft = 20;
+  const over = params.get("over") === "1";
+  const spent = over ? 1030 : params.get("fast") === "1" ? 600 : 287.4;
+  const leftToSpend = over ? -86.4 : 652.6;
+  const fm = (n) => `$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const spentPct = Math.min((spent / budget) * 100, 100);
+  const elapsedPct = ((totalDays - daysLeft) / totalDays) * 100;
+  const dayOfPeriod = totalDays - daysLeft + 1;
+  const d = budget * (elapsedPct / 100) - spent;
+  const onPace = Math.abs(d) < 0.5, underPace = d >= 0;
+  const anchor = (pct) => (pct < 50 ? { left: `${pct}%` } : { right: `${100 - pct}%` });
+  const verdict = over ? `${fm(leftToSpend)} past` : spentPct <= elapsedPct ? "Ahead of pace" : "Behind pace";
+  const verdictRef = React.useRef(null);
+  const [verdictWidth, setVerdictWidth] = React.useState(0);
+  React.useLayoutEffect(() => {
+    setVerdictWidth(verdictRef.current?.offsetWidth ?? 0);
+  }, [verdict]);
+
+  return (
+    <div className="mx-auto w-full max-w-app px-4 pt-6">
+      <h1 className="text-title">Welcome back, shaunteo</h1>
+      <p className="mt-1 text-[13px] text-ink-3">13 August 2026 · 20 days left</p>
+      <div className="mt-[34px]">
+        <div className="text-center">
+          <p className="text-overline text-ink-3">{over ? "Over budget" : "Left to spend this month"}</p>
+          <p className={`num-display mt-2 text-display ${over ? "text-negative" : "text-ink"}`}>
+            {over ? "−" : ""}{fm(leftToSpend)}
+          </p>
+        </div>
+        <div className="mt-[22px]">
+          <div className="relative h-[15px]">
+            <TrackingLabel
+              pct={(over ? 100 : spentPct) / 2}
+              rightInset={verdictWidth ? verdictWidth + 8 : 0}
+              className={`text-[11px] font-medium ${over ? "text-negative" : "text-ink-2"}`}
+            >
+              {Math.round(over ? 100 : spentPct)}% spent
+            </TrackingLabel>
+            <button
+              ref={verdictRef}
+              className={`absolute right-0 top-0 flex h-[15px] items-center gap-0.5 text-[11px] font-medium ${over ? "text-negative" : spentPct <= elapsedPct ? "text-positive" : "text-warning"}`}
+            >
+              {verdict}
+              <_chev className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="relative mt-1 h-1 rounded-full bg-surface-3">
+            <div className={`h-full rounded-full ${over ? "bg-negative" : "bg-ink"}`} style={{ width: `${over ? 100 : spentPct}%` }} />
+            <span className="absolute -top-1 h-3 w-[1.5px] rounded-full bg-ink-3" style={{ left: `${elapsedPct}%` }} />
+          </div>
+          <div className="relative mt-1.5 h-[15px]">
+            <TrackingLabel pct={elapsedPct} className="text-[11px] text-ink-3">
+              {Math.round(elapsedPct)}% of the month passed
+            </TrackingLabel>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const VIEWS = {
   calculator: () => (
     <BottomSheet open onClose={() => {}} title="Calculator" closeLabel="Back to form">
@@ -943,6 +1030,7 @@ const VIEWS = {
   daily: DailyView,
   friends: FriendsView,
   grouped: LedgerGroupedView,
+  hero: HeroView,
 };
 
 function Harness() {

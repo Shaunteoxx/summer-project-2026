@@ -1,16 +1,9 @@
 // The add-entry sheet's fast path. Typing is the slowest step in this form, so
-// the description is optional and the sheet hands you from field to field —
-// both are easy to break without noticing, because the form still *works*
-// afterwards, it just costs more taps or saves a blank-looking row.
+// the description is optional and the amount, category, date and account are
+// each one press — all easy to break without noticing, because the form still
+// *works* afterwards, it just costs more taps or saves a blank-looking row.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-  waitForElementToBeRemoved,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const addTransaction = vi.fn();
@@ -81,10 +74,10 @@ vi.mock("@/hooks/useBudgetPeriod", () => ({
   useBudgetPeriod: () => mockPeriod,
 }));
 
-// Coarse pointer = phone, where the amount is a keypad button rather than a
-// typeable field. Flipped per-test to cover both.
-let coarse = true;
-vi.mock("@/hooks/useCoarsePointer", () => ({ useCoarsePointer: () => coarse }));
+// The entry sheet no longer branches on pointer type — the amount is the same
+// keypad hero everywhere. The transfer sheet still reads this, so the mock
+// stays; nothing here flips it.
+vi.mock("@/hooks/useCoarsePointer", () => ({ useCoarsePointer: () => true }));
 
 vi.mock("@/hooks/useCategories", async () => {
   const { Tag } = await import("lucide-react");
@@ -92,7 +85,7 @@ vi.mock("@/hooks/useCategories", async () => {
   return {
     useCategories: () => ({
       categoriesByType: {
-        expense: [cat("Food & Drinks"), cat("Transport")],
+        expense: [cat("F & B"), cat("Transport")],
         income: [cat("Allowance")],
       },
       getCategory: (name) => cat(name),
@@ -103,7 +96,7 @@ vi.mock("@/hooks/useCategories", async () => {
   };
 });
 
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 import TransactionsPage from "@/pages/TransactionsPage";
 
@@ -117,6 +110,12 @@ const renderPage = (state) =>
     </MemoryRouter>
   );
 
+/** Reports the router state back to the test, so it can be asserted on. */
+function LocationProbe({ onState }) {
+  onState(useLocation().state);
+  return null;
+}
+
 /** Open the expense sheet and hand back its scope. */
 const openExpenseSheet = async () => {
   renderPage({ openAdd: "expense" });
@@ -124,6 +123,38 @@ const openExpenseSheet = async () => {
 };
 
 const submitted = () => addTransaction.mock.calls.at(-1)[0];
+
+/**
+ * Type an amount into the sheet.
+ *
+ * The amount is one control on every device now — the 44px hero opens the
+ * keypad, and the keypad takes digits, operators and Enter from a hardware
+ * keyboard, so there is no plain input left to type into on desktop.
+ */
+const enterAmount = async (user, sheet, keys) => {
+  await user.click(sheet.getByLabelText(/^Amount/));
+  for (const key of String(keys)) {
+    await user.click(
+      screen.getByRole("button", { name: key === "." ? "Decimal point" : key })
+    );
+  }
+  await user.click(screen.getByRole("button", { name: /^Use/ }));
+};
+
+/** The account field in the entry sheet, which reads as its current value. */
+const accountField = (sheet) =>
+  sheet.getByRole("button", { name: /^Paid (from|into):/ });
+
+/**
+ * Open the entry sheet's account chips and tag the entry to one. Scoped to the
+ * chip group: the field above it names the same account, so an unscoped query
+ * matches both.
+ */
+const tagAccount = async (user, sheet, name) => {
+  await user.click(accountField(sheet));
+  const chips = within(sheet.getByRole("group", { name: /^Paid (from|into)$/ }));
+  await user.click(chips.getByRole("button", { name }));
+};
 
 /** The account filter trigger, whose label changes with the selection. */
 const accountButton = () =>
@@ -137,7 +168,6 @@ const pickAccount = async (user, name) => {
 };
 
 beforeEach(() => {
-  coarse = true;
   mockAccounts = [];
   mockTransactions = [];
   mockTransfers = [];
@@ -159,15 +189,15 @@ describe("optional description", () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
     await user.click(sheet.getByLabelText(/^Amount/));
     await user.click(screen.getByRole("button", { name: "4" }));
     await user.click(screen.getByRole("button", { name: /^Use/ }));
     await user.click(screen.getByRole("button", { name: "Add expense" }));
 
     expect(submitted()).toMatchObject({
-      description: "Food & Drinks",
-      category: "Food & Drinks",
+      description: "F & B",
+      category: "F & B",
       amount: 4,
     });
   });
@@ -191,7 +221,7 @@ describe("optional description", () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
     await user.type(sheet.getByLabelText("Description"), "Chicken rice");
     await user.click(sheet.getByLabelText(/^Amount/));
     await user.click(screen.getByRole("button", { name: "4" }));
@@ -199,6 +229,29 @@ describe("optional description", () => {
     await user.click(screen.getByRole("button", { name: "Add expense" }));
 
     expect(submitted().description).toBe("Chicken rice");
+  });
+
+  // The row you just saved is the one you most want to read back, and it used
+  // to land mid-entrance — mounted at opacity 0 and left there, so the ledger
+  // grew a row-shaped blank that only a reload filled in. Nothing about a new
+  // row is animated now, so there is no frame in which it can be invisible.
+  it("shows a new row's details the moment it lands", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet();
+
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
+    await user.type(sheet.getByLabelText("Description"), "Chicken rice");
+    await user.click(sheet.getByLabelText(/^Amount/));
+    await user.click(screen.getByRole("button", { name: "4" }));
+    await user.click(screen.getByRole("button", { name: /^Use/ }));
+    await user.click(screen.getByRole("button", { name: "Add expense" }));
+
+    const row = await screen.findByRole("listitem");
+    expect(within(row).getByText("Chicken rice")).toBeInTheDocument();
+    expect(within(row).getByText("−$4.00")).toBeInTheDocument();
+    // The entrance animation this guards against showed up here as an inline
+    // `opacity: 0` that nothing ever cleared.
+    expect(row.style.opacity).toBe("");
   });
 
   it("still refuses a submit with no category", async () => {
@@ -211,62 +264,91 @@ describe("optional description", () => {
   });
 });
 
+// The sheet used to drive focus down the form for you — category tap jumped to
+// the description, the description's return key opened the keypad. Each jump
+// saved a tap and cost a keyboard flying up over the sheet mid-scroll, which is
+// what made adding an entry feel like a fight. Every field below is one press;
+// the user makes those presses. What's left to protect is that nothing moves on
+// its own, and that Enter still can't submit a half-filled form.
 describe("moving between fields", () => {
-  it("hands over to the description when a category is picked", async () => {
+  it("leaves focus alone when a category is picked", async () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
-    expect(sheet.getByLabelText("Description")).toHaveFocus();
+    const food = sheet.getByRole("button", { name: /F & B/ });
+    await user.click(food);
+
+    expect(sheet.getByLabelText("Description")).not.toHaveFocus();
+    expect(food).toHaveFocus();
   });
 
-  it("doesn't grab focus back when a category is corrected later on", async () => {
+  it("keeps what you typed when a category is corrected later on", async () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
     await user.type(sheet.getByLabelText("Description"), "Chicken rice");
     const transport = sheet.getByRole("button", { name: /Transport/ });
     await user.click(transport);
 
     // Picking the wrong tile first is common. Fixing it keeps what you typed,
-    // and focus stays on the tile you just tapped rather than jumping back to
-    // the description and re-raising the keyboard over a finished field.
+    // and focus stays on the tile you just tapped.
     expect(sheet.getByLabelText("Description")).toHaveValue("Chicken rice");
     expect(transport).toHaveFocus();
   });
 
-  it("opens the keypad from the description's return key on a phone", async () => {
+  it("puts the keyboard away on the description's return key, and submits nothing", async () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
     await user.type(sheet.getByLabelText("Description"), "Chicken rice{Enter}");
 
-    expect(screen.getByRole("button", { name: /^Use/ })).toBeInTheDocument();
+    // Return must not fall through to the form's implicit submit: the amount
+    // isn't filled in yet, so that would only ever bounce back with errors.
     expect(addTransaction).not.toHaveBeenCalled();
+    expect(sheet.getByLabelText("Description")).not.toHaveFocus();
+    // And it doesn't open the keypad for you either — that's the one button
+    // sitting right there under Amount.
+    expect(screen.queryByRole("button", { name: /^Use/ })).not.toBeInTheDocument();
   });
 
-  it("moves to the amount field instead when there's a real keyboard", async () => {
-    coarse = false;
+  it("does the same with a real keyboard, without jumping to the amount", async () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
     await user.type(sheet.getByLabelText("Description"), "Chicken rice{Enter}");
 
-    expect(sheet.getByLabelText("Amount")).toHaveFocus();
+    expect(sheet.getByLabelText(/^Amount/)).not.toHaveFocus();
     expect(addTransaction).not.toHaveBeenCalled();
   });
 });
 
+// With nothing logged, the search box and the type filter are hidden — there
+// is nothing to narrow — so the old copy's "add income or an expense above"
+// pointed at controls that weren't on screen. The empty state carries the
+// action itself now.
+describe("an empty ledger", () => {
+  it("offers the entry sheet from the empty state, without leaving the page", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Nothing logged yet");
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Add your first entry/ }));
+
+    expect(await screen.findByRole("dialog", { name: "New entry" })).toBeInTheDocument();
+  });
+});
+
 describe("adding a category", () => {
-  it("offers New on the label line rather than as a tile in the grid", async () => {
+  it("offers New as the last tile in the category grid", async () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    // As a tile it claimed a whole row whenever the category count was already
-    // a multiple of three, which is what this guards against.
+    // A create affordance shaped like the things it creates, sitting where
+    // the next category would go, needs no explaining.
     const newButton = sheet.getByRole("button", { name: "New" });
     expect(newButton).toHaveAttribute("aria-expanded", "false");
 
@@ -275,16 +357,18 @@ describe("adding a category", () => {
     expect(sheet.getByPlaceholderText("Category name")).toBeInTheDocument();
   });
 
-  it("hands a newly created category over to the description too", async () => {
+  it("selects a newly created category, the same as tapping an existing tile", async () => {
     addCategory.mockResolvedValue({ name: "Groceries", type: "expense", color: "#888" });
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
     await user.click(sheet.getByRole("button", { name: "New" }));
     await user.type(sheet.getByPlaceholderText("Category name"), "Groceries");
-    await user.click(sheet.getByRole("button", { name: "Add category" }));
+    await user.click(sheet.getByRole("button", { name: "Create" }));
 
-    expect(sheet.getByLabelText("Description")).toHaveFocus();
+    // Selected, not merely created — you've just chosen a category either way.
+    // The placeholder is what proves it: it becomes the name that will be
+    // saved if the description is left blank.
     expect(sheet.getByLabelText("Description")).toHaveAttribute(
       "placeholder",
       "Groceries"
@@ -307,7 +391,7 @@ describe("tagging entries with an account", () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    expect(sheet.queryByText("Paid from")).not.toBeInTheDocument();
+    expect(sheet.queryByRole("button", { name: /^Paid from:/ })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Filter by account")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Move money between accounts/ })
@@ -319,8 +403,8 @@ describe("tagging entries with an account", () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    await user.click(sheet.getByRole("button", { name: /DBS/ }));
-    await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
+    await tagAccount(user, sheet, /DBS/);
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
     await user.click(sheet.getByLabelText(/^Amount/));
     await fillAmount(user);
     await user.click(screen.getByRole("button", { name: "Add expense" }));
@@ -328,15 +412,13 @@ describe("tagging entries with an account", () => {
     expect(submitted().accountId).toBe("a2");
   });
 
+  // The field reads as its value, so the preselection is visible without
+  // opening anything — which is the whole point of remembering it.
   it("preselects the first account so it costs no extra tap", async () => {
     mockAccounts = twoAccounts;
-    const user = userEvent.setup();
-    const sheet = await openExpenseSheet();
+    await openExpenseSheet();
 
-    expect(sheet.getByRole("button", { name: /Trust/ })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
+    expect(accountField(screen)).toHaveAccessibleName(/Paid from: Trust/);
   });
 
   it("asks where income landed rather than where it came from", async () => {
@@ -346,17 +428,35 @@ describe("tagging entries with an account", () => {
     // toggle, which is the only route to income now the page buttons are gone.
     renderPage({ openAdd: "expense" });
     const sheet = within(await screen.findByRole("dialog"));
-    expect(sheet.getByText("Paid from")).toBeInTheDocument();
+    expect(accountField(sheet)).toHaveAccessibleName(/^Paid from:/);
 
     await user.click(sheet.getByRole("button", { name: "Income" }));
 
-    expect(sheet.getByText("Paid into")).toBeInTheDocument();
-    expect(sheet.queryByText("Paid from")).not.toBeInTheDocument();
+    expect(accountField(sheet)).toHaveAccessibleName(/^Paid into:/);
   });
 
   // "offers the transfer action only with two accounts" moved to
   // AccountsCard.test.jsx — the button now lives in the Account activity card,
   // beside the accounts it moves between, and that card is stubbed out here.
+
+  // Router state lives in history.state, which survives a reload. Left in
+  // place, the request the + button wrote there is re-read on every refresh of
+  // /transactions and the sheet opens again over the ledger, hours after the
+  // tap that asked for it.
+  it("consumes the open-add request, so a refresh doesn't reopen the sheet", async () => {
+    let state;
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: "/transactions", state: { openAdd: "expense" } }]}
+      >
+        <TransactionsPage />
+        <LocationProbe onState={(s) => (state = s)} />
+      </MemoryRouter>
+    );
+
+    await screen.findByRole("dialog");
+    expect(state).toBeNull();
+  });
 });
 
 describe("transfers in the ledger", () => {
@@ -369,7 +469,7 @@ describe("transfers in the ledger", () => {
     date: "2026-08-05T00:00:00.000Z",
     type: "expense",
     amount: 12,
-    category: "Food & Drinks",
+    category: "F & B",
     description: "Lunch",
     accountId: "a1",
   };
@@ -424,9 +524,30 @@ describe("transfers in the ledger", () => {
         { name: "Expenses" }
       )
     );
-    // AnimatePresence keeps the row mounted through its exit animation, so
-    // wait it out rather than asserting on the frame after the click.
-    await waitForElementToBeRemoved(() => screen.queryByText("$50.00"));
+    expect(screen.queryByText("$50.00")).not.toBeInTheDocument();
+    expect(screen.getByText("Lunch")).toBeInTheDocument();
+  });
+
+  // The transfer is the only entry on 6 Aug, so narrowing past it has to take
+  // its date header with it. The presence boundary used to sit around the days
+  // rather than inside them, which kept a filtered-out day mounted for as long
+  // as its rows took to fade — every keystroke of a search left a row of
+  // headers with nothing under them.
+  it("takes the day header with it when a day stops matching", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [expense];
+    mockTransfers = [move];
+    const user = userEvent.setup();
+    await show();
+
+    expect(screen.getByText("6 Aug")).toBeInTheDocument();
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search transactions" }),
+      "Lunch"
+    );
+
+    expect(screen.queryByText("6 Aug")).not.toBeInTheDocument();
+    expect(screen.getByText("5 Aug")).toBeInTheDocument();
     expect(screen.getByText("Lunch")).toBeInTheDocument();
   });
 
@@ -525,7 +646,7 @@ describe("editing an entry", () => {
     date: "2026-08-05T00:00:00.000Z",
     type: "expense",
     amount: 12,
-    category: "Food & Drinks",
+    category: "F & B",
     description: "Lunch",
     accountId: null,
   };
@@ -543,11 +664,6 @@ describe("editing an entry", () => {
   const save = (user) =>
     user.click(screen.getByRole("button", { name: "Save changes" }));
 
-  beforeEach(() => {
-    // A real keyboard, so the amount is a typeable field rather than the keypad.
-    coarse = false;
-  });
-
   it("opens on the entry as it stands", async () => {
     mockAccounts = twoAccounts;
     const user = userEvent.setup();
@@ -555,24 +671,21 @@ describe("editing an entry", () => {
 
     expect(screen.getByRole("dialog", { name: "Edit expense" })).toBeInTheDocument();
     expect(sheet.getByLabelText("Description")).toHaveValue("Lunch");
-    expect(sheet.getByLabelText("Amount")).toHaveValue(12);
+    // The hero reads the figure back signed, the way the ledger row will.
+    expect(sheet.getByLabelText(/^Amount/)).toHaveTextContent("−$12.00");
     expect(sheet.getByLabelText("Date")).toHaveValue("2026-08-05");
-    expect(sheet.getByRole("button", { name: /Food & Drinks/ })).toHaveAttribute(
+    expect(sheet.getByRole("button", { name: /F & B/ })).toHaveAttribute(
       "aria-pressed",
       "true"
     );
-    expect(sheet.getByRole("button", { name: /DBS/ })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
+    expect(accountField(sheet)).toHaveAccessibleName(/Paid from: DBS/);
   });
 
   it("sends only the field that changed", async () => {
     const user = userEvent.setup();
     const sheet = await openEditor(user);
 
-    await user.clear(sheet.getByLabelText("Amount"));
-    await user.type(sheet.getByLabelText("Amount"), "8.5");
+    await enterAmount(user, sheet, "8.5");
     await save(user);
 
     // Exact, not a subset: an edit that resends untouched fields is an edit
@@ -587,7 +700,9 @@ describe("editing an entry", () => {
     await save(user);
 
     expect(updateTransaction).not.toHaveBeenCalled();
-    await waitForElementToBeRemoved(() => screen.queryByRole("dialog"));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    );
   });
 
   it("tags a row logged before accounts existed", async () => {
@@ -597,12 +712,9 @@ describe("editing an entry", () => {
 
     // Nothing is preselected — an untagged row stays untagged unless you say
     // otherwise, or opening the editor would silently tag your whole history.
-    expect(sheet.getByRole("button", { name: /Trust/ })).toHaveAttribute(
-      "aria-pressed",
-      "false"
-    );
+    expect(accountField(sheet)).toHaveAccessibleName(/Paid from: no account/);
 
-    await user.click(sheet.getByRole("button", { name: /DBS/ }));
+    await tagAccount(user, sheet, /DBS/);
     await save(user);
 
     expect(updateTransaction).toHaveBeenCalledWith("t1", { accountId: "a2" });
@@ -613,7 +725,7 @@ describe("editing an entry", () => {
     const user = userEvent.setup();
     const sheet = await openEditor(user, { ...expense, accountId: "a2" });
 
-    await user.click(sheet.getByRole("button", { name: /DBS/ }));
+    await tagAccount(user, sheet, /DBS/);
     await save(user);
 
     // Tapping the selected account deselects it. null, not undefined: an
@@ -631,10 +743,7 @@ describe("editing an entry", () => {
 
     // It can't be chosen for anything new, but the row is tagged to it and
     // hiding that would read as untagged.
-    expect(sheet.getByRole("button", { name: /Closed/ })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
+    expect(accountField(sheet)).toHaveAccessibleName(/Paid from: Closed/);
 
     await user.clear(sheet.getByLabelText("Description"));
     await user.type(sheet.getByLabelText("Description"), "Dinner");
@@ -662,8 +771,7 @@ describe("editing an entry", () => {
     const user = userEvent.setup();
     const sheet = await openEditor(user);
 
-    await user.clear(sheet.getByLabelText("Amount"));
-    await user.type(sheet.getByLabelText("Amount"), "8.5");
+    await enterAmount(user, sheet, "8.5");
     await save(user);
 
     // The row and its day header both carry the corrected figure now.
@@ -693,7 +801,8 @@ describe("editing an entry", () => {
     const sheet = await openExpenseSheet();
     expect(screen.getByRole("dialog", { name: "New entry" })).toBeInTheDocument();
     expect(sheet.getByLabelText("Description")).toHaveValue("");
-    expect(sheet.getByLabelText("Amount")).toHaveValue(null);
+    // The hero shows an unset amount as a muted $0.00, with no sign on it.
+    expect(sheet.getByLabelText(/^Amount/)).toHaveTextContent(/^\$0\.00$/);
   });
 });
 
@@ -702,15 +811,10 @@ describe("editing an entry", () => {
 // must never also fire for the same day.
 describe("repeating an entry as you add it", () => {
   const fillExpense = async (user, sheet) => {
-    await user.click(sheet.getByRole("button", { name: /Food & Drinks/ }));
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
     await user.type(sheet.getByLabelText("Description"), "Rent");
-    await user.clear(sheet.getByLabelText("Amount"));
-    await user.type(sheet.getByLabelText("Amount"), "850");
+    await enterAmount(user, sheet, "850");
   };
-
-  beforeEach(() => {
-    coarse = false;
-  });
 
   it("starts the rule after this entry, so the month isn't logged twice", async () => {
     const user = userEvent.setup();
@@ -720,7 +824,7 @@ describe("repeating an entry as you add it", () => {
     fireEvent.change(sheet.getByLabelText("Date"), {
       target: { value: "2026-08-15" },
     });
-    await user.click(sheet.getByRole("checkbox", { name: /Repeat monthly/ }));
+    await user.click(sheet.getByRole("switch", { name: /Repeat monthly/ }));
     await user.click(screen.getByRole("button", { name: "Add expense" }));
 
     expect(addRule).toHaveBeenCalledWith(
@@ -743,7 +847,7 @@ describe("repeating an entry as you add it", () => {
     fireEvent.change(sheet.getByLabelText("Date"), {
       target: { value: "2026-08-15" },
     });
-    await user.click(sheet.getByRole("checkbox", { name: /Repeat monthly/ }));
+    await user.click(sheet.getByRole("switch", { name: /Repeat monthly/ }));
 
     expect(
       sheet.getByText("Adds this again on the 15th of each month, from September.")
@@ -754,7 +858,7 @@ describe("repeating an entry as you add it", () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    await user.click(sheet.getByRole("checkbox", { name: /Repeat monthly/ }));
+    await user.click(sheet.getByRole("switch", { name: /Repeat monthly/ }));
     fireEvent.change(sheet.getByLabelText("Date"), {
       target: { value: "2026-08-15" },
     });
@@ -783,7 +887,7 @@ describe("repeating an entry as you add it", () => {
     const sheet = await openExpenseSheet();
 
     await fillExpense(user, sheet);
-    await user.click(sheet.getByRole("checkbox", { name: /Repeat monthly/ }));
+    await user.click(sheet.getByRole("switch", { name: /Repeat monthly/ }));
     await user.click(screen.getByRole("button", { name: "Add expense" }));
 
     // The expense was what was asked for; the repeat was a convenience on top.
@@ -798,7 +902,7 @@ describe("repeating an entry as you add it", () => {
         date: "2026-08-05T00:00:00.000Z",
         type: "expense",
         amount: 12,
-        category: "Food & Drinks",
+        category: "F & B",
         description: "Lunch",
         accountId: null,
       },
@@ -808,6 +912,6 @@ describe("repeating an entry as you add it", () => {
     await user.click(await screen.findByRole("button", { name: "Edit Lunch" }));
 
     const sheet = within(screen.getByRole("dialog"));
-    expect(sheet.queryByRole("checkbox", { name: /Repeat monthly/ })).not.toBeInTheDocument();
+    expect(sheet.queryByRole("switch", { name: /Repeat monthly/ })).not.toBeInTheDocument();
   });
 });

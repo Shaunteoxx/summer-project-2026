@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema(
     // Case-normalized key closes the race left by case-insensitive pre-checks.
     usernameKey: { type: String, unique: true, sparse: true, select: false },
     email: { type: String, required: true, unique: true, lowercase: true },
-    // Read-only demo account used by the public "Explore the demo" button.
+    // Read-only demo account used by the public "Try the demo" button.
     isDemo: { type: Boolean, default: false },
     // Bumped on sign-out to invalidate every token already issued to this user.
     // Tokens carry the version they were signed with; a mismatch fails auth.
