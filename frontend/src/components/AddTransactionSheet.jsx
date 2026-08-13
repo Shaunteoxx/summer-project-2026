@@ -776,24 +776,18 @@ export default function AddTransactionSheet({
             onKeyDown={handleDescriptionKeyDown}
             onChange={(e) => updateForm({ description: e.target.value })}
           />
-          {/* Two up only when there's an account to put beside the date.
-              Without one, a half-width date field with empty space next to it
-              reads as a control that failed to render.
+          {/* Side by side when they fit, stacked when they don't — a wrapping
+              flex row, not a two-column grid.
 
-              `minmax(0,1fr)`, not `1fr`. A grid track is `minmax(auto,1fr)` by
-              default, and `auto` floors at the item's min-content width —
-              which for a native date input on iOS is the rendered date plus
-              the calendar button, wider than half this sheet. The track grew
-              to fit it and the account field beside it got sat on. The
-              `min-w-0` on each child is the same fix one level down. */}
-          <div
-            className={`grid items-start gap-2.5 ${
-              hasAccounts || taggedAccount
-                ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
-                : "grid-cols-1"
-            }`}
-          >
-            <motion.div animate={shakeControls.date} className="min-w-0">
+              The grid was the bug: its tracks were sized off the date input,
+              which on iOS is a native control that refuses to shrink, so it
+              overflowed its column and sat on the account field. Dropping the
+              native appearance (see index.css) makes it shrink, and this makes
+              the point moot either way — anything that still can't fit in half
+              the width pushes the account onto its own line instead of
+              overlapping it. Correctness first; the row is the nice-to-have. */}
+          <div className="flex flex-wrap items-start gap-2.5">
+            <motion.div animate={shakeControls.date} className="flex-1 basis-[9rem]">
               <Input
                 id="date"
                 type="date"
@@ -803,7 +797,6 @@ export default function AddTransactionSheet({
                 aria-invalid={Boolean(errors.date)}
                 aria-describedby={errors.date ? "tx-date-error" : undefined}
                 className={cn(
-                  "min-w-0",
                   errors.date && "border-destructive focus-visible:ring-destructive"
                 )}
                 onChange={(e) => updateForm({ date: e.target.value })}
@@ -826,7 +819,7 @@ export default function AddTransactionSheet({
                 aria-label={`${type === "income" ? "Paid into" : "Paid from"}: ${
                   selectedAccount ? selectedAccount.name : "no account"
                 }. Choose account`}
-                className="flex h-11 w-full min-w-0 items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-[46px] w-full min-w-0 flex-1 basis-[9rem] items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {selectedAccount ? (
                   <span

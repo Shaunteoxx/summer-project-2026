@@ -154,6 +154,28 @@
     overscroll-behavior-y: none;
   }
 
+  /* iOS renders a date input as a native control sized to the locale's date
+     format, and it will not shrink: `width: 100%` and `min-width: 0` are both
+     ignored, so the field overflows its column and sits on whatever is beside
+     it. Dropping the native appearance makes it lay out like any other input.
+     Set globally rather than on the one field, because the next date input
+     added anywhere would hit exactly the same thing.
+
+     Deliberately no `min-width: 0` here. That would let the field shrink below
+     its own content, which trades an overlap for a clipped date — unreadable
+     either way. Leaving its min-content intact is what lets the row it sits in
+     wrap instead.
+
+     The value is also centred inside the control by default, which is the one
+     input in the app that wouldn't line up with the rest. */
+  input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type="date"]::-webkit-date-and-time-value {
+    text-align: left;
+  }
+
   /* Every digit in the app is lining + tabular. Money must never reflow or
      drift out of column as values change — this is the cheapest credibility
      win available in a finance UI, so it's set once, globally. */
