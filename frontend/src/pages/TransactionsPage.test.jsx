@@ -348,6 +348,31 @@ describe("an empty ledger", () => {
   });
 });
 
+describe("the page subtitle", () => {
+  it("says the window is empty rather than leaving the tail off", async () => {
+    renderPage();
+    expect(await screen.findByText(/no entries yet/)).toBeInTheDocument();
+    // The window itself stays: "nothing logged" means nothing logged in this
+    // period, and in days mode that could be a fortnight.
+    expect(screen.getByText(/August 2026/)).toBeInTheDocument();
+  });
+
+  it("counts them once there are any", async () => {
+    mockTransactions = [
+      {
+        _id: "t1",
+        date: "2026-08-05T00:00:00.000Z",
+        type: "expense",
+        amount: 12,
+        category: "F & B",
+        description: "Lunch",
+      },
+    ];
+    renderPage();
+    expect(await screen.findByText(/1 entry$/)).toBeInTheDocument();
+  });
+});
+
 describe("adding a category", () => {
   // Six across, so twelve is two full rows. A third row is 81px the sheet
   // does not have on a short phone — with eight custom categories the old
@@ -802,6 +827,26 @@ describe("editing an entry", () => {
     // Tapping the selected account deselects it. null, not undefined: an
     // absent key would leave the old tag in place.
     expect(updateTransaction).toHaveBeenCalledWith("t1", { accountId: null });
+  });
+
+  // The Categories sheet promises that entries filed under a deleted category
+  // keep their label, and the ledger honours it. The editor used to contradict
+  // it: the name was gone from the picker, so the row read as uncategorised.
+  it("still shows a category you've since deleted", async () => {
+    mockExpenseCategories = ["F & B", "Transport"];
+    const user = userEvent.setup();
+    const sheet = await openEditor(user, { ...expense, category: "Gym" });
+
+    expect(sheet.getByRole("button", { name: "Gym" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+
+    // And leaving it alone still sends nothing about it.
+    await user.clear(sheet.getByLabelText("Description"));
+    await user.type(sheet.getByLabelText("Description"), "Dinner");
+    await save(user);
+    expect(updateTransaction).toHaveBeenCalledWith("t1", { description: "Dinner" });
   });
 
   it("still shows a tag pointing at an account you've since archived", async () => {

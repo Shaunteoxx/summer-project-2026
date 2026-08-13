@@ -126,7 +126,7 @@ export default function AddTransactionSheet({
   const isEdit = Boolean(editing);
   const toast = useToast();
   const guard = useDemoGuard();
-  const { categoriesByType, addCategory } = useCategories();
+  const { categoriesByType, getCategory, addCategory } = useCategories();
   const {
     active: accounts,
     hasAccounts,
@@ -205,7 +205,27 @@ export default function AddTransactionSheet({
   // show without the sheet getting taller than the screen it opens on. Past
   // that it becomes a field and a list, which costs one tap and a fixed 44px
   // however many categories you have.
-  const categoryList = categoriesByType[type] ?? [];
+  // An entry can be filed under a category that has since been deleted. Show
+  // it alongside the live ones so the tag reads as it is rather than as
+  // cleared — the same thing the account picker does for an archived account,
+  // and the same promise the Categories sheet makes: entries already filed
+  // under a deleted category keep their label.
+  //
+  // `getCategory` answers with a neutral grey Tag for a name it doesn't know,
+  // so an orphan renders exactly as it does in the ledger and reads as the
+  // odd one out without needing a badge.
+  //
+  // Only ever an edit in practice: switching Expense/Income while adding
+  // rebuilds the form (the reseed effect keys on `type`), so a category from
+  // the other type can't survive to be mistaken for one of these.
+  const liveCategories = categoriesByType[type] ?? [];
+  const orphanCategory =
+    form.category && !liveCategories.some((c) => c.name === form.category)
+      ? getCategory(form.category)
+      : null;
+  const categoryList = orphanCategory
+    ? [...liveCategories, orphanCategory]
+    : liveCategories;
   const useCategoryGrid = categoryList.length <= CATEGORY_GRID_MAX;
   const selectedCategory = categoryList.find((c) => c.name === form.category);
 
@@ -554,7 +574,7 @@ export default function AddTransactionSheet({
                   : ""
               }`}
             >
-            {(categoriesByType[type] ?? []).map((c) => {
+            {categoryList.map((c) => {
               const Icon = c.icon;
               const selected = !showNewCategory && form.category === c.name;
               return (
@@ -652,7 +672,7 @@ export default function AddTransactionSheet({
                     // category cost a scroll back up.
                     className="max-h-[248px] space-y-0.5 overflow-y-auto overscroll-contain rounded-xl bg-surface-2 p-2"
                   >
-                    {(categoriesByType[type] ?? []).map((c) => {
+                    {categoryList.map((c) => {
                       const Icon = c.icon;
                       const selected = form.category === c.name;
                       return (

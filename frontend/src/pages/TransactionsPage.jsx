@@ -343,11 +343,21 @@ export default function TransactionsPage() {
     <PageWrapper>
       <motion.div variants={fadeUp} initial="initial" animate="animate">
         <h1 className="text-title-lg">Transactions</h1>
+        {/* The tail says what's in the window, not what the window is: the
+            count once there's something to count, "no entries yet" before
+            that. The window itself stays either way — an empty ledger means
+            nothing logged *in this period*, and in days mode that could be a
+            fortnight, so dropping the dates would make the emptiness read as
+            bigger than it is. */}
         <p className="mt-1 text-[13px] text-ink-3">
           {current
             ? `${formatPeriodLabel(current, { mode: budgetPeriod.mode })} · this ${budgetPeriod.noun}`
             : "No budget period running"}
-          {hasEntries ? ` · ${visible.length} ${visible.length === 1 ? "entry" : "entries"}` : ""}
+          {loading
+            ? ""
+            : hasEntries
+              ? ` · ${visible.length} ${visible.length === 1 ? "entry" : "entries"}`
+              : " · no entries yet"}
         </p>
       </motion.div>
 

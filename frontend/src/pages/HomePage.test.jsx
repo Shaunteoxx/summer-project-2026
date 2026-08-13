@@ -30,11 +30,17 @@ vi.mock("@/hooks/useToast", () => ({
 vi.mock("@/hooks/useCategories", () => ({
   useCategories: () => ({ getCategory: () => ({ color: "#666", icon: () => null }) }),
 }));
+// Overridden per-test where the absence of a period is the subject.
+let mockPeriod = { current: null, noun: "month", status: "active" };
 vi.mock("@/hooks/useBudgetPeriod", () => ({
-  useBudgetPeriod: () => ({ current: null, noun: "month", status: "active" }),
+  useBudgetPeriod: () => mockPeriod,
 }));
-// The streak card fetches on its own; it isn't the subject here.
-vi.mock("@/components/StreakCard", () => ({ default: () => null }));
+// The streak card fetches on its own, so it's stubbed — but it has to keep
+// saying the thing it really says when no period is running, or the test that
+// this page doesn't repeat itself would pass without proving anything.
+vi.mock("@/components/StreakCard", () => ({
+  default: () => <div>No budget period running</div>,
+}));
 vi.mock("@/hooks/useCountUp", () => ({ useCountUp: (value) => value }));
 
 import HomePage from "@/pages/HomePage";
@@ -76,6 +82,7 @@ const show = async (overrides = {}, transactions = [entry]) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockPeriod = { current: null, noun: "month", status: "active" };
 });
 
 describe("the pace bar", () => {
@@ -128,6 +135,57 @@ describe("the pace bar", () => {
     await show({ leftToSpend: -86.4, periodExpenses: 1026.4 });
     expect(screen.getByText("100% spent")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /past/ })).toBeInTheDocument();
+  });
+});
+
+// Days mode with nothing running. Every figure below the greeting depends on
+// a period, so there is nothing to show and something to do instead.
+describe("with no budget period running", () => {
+  const showNoPeriod = async (status = "active") => {
+    mockPeriod = { current: null, noun: "month", status };
+    fetchHomeStats.mockResolvedValue({ ...stats, period: null });
+    fetchTransactions.mockResolvedValue([entry]);
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
+    );
+    await screen.findByText(/Welcome back/);
+  };
+
+  it("names the gap and offers the one thing that closes it", async () => {
+    await showNoPeriod();
+    expect(screen.getByText("No budget period running yet")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Set up a period" })
+    ).toBeInTheDocument();
+    // No hero, because there is no budget to put in it.
+    expect(screen.queryByText(/% spent/)).not.toBeInTheDocument();
+  });
+
+  it("says so differently once a period has been and gone", async () => {
+    await showNoPeriod("lapsed");
+    expect(
+      screen.getByText("Your last budget period has ended")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Start next period" })
+    ).toBeInTheDocument();
+  });
+
+  // The streak card carries its own "No budget period running" empty state,
+  // with its own button. Rendered under this one it asked the same question
+  // twice, three lines apart.
+  it("doesn't ask twice", async () => {
+    await showNoPeriod();
+    expect(screen.getAllByText(/No budget period running/)).toHaveLength(1);
+  });
+
+  it("sends you to More, where periods are set up", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    await showNoPeriod();
+    await user.click(screen.getByRole("button", { name: "Set up a period" }));
+    expect(navigate).toHaveBeenCalledWith("/more");
   });
 });
 

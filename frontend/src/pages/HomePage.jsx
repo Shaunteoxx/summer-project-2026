@@ -1,7 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { AlertTriangle, ChevronRight, Plus, Receipt } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarRange,
+  ChevronRight,
+  Plus,
+  Receipt,
+} from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
 import AnimatedNumber from "@/components/AnimatedNumber";
@@ -188,16 +194,31 @@ export default function HomePage() {
         className="mt-[25px]"
       >
         {!loading && noPeriod ? (
-          <div className="text-center">
-            <p className="text-sm text-ink-2">
-              {period.status === "lapsed"
-                ? "Your last budget period has ended."
-                : "No budget period running yet."}
-            </p>
-            <Button className="mt-4 w-full" onClick={() => navigate("/more")}>
-              {period.status === "lapsed" ? "Start next period" : "Set up a period"}
-            </Button>
-          </div>
+          /* The same shape as the other two empty states on this page, rather
+             than a sentence with a full-width button under it. A page-wide
+             button reads as the primary action of a form; this is a gap being
+             named, and the thing that closes it is one option, not a submit. */
+          <EmptyState
+            icon={CalendarRange}
+            title={
+              period.status === "lapsed"
+                ? "Your last budget period has ended"
+                : "No budget period running yet"
+            }
+            body={
+              period.status === "lapsed"
+                ? "Days since it ended aren't budgeted or counted towards your streak. Start the next one to pick up where you left off."
+                : "Set one up and you'll get a daily budget from whatever's left after savings."
+            }
+            action={
+              <Button
+                className="mt-[22px] w-auto px-5"
+                onClick={() => navigate("/more")}
+              >
+                {period.status === "lapsed" ? "Start next period" : "Set up a period"}
+              </Button>
+            }
+          />
         ) : (
           <>
             <div className="flex flex-col items-center text-center">
@@ -350,10 +371,17 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Today's budget + streak */}
-      <div className="mt-4">
-        <StreakCard />
-      </div>
+      {/* Today's budget + streak. Not while there's no period: the card's own
+          empty state says "No budget period running" with a button to start
+          one, which is what the hero above is already saying — two prompts for
+          the same missing thing, three lines apart, each with its own button.
+          The totals and Recent below stay, because those are true with or
+          without a period. */}
+      {!noPeriod && (
+        <div className="mt-4">
+          <StreakCard />
+        </div>
+      )}
 
       {/* Totals */}
       <motion.div
