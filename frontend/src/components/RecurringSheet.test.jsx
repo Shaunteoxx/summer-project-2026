@@ -70,7 +70,7 @@ const show = (rules = []) =>
 /** Open the "new entry" form and hand back the dialog scope. */
 const startNew = async (user, rules = []) => {
   show(rules);
-  await user.click(screen.getByRole("button", { name: /New repeating entry/ }));
+  await user.click(screen.getByRole("button", { name: /New Repeating Entry/ }));
   return within(screen.getByRole("dialog"));
 };
 
@@ -102,9 +102,9 @@ describe("adding a rule", () => {
     await user.click(sheet.getByRole("button", { name: "Shopping" }));
     await user.clear(sheet.getByLabelText("Amount"));
     await user.type(sheet.getByLabelText("Amount"), "800");
-    await user.clear(sheet.getByLabelText("Day of the month"));
-    await user.type(sheet.getByLabelText("Day of the month"), "1");
-    await user.click(sheet.getByRole("button", { name: "Add repeating entry" }));
+    await user.clear(sheet.getByLabelText("Day of the Month"));
+    await user.type(sheet.getByLabelText("Day of the Month"), "1");
+    await user.click(sheet.getByRole("button", { name: "Add Repeating Entry" }));
 
     expect(onAdd).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -125,7 +125,7 @@ describe("adding a rule", () => {
     const sheet = await startNew(user);
 
     await user.click(sheet.getByRole("button", { name: "weekly" }));
-    expect(sheet.queryByLabelText("Day of the month")).not.toBeInTheDocument();
+    expect(sheet.queryByLabelText("Day of the Month")).not.toBeInTheDocument();
 
     await user.click(sheet.getByRole("button", { name: "Shopping" }));
     await user.type(sheet.getByLabelText("Amount"), "15");
@@ -135,7 +135,7 @@ describe("adding a rule", () => {
         { name: "Tue" }
       )
     );
-    await user.click(sheet.getByRole("button", { name: "Add repeating entry" }));
+    await user.click(sheet.getByRole("button", { name: "Add Repeating Entry" }));
 
     expect(onAdd).toHaveBeenCalledWith(
       expect.objectContaining({ frequency: "weekly", weekday: 2 })
@@ -148,8 +148,8 @@ describe("adding a rule", () => {
     const sheet = await startNew(user);
 
     expect(sheet.queryByText(/Shorter months/)).not.toBeInTheDocument();
-    await user.clear(sheet.getByLabelText("Day of the month"));
-    await user.type(sheet.getByLabelText("Day of the month"), "31");
+    await user.clear(sheet.getByLabelText("Day of the Month"));
+    await user.type(sheet.getByLabelText("Day of the Month"), "31");
 
     expect(sheet.getByText("Shorter months use their last day.")).toBeInTheDocument();
   });
@@ -162,14 +162,14 @@ describe("adding a rule", () => {
     // picked in the first place.
     const today = new Date();
     const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    expect(sheet.getByLabelText("Starting from")).toHaveAttribute("min", ymd);
+    expect(sheet.getByLabelText("Starting From")).toHaveAttribute("min", ymd);
   });
 
   it("refuses to save without a category or an amount", async () => {
     const user = userEvent.setup();
     const sheet = await startNew(user);
 
-    await user.click(sheet.getByRole("button", { name: "Add repeating entry" }));
+    await user.click(sheet.getByRole("button", { name: "Add Repeating Entry" }));
 
     expect(sheet.getByText("Choose a category.")).toBeInTheDocument();
     expect(sheet.getByText("Enter an amount greater than $0.")).toBeInTheDocument();
@@ -204,12 +204,12 @@ describe("managing rules", () => {
 
     // Moving a running rule's start backwards would be a back-fill by another
     // name, so it simply isn't offered.
-    expect(sheet.queryByLabelText("Starting from")).not.toBeInTheDocument();
+    expect(sheet.queryByLabelText("Starting From")).not.toBeInTheDocument();
     expect(sheet.getByLabelText("Amount")).toHaveValue(800);
 
     await user.clear(sheet.getByLabelText("Amount"));
     await user.type(sheet.getByLabelText("Amount"), "950");
-    await user.click(sheet.getByRole("button", { name: "Save changes" }));
+    await user.click(sheet.getByRole("button", { name: "Save Changes" }));
 
     expect(onUpdate).toHaveBeenCalledWith("r1", expect.objectContaining({ amount: 950 }));
     expect(onUpdate.mock.calls[0][1]).not.toHaveProperty("startKey");

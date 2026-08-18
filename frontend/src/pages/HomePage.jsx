@@ -78,6 +78,15 @@ export default function HomePage() {
   const elapsedPct =
     totalDays > 0 ? Math.min(((totalDays - daysLeft) / totalDays) * 100, 100) : 0;
   const fillPct = overspent ? 100 : spentPct;
+  // The "Unspent So Far" tile, derived from the bar so it cannot contradict it.
+  // Two things matter here. First the denominator: this shares the bar's budget
+  // (income - savings), where the API's `percentageSaved` divides by income, so
+  // mid-period that field reads 77% under a bar showing 31% spent. Second the
+  // rounding: subtracting from the *rounded* fill, not the raw percentage,
+  // guarantees the pair always sums to 100 — round(100 - 30.5) would print 70
+  // beside a bar reading 31. Overspent means fillPct is 100, so nothing is
+  // unspent, which is true.
+  const unspentPct = budget > 0 ? 100 - Math.round(fillPct) : 0;
   // Spending less of the budget than the period has used up is the good case.
   // The two percentages sit either side of the bar, so the verdict is now
   // backed by figures the reader can check rather than asserted on its own.
@@ -135,7 +144,7 @@ export default function HomePage() {
         <motion.div variants={fadeUp} initial="initial" animate="animate">
           <EmptyState
             icon={Receipt}
-            title="Nothing logged yet"
+            title="Nothing Logged Yet"
             body={`Add your income for the ${noun} and your daily budget appears here.`}
             action={
               <Button
@@ -145,7 +154,7 @@ export default function HomePage() {
                 }
               >
                 <Plus className="h-[17px] w-[17px]" />
-                Add your first entry
+                Add Your First Entry
               </Button>
             }
           />
@@ -153,7 +162,7 @@ export default function HomePage() {
           <Card className="mt-[34px]">
             <CardContent className="p-[18px]">
               <p className="text-[14px] font-semibold tracking-[-0.01em]">
-                Set up in two steps
+                Set Up in Two Steps
               </p>
               {[
                 `Log the money coming in this ${noun}`,
@@ -202,8 +211,8 @@ export default function HomePage() {
             icon={CalendarRange}
             title={
               period.status === "lapsed"
-                ? "Your last budget period has ended"
-                : "No budget period running yet"
+                ? "Your Last Budget Period Has Ended"
+                : "No Budget Period Running Yet"
             }
             body={
               period.status === "lapsed"
@@ -215,7 +224,7 @@ export default function HomePage() {
                 className="mt-[22px] w-auto px-5"
                 onClick={() => navigate("/more")}
               >
-                {period.status === "lapsed" ? "Start next period" : "Set up a period"}
+                {period.status === "lapsed" ? "Start Next Period" : "Set Up a Period"}
               </Button>
             }
           />
@@ -344,30 +353,62 @@ export default function HomePage() {
             </div>
 
             {overspent && (
-              <div className="mt-[18px] flex items-start gap-2.5 rounded-md bg-negative/[0.08] p-3.5">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-negative" />
-                <p className="text-[12.5px] leading-relaxed text-ink-2">
-                  You&apos;re{" "}
-                  <b className="font-semibold text-negative">
-                    {formatMoney(Math.abs(stats.leftToSpend))}
-                  </b>{" "}
-                  past this {noun}&apos;s budget. No daily budget until more income
-                  lands — or lower this {noun}&apos;s savings target.
-                </p>
+              <div className="mt-[18px] rounded-md bg-negative/[0.08] p-3.5">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-negative" />
+                  <p className="text-[12.5px] leading-relaxed text-ink-2">
+                    You&apos;re{" "}
+                    <b className="font-semibold text-negative">
+                      {formatMoney(Math.abs(stats.leftToSpend))}
+                    </b>{" "}
+                    past this {noun}&apos;s budget. There&apos;s no daily budget
+                    until that gap closes.
+                  </p>
+                </div>
+                {/* The sentence used to name both remedies and link to neither,
+                    which left the one screen that most needs a next step as a
+                    dead end. The buttons carry them now, so the prose no longer
+                    repeats them.
+
+                    Outline, not ghost: a recovery path shouldn't outshout the
+                    figure above it, but ghost on this tinted panel has neither
+                    border nor fill, so it read as bold text rather than as
+                    something you can tap. The border is the smallest thing that
+                    says "control" without competing with the hero. */}
+                <div className="mt-3 flex gap-2 pl-[26px]">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-auto px-3"
+                    onClick={() =>
+                      navigate("/transactions", { state: { openAdd: "income" } })
+                    }
+                  >
+                    Add Income
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-auto px-3"
+                    onClick={() => navigate("/more")}
+                  >
+                    Lower Target
+                  </Button>
+                </div>
               </div>
             )}
           </>
         )}
       </motion.div>
 
-      {/* In / Out / Saved — a hairline strip, not three more cards */}
+      {/* In / Out / Reserved — a hairline strip, not three more cards */}
       {!noPeriod && (
         <div className="mt-[10px] flex border-y border-hairline text-center ">
           <StripCell label="In" value={stats?.periodIncome} loading={loading} accent />
           <span className="my-3 w-px bg-hairline" />
           <StripCell label="Out" value={stats?.periodExpenses} loading={loading} inset />
           <span className="my-3 w-px bg-hairline" />
-          <StripCell label="Saved" value={stats?.periodSavings} loading={loading} inset />
+          <StripCell label="Reserved" value={stats?.periodSavings} loading={loading} inset />
         </div>
       )}
 
@@ -391,15 +432,15 @@ export default function HomePage() {
         className="mt-3 grid grid-cols-2 gap-2.5"
       >
         <StatCard
-          label="Total saved"
+          label="Total Saved"
           value={stats?.totalSavings ?? 0}
           prefix="$"
           decimals={2}
           loading={loading}
         />
         <StatCard
-          label={`Saved this ${noun}`}
-          value={stats?.percentageSaved ?? 0}
+          label="Unspent So Far"
+          value={unspentPct}
           suffix="%"
           decimals={0}
           loading={loading}
@@ -417,7 +458,7 @@ export default function HomePage() {
             onClick={() => navigate("/transactions")}
             className="rounded-sm text-[12.5px] font-medium text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            See all
+            See All
           </button>
         </header>
 

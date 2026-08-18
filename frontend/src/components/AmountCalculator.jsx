@@ -250,7 +250,7 @@ export default function AmountCalculator({ initialValue, tone, onApply, onCancel
           disabled={!canApply}
           className="flex-[2]"
         >
-          {canApply ? `Use ${formatMoney(rounded)}` : "Use amount"}
+          {canApply ? `Use ${formatMoney(rounded)}` : "Use Amount"}
         </Button>
       </div>
     </motion.div>

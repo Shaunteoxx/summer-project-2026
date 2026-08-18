@@ -87,7 +87,7 @@ describe("managing your own categories", () => {
 
     await user.click(sheet.getByRole("button", { name: "Income" }));
     await user.type(sheet.getByLabelText("Category name"), "Freelance");
-    await user.click(sheet.getByRole("button", { name: "Add category" }));
+    await user.click(sheet.getByRole("button", { name: "Add Category" }));
 
     expect(addCategory).toHaveBeenCalledWith(
       expect.objectContaining({ name: "Freelance", type: "income" })

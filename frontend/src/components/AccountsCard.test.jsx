@@ -129,9 +129,9 @@ describe("account activity", () => {
       payload({ unassigned: { income: 0, spent: 12, net: -12 } })
     );
     render(<AccountsCard />);
-    await waitFor(() => expect(screen.getByText("Not assigned")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Not Assigned")).toBeInTheDocument());
 
-    expect(cellsFor("Not assigned")).toEqual(["—", "$12.00"]);
+    expect(cellsFor("Not Assigned")).toEqual(["—", "$12.00"]);
     expect(cellsFor("Total")).toEqual(["$800.00", "$460.00"]);
   });
 

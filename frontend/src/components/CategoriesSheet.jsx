@@ -74,7 +74,7 @@ export default function CategoriesSheet({ open, onClose }) {
     } catch (err) {
       setConfirmId(null);
       toast.error(
-        err?.response?.data?.message || "Couldn't remove that category."
+        err?.response?.data?.message || "Couldn't remove that category. Please try again."
       );
     }
   };
@@ -207,7 +207,7 @@ export default function CategoriesSheet({ open, onClose }) {
             disabled={!name.trim() || saving}
             className="w-full"
           >
-            {saving ? "Adding…" : "Add category"}
+            {saving ? "Adding…" : "Add Category"}
           </Button>
         </div>
       </div>

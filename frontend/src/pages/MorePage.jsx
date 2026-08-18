@@ -276,7 +276,7 @@ export default function MorePage() {
     const length = Number(periodLength);
     let error = "";
     if (!periodStart) error = "Pick a start date.";
-    else if (periodStart > localToday()) error = "Start date can't be in the future.";
+    else if (periodStart > localToday()) error = "Start Date can't be in the future.";
     else if (!Number.isInteger(length) || length < MIN_PERIOD_DAYS || length > MAX_PERIOD_DAYS)
       error = `Enter a whole number of days between ${MIN_PERIOD_DAYS} and ${MAX_PERIOD_DAYS}.`;
     if (error) {
@@ -399,7 +399,7 @@ export default function MorePage() {
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-[19px] font-semibold tracking-[-0.02em]">
-              {user?.username ?? "Your account"}
+              {user?.username ?? "Your Account"}
             </h1>
             {user?.email && (
               <p className="mt-0.5 truncate text-meta text-ink-3">{user.email}</p>
@@ -435,7 +435,7 @@ export default function MorePage() {
       <Section label="Budget">
         <Row
           icon={CalendarRange}
-          title="Budget period"
+          title="Budget Period"
           meta={
             !isDays
               ? "Resets on the 1st"
@@ -448,7 +448,7 @@ export default function MorePage() {
           value={
             isDays && period.status !== "active" ? (
               <span className="shrink-0 rounded-xs bg-surface-2 px-1.5 py-[3px] text-[11px] font-medium text-ink-2">
-                Action needed
+                Action Needed
               </span>
             ) : (
               <RowValue>
@@ -460,7 +460,7 @@ export default function MorePage() {
         />
         <Row
           icon={Wallet}
-          title="Bank accounts"
+          title="Bank Accounts"
           meta="Tag where money comes and goes"
           value={<RowValue>{accountCount}</RowValue>}
           onClick={() => {
@@ -480,7 +480,7 @@ export default function MorePage() {
         />
         <Row
           icon={Repeat}
-          title="Repeating entries"
+          title="Repeating Entries"
           meta={
             rules.length === 0
               ? "Add rent and subscriptions once"
@@ -496,7 +496,7 @@ export default function MorePage() {
         />
         <Row
           icon={PiggyBank}
-          title="Savings target"
+          title="Savings Target"
           meta={
             isDays
               ? period.current
@@ -516,7 +516,7 @@ export default function MorePage() {
         <Row
           icon={isDark ? Moon : Sun}
           title="Appearance"
-          meta={isDark ? "Dark mode" : "Light mode"}
+          meta={isDark ? "Dark Mode" : "Light Mode"}
           chevron={false}
           value={
             <Segmented
@@ -534,7 +534,7 @@ export default function MorePage() {
 
       {/* Account */}
       <Section label="Account">
-        <Row icon={LogOut} title="Log out" chevron={false} onClick={logout} />
+        <Row icon={LogOut} title="Log Out" chevron={false} onClick={logout} />
       </Section>
 
       {/* Deleting your account is a real action but not a common one. As a
@@ -549,7 +549,7 @@ export default function MorePage() {
           }}
           className="rounded-sm px-2.5 py-1.5 text-[13px] font-medium text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
         >
-          Delete account
+          Delete Account
         </button>
         <p className="mt-4 text-[11.5px] leading-relaxed text-ink-3">
           Broke No More · Avatars by Twemoji (CC-BY 4.0)
@@ -557,7 +557,7 @@ export default function MorePage() {
       </div>
 
       {/* Edit profile sheet */}
-      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} title="Edit profile">
+      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} title="Edit Profile">
         <div className="space-y-5">
           <div className="space-y-2">
             <Label>Avatar</Label>
@@ -594,7 +594,7 @@ export default function MorePage() {
               htmlFor="display-name"
               className={nameError ? "text-negative" : undefined}
             >
-              Display name
+              Display Name
             </Label>
             <Input
               id="display-name"
@@ -623,7 +623,7 @@ export default function MorePage() {
           </motion.div>
 
           <Button onClick={handleSave} disabled={saving} className="w-full">
-            {saving ? "Saving…" : "Save changes"}
+            {saving ? "Saving…" : "Save Changes"}
           </Button>
         </div>
       </BottomSheet>
@@ -648,7 +648,7 @@ export default function MorePage() {
       <BottomSheet
         open={savingsOpen}
         onClose={() => !savingSavings && setSavingsOpen(false)}
-        title="Savings target"
+        title="Savings Target"
       >
         <div className="space-y-4">
           {/* Month stepper — days mode edits the running period instead, so
@@ -723,7 +723,7 @@ export default function MorePage() {
               checked={repeatSavings}
               onChange={setRepeatSavings}
               disabled={savingSavings}
-              label="Repeat every month"
+              label="Repeat Every Month"
               description="New months start with your latest target, so you don't have to set it again."
             />
           )}
@@ -740,7 +740,7 @@ export default function MorePage() {
       <BottomSheet
         open={periodOpen}
         onClose={() => !savingPeriod && setPeriodOpen(false)}
-        title="Budget period"
+        title="Budget Period"
       >
         <motion.div animate={periodShake} className="space-y-5">
           {/* Mode toggle */}
@@ -750,7 +750,7 @@ export default function MorePage() {
             aria-label="Budget period mode"
           >
             {/* One line each. The hints that used to sit under these labels
-                ("Calendar", "Custom length") said less than the paragraph
+                ("Calendar", "Custom Length") said less than the paragraph
                 right below, and made this the only two-line segmented control
                 in the app. */}
             <ModeTab
@@ -797,7 +797,7 @@ export default function MorePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="period-edit-start">Start date</Label>
+                    <Label htmlFor="period-edit-start">Start Date</Label>
                     <Input
                       id="period-edit-start"
                       type="date"
@@ -839,7 +839,7 @@ export default function MorePage() {
                     disabled={savingPeriod}
                     className="w-full"
                   >
-                    {savingPeriod ? "Saving…" : "Save changes"}
+                    {savingPeriod ? "Saving…" : "Save Changes"}
                   </Button>
 
                   {/* Removing the running period — the escape hatch for one
@@ -869,7 +869,7 @@ export default function MorePage() {
                           disabled={savingPeriod}
                           onClick={() => handleDeletePeriod(period.current.id)}
                         >
-                          {savingPeriod ? "Removing…" : "Remove period"}
+                          {savingPeriod ? "Removing…" : "Remove Period"}
                         </Button>
                       </div>
                     </div>
@@ -879,7 +879,7 @@ export default function MorePage() {
                       onClick={() => setConfirmDeleteId(period.current.id)}
                       className="w-full rounded-sm py-3 text-center text-[13px] font-medium text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
                     >
-                      Remove this period
+                      Remove This Period
                     </button>
                   )}
                 </div>
@@ -899,7 +899,7 @@ export default function MorePage() {
                   )}
 
                   <div className="space-y-2">
-                    <Label htmlFor="period-start">Start date</Label>
+                    <Label htmlFor="period-start">Start Date</Label>
                     <Input
                       id="period-start"
                       type="date"
@@ -958,7 +958,7 @@ export default function MorePage() {
                     disabled={savingPeriod}
                     className="w-full"
                   >
-                    {savingPeriod ? "Starting…" : "Start period"}
+                    {savingPeriod ? "Starting…" : "Start Period"}
                   </Button>
                 </div>
               )}
@@ -1028,11 +1028,11 @@ export default function MorePage() {
         </motion.div>
       </BottomSheet>
 
-      {/* Delete account confirmation */}
+      {/* Delete Account confirmation */}
       <BottomSheet
         open={deleteOpen}
         onClose={() => !deleting && setDeleteOpen(false)}
-        title="Delete account"
+        title="Delete Account"
       >
         <div className="space-y-5">
           <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
@@ -1057,7 +1057,7 @@ export default function MorePage() {
               onClick={handleDelete}
               disabled={deleting}
             >
-              {deleting ? "Deleting…" : "Delete account"}
+              {deleting ? "Deleting…" : "Delete Account"}
             </Button>
           </div>
         </div>
@@ -1085,7 +1085,7 @@ function ModeTab({ active, disabled, onClick, label }) {
 }
 
 /**
- * Length in days, with the four lengths people actually use one tap away.
+ * Length in Days, with the four lengths people actually use one tap away.
  *
  * Shared by both branches of the sheet. It used to exist only on the "start a
  * new period" form, so changing the length of a running one meant clearing a
@@ -1094,7 +1094,7 @@ function ModeTab({ active, disabled, onClick, label }) {
 function LengthField({ id, value, onChange, disabled, children }) {
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>Length in days</Label>
+      <Label htmlFor={id}>Length in Days</Label>
       <Input
         id={id}
         type="number"

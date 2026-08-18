@@ -130,15 +130,15 @@ describe("no period running", () => {
     );
     render(<StreakCard />);
 
-    expect(await screen.findByText("No budget period running")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start a period" })).toBeInTheDocument();
+    expect(await screen.findByText("No Budget Period Running")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start a Period" })).toBeInTheDocument();
   });
 
   it("asks for income when a period is running but empty", async () => {
     fetchStreak.mockResolvedValue(streak({ hasIncome: false }));
     render(<StreakCard />);
 
-    expect(await screen.findByText("Start a spending streak")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add income" })).toBeInTheDocument();
+    expect(await screen.findByText("Start a Spending Streak")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add Income" })).toBeInTheDocument();
   });
 });

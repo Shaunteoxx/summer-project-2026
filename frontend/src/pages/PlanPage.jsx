@@ -122,7 +122,7 @@ export default function PlanPage() {
                 you can spend, live.
               </p>
               <Button onClick={() => navigate("/transactions")} className="mt-1">
-                Add income
+                Add Income
               </Button>
             </CardContent>
           </Card>
@@ -334,13 +334,13 @@ export function WhatIfCard({ leftToday, income, savings, spentSoFar, daysAfterTo
             >
               <div className="mt-3.5 flex border-t border-hairline pt-3.5">
                 <Metric
-                  label="Left for today"
+                  label="Left for Today"
                   value={signed(afterToday)}
                   tone={afterToday < 0 ? "text-negative" : "text-positive"}
                 />
                 {newDaily !== null && (
                   <Metric
-                    label="New daily budget"
+                    label="New Daily Budget"
                     value={`${signed(newDaily)}/day`}
                     tone={newDaily < 0 ? "text-negative" : undefined}
                   />
@@ -431,11 +431,11 @@ export function PaceForecastCard({
 
           <div className="mt-4 flex border-t border-hairline pt-3.5">
             <Metric
-              label="Spending / day so far"
+              label="Spending / Day So Far"
               value={`${formatMoney(avgDaily)}/day`}
             />
             <Metric
-              label="Projected saved"
+              label="Projected Saved"
               value={signed(projectedSaved)}
               tone={meetsGoal ? "text-positive" : "text-negative"}
             />
@@ -523,7 +523,7 @@ export function GoalDailyCard({ income, savings, spentBeforeToday, daysLeft, nou
               <ArrowLeftRight className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <FieldLabel htmlFor="goal-daily">Spend at most</FieldLabel>
+              <FieldLabel htmlFor="goal-daily">Spend at Most</FieldLabel>
               <MoneyInput
                 id="goal-daily"
                 value={daily}

@@ -63,7 +63,7 @@ export default function AccountsSheet({ open, onClose }) {
         account.archived ? `${account.name} is back` : `Archived ${account.name}`
       );
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Couldn't update that account.");
+      toast.error(err?.response?.data?.message || "Couldn't update that account. Please try again.");
     }
   };
 
@@ -78,13 +78,13 @@ export default function AccountsSheet({ open, onClose }) {
       // The server refuses once an account has history; say so rather than
       // failing silently, and point at the archive button right beside it.
       toast.error(
-        err?.response?.data?.message || "Couldn't remove that account."
+        err?.response?.data?.message || "Couldn't remove that account. Please try again."
       );
     }
   };
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Bank accounts">
+    <BottomSheet open={open} onClose={onClose} title="Bank Accounts">
       <div className="space-y-4">
         <p className="text-[13px] leading-relaxed text-ink-3">
           Tag each entry with the account it came from or went into. Your budget
@@ -166,7 +166,7 @@ export default function AccountsSheet({ open, onClose }) {
         {adding ? (
           <div className="space-y-3 rounded-lg border border-hairline bg-surface-2 p-3">
             <div className="space-y-2">
-              <Label htmlFor="account-name">Account name</Label>
+              <Label htmlFor="account-name">Account Name</Label>
               <Input
                 id="account-name"
                 placeholder="e.g. Trust"
@@ -203,7 +203,7 @@ export default function AccountsSheet({ open, onClose }) {
                 disabled={!name.trim() || saving}
                 className="flex-1"
               >
-                {saving ? "Adding…" : "Add account"}
+                {saving ? "Adding…" : "Add Account"}
               </Button>
               <Button type="button" variant="outline" onClick={reset}>
                 Cancel
@@ -217,7 +217,7 @@ export default function AccountsSheet({ open, onClose }) {
             onClick={() => setAdding(true)}
             className="w-full gap-1.5"
           >
-            <Plus className="h-4 w-4" /> Add an account
+            <Plus className="h-4 w-4" /> Add an Account
           </Button>
         )}
       </div>

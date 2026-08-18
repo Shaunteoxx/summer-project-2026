@@ -74,7 +74,7 @@ export default function SavingsGoalCard({
       );
       onUpdated?.();
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Couldn't update savings.");
+      toast.error(err?.response?.data?.message || "Couldn't update savings. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -158,7 +158,7 @@ export default function SavingsGoalCard({
               </div>
             </div>
             <Button size="sm" onClick={openSheet} className="shrink-0">
-              Set target
+              Set Target
             </Button>
           </CardContent>
         </Card>
@@ -167,7 +167,7 @@ export default function SavingsGoalCard({
       <BottomSheet
         open={open}
         onClose={() => setOpen(false)}
-        title="Savings goal"
+        title="Savings Goal"
       >
         <div className="space-y-4 pb-2">
           <div className="space-y-2">

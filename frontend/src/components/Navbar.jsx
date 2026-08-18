@@ -51,13 +51,13 @@ export default function Navbar() {
         <div className="mx-auto flex max-w-app items-center justify-between gap-3 border-t border-hairline bg-surface-2 px-5 py-1.5 text-xs text-ink-2">
           <span className="flex items-center gap-1.5 font-medium">
             <Eye className="h-3.5 w-3.5" />
-            Read-only demo
+            Read-Only Demo
           </span>
           <button
             onClick={logout}
             className="font-semibold text-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
           >
-            Sign in
+            Sign In
           </button>
         </div>
       )}

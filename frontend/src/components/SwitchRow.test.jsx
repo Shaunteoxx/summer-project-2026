@@ -13,7 +13,7 @@ const setup = (props = {}) => {
     <SwitchRow
       checked={false}
       onChange={onChange}
-      label="Repeat every month"
+      label="Repeat Every Month"
       description="New months start with your latest target."
       {...props}
     />
@@ -24,7 +24,7 @@ const setup = (props = {}) => {
 describe("SwitchRow", () => {
   it("announces itself as a switch with its on/off state", () => {
     const { control } = setup({ checked: true });
-    expect(control).toHaveAccessibleName("Repeat every month");
+    expect(control).toHaveAccessibleName("Repeat Every Month");
     expect(control).toHaveAccessibleDescription("New months start with your latest target.");
     expect(control).toBeChecked();
   });

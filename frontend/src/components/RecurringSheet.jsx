@@ -158,7 +158,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
       }
       setEditing(null);
     } catch (err) {
-      setFormError(err?.response?.data?.message || "Couldn't save that. Try again.");
+      setFormError(err?.response?.data?.message || "Couldn't save this repeating entry.");
     } finally {
       setSaving(false);
     }
@@ -172,7 +172,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
         rule.paused ? `${rule.description} is back on` : `Paused ${rule.description}`
       );
     } catch {
-      toast.error("Couldn't update that entry.");
+      toast.error("Couldn't update that entry. Please try again.");
     }
   };
 
@@ -184,7 +184,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
       toast.info(`Removed ${rule.description}`);
     } catch {
       setConfirmId(null);
-      toast.error("Couldn't remove that entry.");
+      toast.error("Couldn't remove that entry. Please try again.");
     }
   };
 
@@ -197,9 +197,9 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
       closeLabel={editing ? "Back to the list" : "Close dialog"}
       title={
         editing === "new"
-          ? "New repeating entry"
+          ? "New Repeating Entry"
           : editing
-            ? "Edit repeating entry"
+            ? "Edit Repeating Entry"
             : "Repeating entries"
       }
     >
@@ -295,7 +295,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
           </div>
 
           <div className="space-y-2">
-            <Label>How often</Label>
+            <Label>How Often</Label>
             <div role="group" aria-label="How often" className="flex gap-0.5 rounded-md bg-surface-2 p-[3px]">
               {["monthly", "weekly"].map((option) => (
                 <button
@@ -321,7 +321,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                 htmlFor="rule-day"
                 className={errors.dayOfMonth ? "text-negative" : undefined}
               >
-                Day of the month
+                Day of the Month
               </Label>
               <Input
                 id="rule-day"
@@ -343,7 +343,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
             </div>
           ) : (
             <div className="space-y-2">
-              <Label>Day of the week</Label>
+              <Label>Day of the Week</Label>
               <div role="group" aria-label="Day of the week" className="flex flex-wrap gap-2">
                 {WEEKDAYS.map((label, index) => {
                   const selected = Number(form.weekday) === index;
@@ -370,7 +370,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
           {hasAccounts && (
             <div className="space-y-2">
               <Label id="rule-account-label">
-                {form.type === "income" ? "Paid into" : "Paid from"}
+                {form.type === "income" ? "Paid Into" : "Paid From"}
               </Label>
               <div
                 role="group"
@@ -408,7 +408,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
 
           {editing === "new" && (
             <div className="space-y-2">
-              <Label htmlFor="rule-start">Starting from</Label>
+              <Label htmlFor="rule-start">Starting From</Label>
               <Input
                 id="rule-start"
                 type="date"
@@ -433,7 +433,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
 
           <div className="flex gap-2">
             <Button type="submit" className="flex-1" disabled={saving}>
-              {saving ? "Saving…" : editing === "new" ? "Add repeating entry" : "Save changes"}
+              {saving ? "Saving…" : editing === "new" ? "Add Repeating Entry" : "Save Changes"}
             </Button>
             <Button type="button" variant="outline" onClick={() => setEditing(null)}>
               Cancel
@@ -543,7 +543,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
           )}
 
           <Button onClick={startAdding} className="w-full gap-1.5">
-            <Plus className="h-4 w-4" /> New repeating entry
+            <Plus className="h-4 w-4" /> New Repeating Entry
           </Button>
         </div>
       )}

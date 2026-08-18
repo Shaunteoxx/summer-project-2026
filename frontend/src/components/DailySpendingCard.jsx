@@ -194,7 +194,7 @@ export default function DailySpendingCard({
         <CardContent className="px-[18px] py-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-[15px] font-semibold tracking-[-0.015em]">Daily spending</h2>
+              <h2 className="text-[15px] font-semibold tracking-[-0.015em]">Daily Spending</h2>
               <p className="mt-0.5 text-[12px] text-ink-3">
                 {subtitle ?? formatPeriodLabel(period)}
               </p>
@@ -368,18 +368,18 @@ export default function DailySpendingCard({
                         className="h-0 w-4 border-t-2 border-dashed"
                         style={{ borderColor: colors.primary }}
                       />
-                      Daily budget
+                      Daily Budget
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5">
                       <span className="h-[9px] w-[9px] rounded-[3px] border border-positive bg-positive/20" />
-                      Within budget
+                      Within Budget
                     </span>
                   ))}
                 {anyOver && (
                   <span className="flex items-center gap-1.5">
                     <span className="h-[9px] w-[9px] rounded-[3px] border border-negative bg-negative/20" />
-                    Over that day's budget
+                    Over That Day's Budget
                   </span>
                 )}
               </div>
@@ -415,7 +415,7 @@ export default function DailySpendingCard({
               </div>
               {selected.budget !== null && (
                 <div className="text-right">
-                  <p className="text-[11.5px] text-ink-3">Budget that day</p>
+                  <p className="text-[11.5px] text-ink-3">Budget That Day</p>
                   <p className="num mt-1 text-[19px] font-medium">
                     {formatMoney(selected.budget)}
                   </p>
@@ -432,7 +432,7 @@ export default function DailySpendingCard({
               >
                 {selected.over
                   ? `${formatMoney(selected.amount - selected.budget)} over budget`
-                  : "Within budget"}
+                  : "Within Budget"}
               </p>
             )}
 

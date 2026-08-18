@@ -62,9 +62,20 @@ export function localToday() {
     .slice(0, 10);
 }
 
+// SGD only for now, formatted the Singapore way. The locale is pinned rather
+// than left to the runtime: `toLocaleString(undefined, …)` follows the reader's
+// browser for separators, so a de-DE machine would render "$1.240,00" — our
+// symbol, their decimal comma. In a money app that's an amount which reads as a
+// different number.
+//
+// When a second currency is needed, this is the one place to change: swap the
+// body for Intl.NumberFormat with { style: "currency", currency,
+// currencyDisplay: "narrowSymbol" } and thread a stored ISO 4217 code through.
+export const LOCALE = "en-SG";
+
 export function formatMoney(value, currency = "$") {
   const n = Number(value) || 0;
-  return `${n < 0 ? "-" : ""}${currency}${Math.abs(n).toLocaleString(undefined, {
+  return `${n < 0 ? "-" : ""}${currency}${Math.abs(n).toLocaleString(LOCALE, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

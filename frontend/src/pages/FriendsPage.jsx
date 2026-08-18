@@ -36,7 +36,7 @@ export default function FriendsPage() {
   const loadComparison = () =>
     fetchComparison(localToday())
       .then(setComparison)
-      .catch(() => toast.error("Couldn't load the leaderboard."));
+      .catch(() => toast.error("Couldn't load the leaderboard. Please try again."));
 
   useEffect(() => {
     loadRequests();
@@ -104,7 +104,7 @@ export default function FriendsPage() {
         {/* Everyone is scored on their own budget period, so the header names
             yours rather than implying a shared window. */}
         <p className="mt-1 text-[13px] text-ink-3">
-          Savings rate
+          Savings Rate
           {comparison?.period
             ? ` · ${formatPeriodLabel(comparison.period, { mode: budgetPeriod.mode })}`
             : comparison

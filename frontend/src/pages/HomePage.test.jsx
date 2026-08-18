@@ -53,7 +53,8 @@ const stats = {
   periodExpenses: 287.4,
   periodSavings: 300,
   totalSavings: 0,
-  percentageSaved: 0,
+  // No `percentageSaved`: the page deliberately doesn't read it. The tile is
+  // derived from the pace bar instead — see "the unspent tile" below.
   period: { start: "2026-08-01", end: "2026-08-31", days: 31, daysLeft: 20 },
 };
 
@@ -96,6 +97,60 @@ describe("the pace bar", () => {
     // 287.40 of 940 spent; 11 of 31 days elapsed at the start of day 12.
     expect(await screen.findByText("31% spent")).toBeInTheDocument();
     expect(screen.getByText(/35% of the month passed/)).toBeInTheDocument();
+  });
+
+  // The tile under the bar used to read the API's `percentageSaved`, which
+  // divides by income: (1240 - 287.40) / 1240 = 77%, printed beneath a bar
+  // reading 31% spent. Those don't complement, and 100 - 31 = 69 says so. It
+  // now comes off the bar, so the two always sum to 100.
+  it("shows the unspent share of the budget, not of income", async () => {
+    await show();
+    expect(await screen.findByText("Unspent So Far")).toBeInTheDocument();
+    // The figure counts up, so wait for it to land rather than reading 0.
+    expect(await screen.findByText("69%")).toBeInTheDocument();
+    expect(screen.queryByText("77%")).not.toBeInTheDocument();
+  });
+
+  it("has nothing unspent once the budget is gone", async () => {
+    await show({ periodExpenses: 1100, leftToSpend: -160 });
+    expect(await screen.findByText("100% spent")).toBeInTheDocument();
+    expect(await screen.findByText("0%")).toBeInTheDocument();
+  });
+
+  // The overspent state names the way out, so it has to be tappable: this is
+  // the screen where someone most needs the next step, and it used to be prose.
+  describe("the overspent state", () => {
+    const overspend = () => show({ periodExpenses: 1100, leftToSpend: -160 });
+
+    it("offers both ways back, not just a description of them", async () => {
+      await overspend();
+      expect(
+        await screen.findByRole("button", { name: "Add Income" })
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Lower Target" })).toBeInTheDocument();
+    });
+
+    it("sends 'Add Income' to the income sheet", async () => {
+      const user = (await import("@testing-library/user-event")).default.setup();
+      await overspend();
+      await user.click(await screen.findByRole("button", { name: "Add Income" }));
+      expect(navigate).toHaveBeenCalledWith("/transactions", {
+        state: { openAdd: "income" },
+      });
+    });
+
+    it("sends 'Lower Target' to where the target is set", async () => {
+      const user = (await import("@testing-library/user-event")).default.setup();
+      await overspend();
+      await user.click(await screen.findByRole("button", { name: "Lower Target" }));
+      expect(navigate).toHaveBeenCalledWith("/more");
+    });
+
+    it("shows neither button while the budget still holds", async () => {
+      await show();
+      expect(await screen.findByText("31% spent")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Add Income" })).not.toBeInTheDocument();
+    });
   });
 
   it("calls spending under the elapsed share 'ahead of pace'", async () => {
@@ -155,9 +210,9 @@ describe("with no budget period running", () => {
 
   it("names the gap and offers the one thing that closes it", async () => {
     await showNoPeriod();
-    expect(screen.getByText("No budget period running yet")).toBeInTheDocument();
+    expect(screen.getByText("No Budget Period Running Yet")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Set up a period" })
+      screen.getByRole("button", { name: "Set Up a Period" })
     ).toBeInTheDocument();
     // No hero, because there is no budget to put in it.
     expect(screen.queryByText(/% spent/)).not.toBeInTheDocument();
@@ -166,25 +221,25 @@ describe("with no budget period running", () => {
   it("says so differently once a period has been and gone", async () => {
     await showNoPeriod("lapsed");
     expect(
-      screen.getByText("Your last budget period has ended")
+      screen.getByText("Your Last Budget Period Has Ended")
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Start next period" })
+      screen.getByRole("button", { name: "Start Next Period" })
     ).toBeInTheDocument();
   });
 
-  // The streak card carries its own "No budget period running" empty state,
+  // The streak card carries its own "No Budget Period Running" empty state,
   // with its own button. Rendered under this one it asked the same question
   // twice, three lines apart.
   it("doesn't ask twice", async () => {
     await showNoPeriod();
-    expect(screen.getAllByText(/No budget period running/)).toHaveLength(1);
+    expect(screen.getAllByText(/No Budget Period Running/)).toHaveLength(1);
   });
 
   it("sends you to More, where periods are set up", async () => {
     const user = (await import("@testing-library/user-event")).default.setup();
     await showNoPeriod();
-    await user.click(screen.getByRole("button", { name: "Set up a period" }));
+    await user.click(screen.getByRole("button", { name: "Set Up a Period" }));
     expect(navigate).toHaveBeenCalledWith("/more");
   });
 });
@@ -207,7 +262,7 @@ describe("with nothing logged yet", () => {
         <HomePage />
       </MemoryRouter>
     );
-    await screen.findByText("Nothing logged yet");
+    await screen.findByText("Nothing Logged Yet");
   };
 
   it("names the gap instead of showing a page of zeroes", async () => {
@@ -227,7 +282,7 @@ describe("with nothing logged yet", () => {
     const user = (await import("@testing-library/user-event")).default.setup();
     await showEmpty();
 
-    await user.click(screen.getByRole("button", { name: /Add your first entry/ }));
+    await user.click(screen.getByRole("button", { name: /Add Your First Entry/ }));
     expect(navigate).toHaveBeenCalledWith("/transactions", {
       state: { openAdd: "income" },
     });

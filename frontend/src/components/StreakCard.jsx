@@ -47,7 +47,7 @@ export default function StreakCard() {
       setConfirmOpen(false);
       toast.success("Streak restored! 🔥");
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Couldn't restore streak.");
+      toast.error(err?.response?.data?.message || "Couldn't restore streak. Please try again.");
     } finally {
       setRestoring(false);
     }
@@ -80,14 +80,14 @@ export default function StreakCard() {
               <Flame className="h-6 w-6" />
             </span>
             <div>
-              <p className="text-[17px] font-semibold tracking-[-0.015em]">No budget period running</p>
+              <p className="text-[17px] font-semibold tracking-[-0.015em]">No Budget Period Running</p>
               <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
                 Start your next period to pick your streak back up. Days in
                 between aren't counted for or against you.
               </p>
             </div>
             <Button size="sm" onClick={() => navigate("/more")}>
-              Start a period
+              Start a Period
             </Button>
           </CardContent>
         </Card>
@@ -105,14 +105,14 @@ export default function StreakCard() {
               <Flame className="h-6 w-6" />
             </span>
             <div>
-              <p className="text-[17px] font-semibold tracking-[-0.015em]">Start a spending streak</p>
+              <p className="text-[17px] font-semibold tracking-[-0.015em]">Start a Spending Streak</p>
               <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
                 Add your income for this {noun} to unlock your daily budget and
                 start a streak.
               </p>
             </div>
             <Button size="sm" onClick={() => navigate("/transactions")}>
-              Add income
+              Add Income
             </Button>
           </CardContent>
         </Card>
@@ -296,7 +296,7 @@ export default function StreakCard() {
       <BottomSheet
         open={confirmOpen}
         onClose={() => !restoring && setConfirmOpen(false)}
-        title="Restore your streak?"
+        title="Restore Your Streak?"
       >
         <div className="space-y-5">
           <div className="flex items-start gap-3 rounded-md bg-surface-2 p-4">
@@ -317,7 +317,7 @@ export default function StreakCard() {
               Cancel
             </Button>
             <Button className="flex-1" onClick={handleRestore} disabled={restoring}>
-              {restoring ? "Restoring…" : "Use a save"}
+              {restoring ? "Restoring…" : "Use a Save"}
             </Button>
           </div>
         </div>

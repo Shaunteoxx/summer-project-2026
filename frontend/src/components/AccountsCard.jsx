@@ -10,7 +10,7 @@ import { formatMoney, localToday } from "@/lib/utils";
 import { fadeUp } from "@/animations/variants";
 
 /**
- * Account activity — what moved through each account this period.
+ * Account Activity — what moved through each account this period.
  *
  * This shows two figures per account rather than one net. The net version
  * ("DBS +$1,175.20") answered no question anyone actually has: it isn't a
@@ -87,7 +87,7 @@ export default function AccountsCard({ onTransfer = null }) {
       <Card>
         <CardContent className="p-[18px]">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-title">Account activity</h2>
+            <h2 className="text-title">Account Activity</h2>
             {/* Transfers move money between the accounts listed right below,
                 so this is where the action belongs — it used to be a
                 full-width button competing with adding a transaction, which
@@ -119,7 +119,7 @@ export default function AccountsCard({ onTransfer = null }) {
               <Row key={a.id} label={a.name} color={a.color} inAmt={a.in} outAmt={a.out} />
             ))}
             {unassigned && (
-              <Row label="Not assigned" inAmt={unassigned.in} outAmt={unassigned.out} />
+              <Row label="Not Assigned" inAmt={unassigned.in} outAmt={unassigned.out} />
             )}
           </ul>
 

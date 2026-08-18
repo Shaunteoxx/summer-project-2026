@@ -100,7 +100,7 @@ export default function LoginPage() {
             ) : (
               <Eye className="h-[17px] w-[17px]" />
             )}
-            {demoLoading ? "Loading demo…" : "Try the demo"}
+            {demoLoading ? "Loading demo…" : "Try the Demo"}
           </Button>
         </div>
 

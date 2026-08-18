@@ -37,7 +37,7 @@ class AppErrorBoundary extends Component {
     return (
       <main className="flex min-h-[100dvh] items-center justify-center bg-canvas p-6 text-center">
         <div className="max-w-sm space-y-4">
-          <h1 className="text-title">Something went wrong</h1>
+          <h1 className="text-title">Something Went Wrong</h1>
           <p className="text-sm text-ink-3">
             Reload the app to try again. Your saved transactions are unaffected.
           </p>
@@ -46,7 +46,7 @@ class AppErrorBoundary extends Component {
             className="h-11 rounded-md bg-ink px-5 font-semibold text-surface"
             onClick={() => window.location.reload()}
           >
-            Reload app
+            Reload App
           </button>
         </div>
       </main>

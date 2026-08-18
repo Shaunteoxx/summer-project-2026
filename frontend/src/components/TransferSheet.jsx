@@ -93,7 +93,7 @@ export default function TransferSheet({ open, onClose, onTransferred }) {
       open={open}
       onClose={calcOpen ? () => setCalcOpen(false) : onClose}
       closeLabel={calcOpen ? "Back to form" : "Close dialog"}
-      title={calcOpen ? "Calculator" : "Move money"}
+      title={calcOpen ? "Calculator" : "Move Money"}
     >
       {calcOpen ? (
         <AmountCalculator
@@ -173,7 +173,7 @@ export default function TransferSheet({ open, onClose, onTransferred }) {
           {error && <FieldError id="transfer-error">{error}</FieldError>}
 
           <Button type="submit" className="w-full" disabled={saving}>
-            {saving ? "Moving…" : "Move money"}
+            {saving ? "Moving…" : "Move Money"}
           </Button>
         </form>
       )}

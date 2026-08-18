@@ -63,7 +63,7 @@ afterEach(() => {
 describe("keeping the sheet clear of the keyboard", () => {
   it("sits flush with the bottom while no keyboard is up", () => {
     render(
-      <BottomSheet open onClose={() => {}} title="Add expense">
+      <BottomSheet open onClose={() => {}} title="Add Expense">
         <input aria-label="Description" />
       </BottomSheet>
     );
@@ -77,7 +77,7 @@ describe("keeping the sheet clear of the keyboard", () => {
 
   it("lifts by exactly what the keyboard covers", () => {
     render(
-      <BottomSheet open onClose={() => {}} title="Add expense">
+      <BottomSheet open onClose={() => {}} title="Add Expense">
         <input aria-label="Description" />
       </BottomSheet>
     );
@@ -87,7 +87,7 @@ describe("keeping the sheet clear of the keyboard", () => {
 
   it("caps its height to the space left, so a tall form can't run off the top", () => {
     render(
-      <BottomSheet open onClose={() => {}} title="Add expense">
+      <BottomSheet open onClose={() => {}} title="Add Expense">
         <input aria-label="Description" />
       </BottomSheet>
     );
@@ -99,7 +99,7 @@ describe("keeping the sheet clear of the keyboard", () => {
 
   it("discounts the page scroll Safari does to reveal the field", () => {
     render(
-      <BottomSheet open onClose={() => {}} title="Add expense">
+      <BottomSheet open onClose={() => {}} title="Add Expense">
         <input aria-label="Description" />
       </BottomSheet>
     );
@@ -111,7 +111,7 @@ describe("keeping the sheet clear of the keyboard", () => {
 
   it("drops back down when the keyboard closes", () => {
     render(
-      <BottomSheet open onClose={() => {}} title="Add expense">
+      <BottomSheet open onClose={() => {}} title="Add Expense">
         <input aria-label="Description" />
       </BottomSheet>
     );
@@ -124,7 +124,7 @@ describe("keeping the sheet clear of the keyboard", () => {
 
   it("ignores shifts too small to be a keyboard", () => {
     render(
-      <BottomSheet open onClose={() => {}} title="Add expense">
+      <BottomSheet open onClose={() => {}} title="Add Expense">
         <input aria-label="Description" />
       </BottomSheet>
     );
@@ -136,14 +136,14 @@ describe("keeping the sheet clear of the keyboard", () => {
 
   it("stops listening once it closes", () => {
     const { rerender } = render(
-      <BottomSheet open onClose={() => {}} title="Add expense">
+      <BottomSheet open onClose={() => {}} title="Add Expense">
         <input aria-label="Description" />
       </BottomSheet>
     );
     expect(viewport.listenerCount()).toBeGreaterThan(0);
 
     rerender(
-      <BottomSheet open={false} onClose={() => {}} title="Add expense">
+      <BottomSheet open={false} onClose={() => {}} title="Add Expense">
         <input aria-label="Description" />
       </BottomSheet>
     );
@@ -152,7 +152,7 @@ describe("keeping the sheet clear of the keyboard", () => {
 
   it("brings the focused field back into view once it has resized", () => {
     render(
-      <BottomSheet open onClose={() => {}} title="Add expense">
+      <BottomSheet open onClose={() => {}} title="Add Expense">
         <input aria-label="Description" />
       </BottomSheet>
     );
@@ -170,7 +170,7 @@ describe("keeping the sheet clear of the keyboard", () => {
   it("survives a browser with no visualViewport at all", () => {
     delete window.visualViewport;
     render(
-      <BottomSheet open onClose={() => {}} title="Add expense">
+      <BottomSheet open onClose={() => {}} title="Add Expense">
         <input aria-label="Description" />
       </BottomSheet>
     );

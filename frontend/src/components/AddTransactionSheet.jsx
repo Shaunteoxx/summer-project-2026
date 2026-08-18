@@ -305,7 +305,7 @@ export default function AddTransactionSheet({
       resetNewCategory();
       toast.success(`Added category “${created.name}”`);
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Couldn't add category.");
+      toast.error(err?.response?.data?.message || "Couldn't add category. Please try again.");
     } finally {
       setSavingCategory(false);
     }
@@ -450,8 +450,8 @@ export default function AddTransactionSheet({
       calcOpen
         ? "Calculator"
         : isEdit
-          ? `Edit ${type === "income" ? "income" : "expense"}`
-          : "New entry"
+          ? `Edit ${type === "income" ? "Income" : "Expense"}`
+          : "New Entry"
     }
   >
     {calcOpen ? (
@@ -721,7 +721,7 @@ export default function AddTransactionSheet({
           {showNewCategory && (
             <div className="rounded-xl bg-surface-2 p-4">
               <p className="text-[13.5px] font-semibold tracking-[-0.01em]">
-                New category
+                New Category
               </p>
               <Input
                 placeholder="Category name"
@@ -913,7 +913,7 @@ export default function AddTransactionSheet({
           <SwitchRow
             checked={repeat}
             onChange={setRepeat}
-            label="Repeat monthly"
+            label="Repeat Monthly"
             description={
               repeat && repeatPlan(form.date)
                 ? repeatPlan(form.date).caption
@@ -944,12 +944,12 @@ export default function AddTransactionSheet({
           {isEdit
             ? submitting
               ? "Saving…"
-              : "Save changes"
+              : "Save Changes"
             : submitting
               ? "Adding…"
               : type === "income"
-                ? "Add income"
-                : "Add expense"}
+                ? "Add Income"
+                : "Add Expense"}
         </Button>
       </form>
     )}

@@ -199,7 +199,7 @@ describe("optional description", () => {
     await user.click(sheet.getByLabelText(/^Amount/));
     await user.click(screen.getByRole("button", { name: "4" }));
     await user.click(screen.getByRole("button", { name: /^Use/ }));
-    await user.click(screen.getByRole("button", { name: "Add expense" }));
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
 
     expect(submitted()).toMatchObject({
       description: "F & B",
@@ -232,7 +232,7 @@ describe("optional description", () => {
     await user.click(sheet.getByLabelText(/^Amount/));
     await user.click(screen.getByRole("button", { name: "4" }));
     await user.click(screen.getByRole("button", { name: /^Use/ }));
-    await user.click(screen.getByRole("button", { name: "Add expense" }));
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
 
     expect(submitted().description).toBe("Chicken rice");
   });
@@ -250,7 +250,7 @@ describe("optional description", () => {
     await user.click(sheet.getByLabelText(/^Amount/));
     await user.click(screen.getByRole("button", { name: "4" }));
     await user.click(screen.getByRole("button", { name: /^Use/ }));
-    await user.click(screen.getByRole("button", { name: "Add expense" }));
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
 
     const row = await screen.findByRole("listitem");
     expect(within(row).getByText("Chicken rice")).toBeInTheDocument();
@@ -264,7 +264,7 @@ describe("optional description", () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    await user.click(screen.getByRole("button", { name: "Add expense" }));
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
     expect(sheet.getByText("Choose a category.")).toBeInTheDocument();
     expect(addTransaction).not.toHaveBeenCalled();
   });
@@ -339,12 +339,12 @@ describe("an empty ledger", () => {
   it("offers the entry sheet from the empty state, without leaving the page", async () => {
     const user = userEvent.setup();
     renderPage();
-    await screen.findByText("Nothing logged yet");
+    await screen.findByText("Nothing Logged Yet");
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Add your first entry/ }));
+    await user.click(screen.getByRole("button", { name: /Add Your First Entry/ }));
 
-    expect(await screen.findByRole("dialog", { name: "New entry" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "New Entry" })).toBeInTheDocument();
   });
 });
 
@@ -416,7 +416,7 @@ describe("adding a category", () => {
       await user.click(sheet.getByRole("button", { name: /Choose a category/ }));
       await user.click(sheet.getByRole("button", { name: "Category 7" }));
       await enterAmount(user, sheet, "4");
-      await user.click(screen.getByRole("button", { name: "Add expense" }));
+      await user.click(screen.getByRole("button", { name: "Add Expense" }));
 
       expect(submitted()).toMatchObject({ category: "Category 7" });
     });
@@ -488,7 +488,7 @@ describe("tagging entries with an account", () => {
     const sheet = await openExpenseSheet();
 
     expect(sheet.queryByRole("button", { name: /^Paid from:/ })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Filter by account")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Filter by Account")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Move money between accounts/ })
     ).not.toBeInTheDocument();
@@ -503,7 +503,7 @@ describe("tagging entries with an account", () => {
     await user.click(sheet.getByRole("button", { name: /F & B/ }));
     await user.click(sheet.getByLabelText(/^Amount/));
     await fillAmount(user);
-    await user.click(screen.getByRole("button", { name: "Add expense" }));
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
 
     expect(submitted().accountId).toBe("a2");
   });
@@ -701,7 +701,7 @@ describe("transfers in the ledger", () => {
 
     await user.click(accountButton());
     const sheet = within(screen.getByRole("dialog"));
-    for (const label of ["All accounts", "Trust", "DBS", "Revolut", "Cash"]) {
+    for (const label of ["All Accounts", "Trust", "DBS", "Revolut", "Cash"]) {
       expect(sheet.getByRole("button", { name: label })).toBeInTheDocument();
     }
   });
@@ -723,7 +723,7 @@ describe("transfers in the ledger", () => {
     const user = userEvent.setup();
     await show();
 
-    expect(accountButton()).toHaveAccessibleName("Filter by account");
+    expect(accountButton()).toHaveAccessibleName("Filter by Account");
     await pickAccount(user, "DBS");
     expect(accountButton()).toHaveAccessibleName(/Filtering by DBS/);
   });
@@ -758,14 +758,14 @@ describe("editing an entry", () => {
   };
 
   const save = (user) =>
-    user.click(screen.getByRole("button", { name: "Save changes" }));
+    user.click(screen.getByRole("button", { name: "Save Changes" }));
 
   it("opens on the entry as it stands", async () => {
     mockAccounts = twoAccounts;
     const user = userEvent.setup();
     const sheet = await openEditor(user, { ...expense, accountId: "a2" });
 
-    expect(screen.getByRole("dialog", { name: "Edit expense" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Edit Expense" })).toBeInTheDocument();
     expect(sheet.getByLabelText("Description")).toHaveValue("Lunch");
     // The hero reads the figure back signed, the way the ledger row will.
     expect(sheet.getByLabelText(/^Amount/)).toHaveTextContent("−$12.00");
@@ -906,7 +906,7 @@ describe("editing an entry", () => {
     // would inherit it.
     const user = userEvent.setup();
     await openEditor(user);
-    expect(screen.getByRole("dialog", { name: "Edit expense" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Edit Expense" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Close dialog" }));
 
@@ -915,7 +915,7 @@ describe("editing an entry", () => {
     );
     // A fresh arrival is an add, with nothing carried over.
     const sheet = await openExpenseSheet();
-    expect(screen.getByRole("dialog", { name: "New entry" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "New Entry" })).toBeInTheDocument();
     expect(sheet.getByLabelText("Description")).toHaveValue("");
     // The hero shows an unset amount as a muted $0.00, with no sign on it.
     expect(sheet.getByLabelText(/^Amount/)).toHaveTextContent(/^\$0\.00$/);
@@ -932,16 +932,29 @@ describe("repeating an entry as you add it", () => {
     await enterAmount(user, sheet, "850");
   };
 
+  // Dated from today rather than a fixed calendar date. This used to pin
+  // "2026-08-15" against an expected start of "2026-08-16", which only held
+  // while the suite ran on or before the 16th — after that `repeatPlan` clamps
+  // the start to today (a rule can't reach into days already lived through)
+  // and the assertion failed for reasons that had nothing to do with the code.
   it("starts the rule after this entry, so the month isn't logged twice", async () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
+    const ymd = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+        d.getDate()
+      ).padStart(2, "0")}`;
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
     await fillExpense(user, sheet);
     fireEvent.change(sheet.getByLabelText("Date"), {
-      target: { value: "2026-08-15" },
+      target: { value: ymd(today) },
     });
-    await user.click(sheet.getByRole("switch", { name: /Repeat monthly/ }));
-    await user.click(screen.getByRole("button", { name: "Add expense" }));
+    await user.click(sheet.getByRole("switch", { name: /Repeat Monthly/ }));
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
 
     expect(addRule).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -949,9 +962,10 @@ describe("repeating an entry as you add it", () => {
         amount: 850,
         type: "expense",
         frequency: "monthly",
-        dayOfMonth: 15,
-        // The 16th, not the 15th: today's entry is already in the ledger.
-        startKey: "2026-08-16",
+        dayOfMonth: today.getDate(),
+        // Tomorrow, not today: today's entry is already in the ledger, and a
+        // rule that also fired today would post it twice.
+        startKey: ymd(tomorrow),
       })
     );
   });
@@ -963,7 +977,7 @@ describe("repeating an entry as you add it", () => {
     fireEvent.change(sheet.getByLabelText("Date"), {
       target: { value: "2026-08-15" },
     });
-    await user.click(sheet.getByRole("switch", { name: /Repeat monthly/ }));
+    await user.click(sheet.getByRole("switch", { name: /Repeat Monthly/ }));
 
     expect(
       sheet.getByText("Adds this again on the 15th of each month, from September.")
@@ -974,7 +988,7 @@ describe("repeating an entry as you add it", () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
-    await user.click(sheet.getByRole("switch", { name: /Repeat monthly/ }));
+    await user.click(sheet.getByRole("switch", { name: /Repeat Monthly/ }));
     fireEvent.change(sheet.getByLabelText("Date"), {
       target: { value: "2026-08-15" },
     });
@@ -991,7 +1005,7 @@ describe("repeating an entry as you add it", () => {
     const sheet = await openExpenseSheet();
 
     await fillExpense(user, sheet);
-    await user.click(screen.getByRole("button", { name: "Add expense" }));
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
 
     expect(addTransaction).toHaveBeenCalled();
     expect(addRule).not.toHaveBeenCalled();
@@ -1003,8 +1017,8 @@ describe("repeating an entry as you add it", () => {
     const sheet = await openExpenseSheet();
 
     await fillExpense(user, sheet);
-    await user.click(sheet.getByRole("switch", { name: /Repeat monthly/ }));
-    await user.click(screen.getByRole("button", { name: "Add expense" }));
+    await user.click(sheet.getByRole("switch", { name: /Repeat Monthly/ }));
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
 
     // The expense was what was asked for; the repeat was a convenience on top.
     expect(addTransaction).toHaveBeenCalled();
@@ -1028,6 +1042,6 @@ describe("repeating an entry as you add it", () => {
     await user.click(await screen.findByRole("button", { name: "Edit Lunch" }));
 
     const sheet = within(screen.getByRole("dialog"));
-    expect(sheet.queryByRole("switch", { name: /Repeat monthly/ })).not.toBeInTheDocument();
+    expect(sheet.queryByRole("switch", { name: /Repeat Monthly/ })).not.toBeInTheDocument();
   });
 });

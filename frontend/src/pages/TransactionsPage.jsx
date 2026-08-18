@@ -112,7 +112,7 @@ export default function TransactionsPage() {
         setTransactions(txns);
         setTransfers(moves);
       })
-      .catch(() => toast.error("Couldn't load transactions. Pull to refresh or try again."))
+      .catch(() => toast.error("Couldn't load transactions. Please try again."))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, hasAccounts]);
@@ -291,7 +291,7 @@ export default function TransactionsPage() {
           next.splice(Math.min(index, next.length), 0, removed);
           return next;
         });
-        toast.error("Couldn't remove that transfer.");
+        toast.error("Couldn't remove that transfer. Please try again.");
       });
   };
 
@@ -316,7 +316,7 @@ export default function TransactionsPage() {
       pendingDeletes.current.delete(id);
       removeTransaction(id).catch(() => {
         restore();
-        toast.error("Couldn't delete transaction.");
+        toast.error("Couldn't delete transaction. Please try again.");
       });
     }, DELETE_GRACE_MS);
     pendingDeletes.current.set(id, timer);
@@ -352,7 +352,7 @@ export default function TransactionsPage() {
         <p className="mt-1 text-[13px] text-ink-3">
           {current
             ? `${formatPeriodLabel(current, { mode: budgetPeriod.mode })} · this ${budgetPeriod.noun}`
-            : "No budget period running"}
+            : "No Budget Period Running"}
           {loading
             ? ""
             : hasEntries
@@ -436,7 +436,7 @@ export default function TransactionsPage() {
               aria-label={
                 selectedAccount
                   ? `Filtering by ${selectedAccount.name}. Change account`
-                  : "Filter by account"
+                  : "Filter by Account"
               }
               className={`flex h-11 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 selectedAccount
@@ -529,7 +529,7 @@ export default function TransactionsPage() {
           // are hidden while the ledger is empty.
           <EmptyState
             icon={Receipt}
-            title="Nothing logged yet"
+            title="Nothing Logged Yet"
             body="Your first entry takes about four taps. Amount, category, done."
             action={
               <Button
@@ -537,7 +537,7 @@ export default function TransactionsPage() {
                 onClick={() => setFormType("expense")}
               >
                 <Plus className="h-[17px] w-[17px]" />
-                Add your first entry
+                Add Your First Entry
               </Button>
             }
           />
@@ -566,7 +566,7 @@ export default function TransactionsPage() {
                   setFilter("all");
                 }}
               >
-                Clear filters
+                Clear Filters
               </Button>
             </CardContent>
           </Card>
@@ -712,9 +712,9 @@ function TransferRow({ transfer, from, to, onDelete }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="flex min-w-0 items-center gap-1.5 truncate text-[15px] font-medium tracking-[-0.01em]">
-            {from?.name ?? "Removed account"}
+            {from?.name ?? "Removed Account"}
             <ArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-3" />
-            {to?.name ?? "Removed account"}
+            {to?.name ?? "Removed Account"}
           </p>
           <p className="mt-0.5 truncate text-meta text-ink-3">
             Transfer · doesn&apos;t touch your budget
@@ -748,10 +748,10 @@ function TransferRow({ transfer, from, to, onDelete }) {
  * eight, and the row above stays one button wide.
  */
 function AccountFilterSheet({ open, onClose, accounts, selectedId, onSelect }) {
-  const options = [{ id: "", name: "All accounts" }, ...accounts];
+  const options = [{ id: "", name: "All Accounts" }, ...accounts];
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Filter by account">
+    <BottomSheet open={open} onClose={onClose} title="Filter by Account">
       <ul className="space-y-1.5">
         {options.map((a) => {
           const selected = selectedId === a.id;

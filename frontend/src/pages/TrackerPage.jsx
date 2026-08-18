@@ -112,7 +112,7 @@ export default function TrackerPage() {
           <p className="mt-1 text-[13px] text-ink-3">
             {current
               ? formatPeriodLabel(current, { mode: budgetPeriod.mode })
-              : "No budget period running"}
+              : "No Budget Period Running"}
           </p>
         </div>
         {/* Same destination as the button at the foot of the page. This page
@@ -124,21 +124,21 @@ export default function TrackerPage() {
           className="mt-1 flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-hairline-strong bg-surface px-3 text-[12.5px] font-medium text-ink transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <BarChart3 className="h-[13px] w-[13px]" />
-          All months
+          All Months
         </button>
       </motion.div>
 
       {!budgetPeriod.loading && !current ? (
         <Card className="mt-5">
           <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
-            <p className="text-[17px] font-semibold tracking-[-0.015em]">Nothing to track yet</p>
+            <p className="text-[17px] font-semibold tracking-[-0.015em]">Nothing to Track Yet</p>
             <p className="text-[13px] leading-relaxed text-ink-3">
               {budgetPeriod.status === "lapsed"
                 ? "Your last budget period has ended. Start the next one to pick tracking back up."
                 : "Set up a budget period to start tracking what you've saved and spent."}
             </p>
             <Button onClick={() => navigate("/more")}>
-              {budgetPeriod.status === "lapsed" ? "Start next period" : "Set up a period"}
+              {budgetPeriod.status === "lapsed" ? "Start Next Period" : "Set Up a Period"}
             </Button>
           </CardContent>
         </Card>
@@ -239,7 +239,7 @@ export default function TrackerPage() {
             todayBudget={streak?.today?.budget ?? 0}
           />
 
-          {/* Spending by category */}
+          {/* Spending by Category */}
           <motion.div variants={fadeUp} initial="initial" animate="animate">
             <CategoryCard
               byCategory={byCategory}
@@ -256,16 +256,20 @@ export default function TrackerPage() {
             animate="animate"
             className="grid grid-cols-2 gap-2.5"
           >
+            {/* "Unspent", not "Saved", for the same reason as the ring above:
+                this is a live period, so income minus spending is money not
+                spent yet. The "% of income" caption stays true either way —
+                it's the denominator this tile has always used. */}
             <BreakdownCard
               icon={PiggyBank}
-              label="Total saved"
+              label="Total Unspent"
               amount={income - spent}
               percent={percentageSaved}
               accent
             />
             <BreakdownCard
               icon={CreditCard}
-              label="Total spent"
+              label="Total Spent"
               amount={spent}
               percent={percentageSpent}
             />
@@ -277,7 +281,7 @@ export default function TrackerPage() {
               onClick={() => navigate("/stats")}
               className="w-full gap-2"
             >
-              <BarChart3 className="h-4 w-4" /> View all months
+              <BarChart3 className="h-4 w-4" /> View All Months
             </Button>
           </motion.div>
         </div>
@@ -316,16 +320,22 @@ export function SavedVsSpentCard({
   // Drop empty slices: a lone 360° sector renders badly with rounded caps, and
   // a zero-value slice contributes nothing but a seam.
   const slices = [
-    { name: "Saved", value: saved, fill: colors.saved },
+    { name: "Unspent", value: saved, fill: colors.saved },
     { name: "Spent", value: spent, fill: colors.spent },
   ].filter((s) => s.value > 0);
   const split = slices.length > 1;
 
   return (
     <Card>
-      {/* No title: the ring says 77% SAVED and the list names both figures, so
-          a heading above them would only repeat what the card already reads
-          out. Matches mockups §06, where this card carries no title either. */}
+      {/* No title: the ring says 77% UNSPENT and the list names both figures,
+          so a heading above them would only repeat what the card already reads
+          out. Matches mockups §06, where this card carries no title either.
+
+          "Unspent", not "Saved": this is a live period, so income minus
+          spending is money not spent yet, not money set aside. Calling it
+          saved put an apparent 3x win directly above a "Goal: set aside $300"
+          footnote. The SavingsGoalCard below is the one place that answers
+          "am I actually saving?", and it says "covers" for the same reason. */}
       <CardContent className="px-8 py-[22px]">
         {hasData ? (
           <div className="flex items-center gap-[50px]">
@@ -358,7 +368,7 @@ export function SavedVsSpentCard({
                   <AnimatedNumber value={percentageSaved} suffix="%" />
                 </span>
                 <span className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.07em] text-ink-3">
-                  Saved
+                  Unspent
                 </span>
               </div>
             </div>
@@ -371,11 +381,11 @@ export function SavedVsSpentCard({
                 breathing room rather than as a hole in the middle of a row. */}
             <div className="mx-auto min-w-0">
             <dl className="grid grid-cols-[auto_auto] items-baseline gap-x-5 gap-y-1">
-              {/* "Saved", not "Saved so far": at 19px the amount needs the room,
-                  and the pair reads as the card's own title now that it has
-                  none. The period it covers is in the page header. */}
+              {/* One word, not "Unspent so far": at 19px the amount needs the
+                  room, and the pair reads as the card's own title now that it
+                  has none. The period it covers is in the page header. */}
               {[
-                ["Saved", saved, colors.saved],
+                ["Unspent", saved, colors.saved],
                 ["Spent", spent, colors.spent],
               ].map(([label, value, swatch]) => (
                 <Fragment key={label}>
@@ -419,7 +429,7 @@ export function SavedVsSpentCard({
 }
 
 /**
- * Spending by category — a 112px ring beside a right-aligned value list.
+ * Spending by Category — a 112px ring beside a right-aligned value list.
  *
  * Arcs are contiguous (no padding angle, butt caps): the eight category hues
  * are perceptually matched, so they separate on colour alone and a gap between
@@ -436,7 +446,7 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
     <Card>
       <CardContent className="px-[18px] py-5">
         <h2 className="text-[15px] font-semibold tracking-[-0.015em]">
-          Spending by category
+          Spending by Category
         </h2>
 
         {byCategory.length > 0 ? (
@@ -514,15 +524,15 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
 /**
  * One of the two summary tiles under the charts.
  *
- * The saved tile used to carry `border-primary/30 bg-primary/5`. With --primary
- * aliased to ink that renders as a grey-tinted box, which says nothing — the
- * accent means "this is money you kept", so it's green. The spent figure is ink
- * rather than red: spending is the normal case in a spending tracker, and red
- * has to still mean "over budget" when it appears.
+ * The unspent tile used to carry `border-primary/30 bg-primary/5`. With
+ * --primary aliased to ink that renders as a grey-tinted box, which says
+ * nothing — the accent means "this money is still yours", so it's green. The
+ * spent figure is ink rather than red: spending is the normal case in a
+ * spending tracker, and red has to still mean "over budget" when it appears.
  */
 function BreakdownCard({ icon: Icon, label, amount, percent, accent }) {
-  // A negative "total saved" is the over-budget case — the one thing red is
-  // reserved for. Green is only for money actually kept.
+  // A negative "total unspent" is the over-budget case — the one thing red is
+  // reserved for. Green is only for money still unspent.
   const over = accent && amount < 0;
   const kept = accent && !over;
 

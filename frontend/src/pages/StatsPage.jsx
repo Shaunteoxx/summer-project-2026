@@ -18,7 +18,7 @@ import DailySpendingCard from "@/components/DailySpendingCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAllSummaries, fetchTransactions } from "@/api/endpoints";
-import { monthName, formatMoney, localToday } from "@/lib/utils";
+import { monthName, formatMoney, localToday, LOCALE } from "@/lib/utils";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useToast } from "@/hooks/useToast";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
@@ -88,7 +88,7 @@ export default function StatsPage() {
         }).catch(() => []);
         if (!cancelled) setTransactions(txns);
       })
-      .catch(() => toast.error("Couldn't load your monthly history."))
+      .catch(() => toast.error("Couldn't load your monthly history. Please try again."))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -107,6 +107,18 @@ export default function StatsPage() {
   // The mean of each month's rate — every month counts equally, so a $50 month
   // weighs as much as a $2,000 one. Deliberately not the same number as the
   // all-time rate below, which is why they're labelled apart.
+  //
+  // `percentageSaved` divides by income. That's defensible for the finished
+  // months this average is mostly made of, and it's the figure the backend
+  // has always returned, so it stays.
+  //
+  // But be honest about the edge: this list includes the *running* month, and
+  // its row reads "77% saved" on day 18 for the same reason Home's tile used
+  // to — most of that money is still earmarked. Home now derives "Unspent So
+  // Far" from its budget-denominated pace bar instead. Don't "fix" Stats to
+  // match Home: for a history view the income denominator is the right one,
+  // and the two answer different questions. The open question is whether the
+  // in-progress row should be labelled apart from the finished ones.
   const avgSavingsRate = monthsTracked
     ? Math.round(
         summaries.reduce((acc, s) => acc + (s.percentageSaved ?? 0), 0) /
@@ -129,6 +141,31 @@ export default function StatsPage() {
     lifetime.income > 0 ? Math.round((lifetimeSaved / lifetime.income) * 100) : 0;
 
   const historySpan = calendarSpan(summaries, localToday());
+
+  // This list includes the month currently running, and that row is not like
+  // the others: its `percentageSaved` divides money not yet spent by income,
+  // so on day 2 it reads ~97%. For a finished month that figure is a real
+  // savings rate; for this one it's a rate that will fall every time the
+  // reader buys lunch. Same wording as Home and Tracker — "unspent so far",
+  // not "saved" — so the one in-progress row stops claiming to be an outcome.
+  const [todayYear, todayMonth] = (() => {
+    const d = localToday().split("-");
+    return [Number(d[0]), Number(d[1]) - 1];
+  })();
+  const isRunningMonth = (s) => s.year === todayYear && s.month === todayMonth;
+
+  // The all-time totals sum that same partial month in, which matters most for
+  // the reader who can least afford it: with one month tracked, "Total Saved"
+  // *is* the running month and reads like an achievement on day 2. The share
+  // shrinks as history builds, so the fix isn't to rename the tile — across
+  // three years the income denominator is asking the right question — nor to
+  // drop the month from the totals, when the lens promises "everything
+  // totalled". Naming the caveat is enough, and only on the two tiles that
+  // make a claim: Earned and Spent are sums, and hinting all four would turn
+  // the caveat into wallpaper.
+  const partialMonth = summaries.some(isRunningMonth)
+    ? "Includes this month, still running"
+    : undefined;
 
   // Summaries arrive oldest-first; show the breakdown newest-first, collapsed
   // to the most recent few until the user asks to see all months.
@@ -189,13 +226,13 @@ export default function StatsPage() {
                 <LensTab
                   active={lens === "all"}
                   onClick={() => setLens("all")}
-                  label="All time"
+                  label="All Time"
                   hint="Everything totalled"
                 />
                 <LensTab
                   active={lens === "months"}
                   onClick={() => setLens("months")}
-                  label="Per month"
+                  label="Per Month"
                   hint="Month by month"
                 />
               </div>
@@ -211,14 +248,21 @@ export default function StatsPage() {
             >
               {lens === "all" ? (
                 <>
-                  <StatTile label="Total earned" value={lifetime.income} money />
-                  <StatTile label="Total spent" value={lifetime.spent} money />
-                  <StatTile label="Total saved" value={lifetimeSaved} money accent />
+                  <StatTile label="Total Earned" value={lifetime.income} money />
+                  <StatTile label="Total Spent" value={lifetime.spent} money />
                   <StatTile
-                    label="Savings rate"
+                    label="Total Saved"
+                    value={lifetimeSaved}
+                    money
+                    accent
+                    hint={partialMonth}
+                  />
+                  <StatTile
+                    label="Savings Rate"
                     value={lifetimeRate}
                     suffix="%"
                     accent
+                    hint={partialMonth}
                     // Named apart from "Average month" so the two rates
                     // disagreeing reads as two questions, not a bug.
                   />
@@ -226,11 +270,11 @@ export default function StatsPage() {
               ) : (
                 <>
                   <StatTile
-                    label={monthsTracked === 1 ? "Month tracked" : "Months tracked"}
+                    label={monthsTracked === 1 ? "Month Tracked" : "Months Tracked"}
                     value={monthsTracked}
                   />
                   <StatTile
-                    label="Average month"
+                    label="Average Month"
                     value={avgSavingsRate}
                     suffix="%"
                     accent
@@ -361,7 +405,9 @@ export default function StatsPage() {
                               {formatMoney(Math.abs(s.totalSaved))}
                             </p>
                             <p className="num mt-0.5 text-meta text-ink-3">
-                              {s.percentageSaved}% saved
+                              {`${s.percentageSaved}% ${
+                                isRunningMonth(s) ? "unspent so far" : "saved"
+                              }`}
                             </p>
                           </div>
                         </motion.li>
@@ -378,7 +424,7 @@ export default function StatsPage() {
                     className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-sm px-3 py-2.5 text-[13px] font-semibold text-ink-2 transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {showAllMonths
-                      ? "Show less"
+                      ? "Show Less"
                       : `See all ${monthsNewestFirst.length} months`}
                     <ChevronDown
                       className={`h-4 w-4 transition-transform ${
@@ -429,8 +475,10 @@ function valueSizeClass(text) {
 
 export function StatTile({ label, value, money, suffix, accent, hint }) {
   // Mirrors what AnimatedNumber will render, so the size is picked from the
-  // final string rather than from the value's magnitude.
-  const rendered = `${money ? "$" : ""}${Number(value).toLocaleString(undefined, {
+  // final string rather than from the value's magnitude. Same pinned locale it
+  // uses — this string is only measured, never shown, so an unpinned locale
+  // wouldn't be visible here, but it would be the wrong thing to copy.
+  const rendered = `${money ? "$" : ""}${Number(value).toLocaleString(LOCALE, {
     minimumFractionDigits: money ? 2 : 0,
     maximumFractionDigits: money ? 2 : 0,
   })}${suffix ?? ""}`;

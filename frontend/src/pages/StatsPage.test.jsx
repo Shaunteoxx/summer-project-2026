@@ -63,7 +63,7 @@ const txn = (date, amount, category = "F & B") => ({
 /** Render and wait for both fetches to settle. */
 const show = async () => {
   render(<StatsPage />);
-  return screen.findByRole("button", { name: /All time/ });
+  return screen.findByRole("button", { name: /All Time/ });
 };
 
 beforeEach(() => {
@@ -81,18 +81,18 @@ describe("the two savings rates", () => {
     await show();
 
     // (2100 - 1810) / 2100 = 13.8% -> 14%
-    expect(screen.getByText("Savings rate").previousSibling).toHaveTextContent("14%");
+    expect(screen.getByText("Savings Rate").previousSibling).toHaveTextContent("14%");
   });
 
   it("keeps the per-month average as its own, different figure", async () => {
     fetchAllSummaries.mockResolvedValue(lumpy);
     const user = userEvent.setup();
     await show();
-    await user.click(screen.getByRole("button", { name: /Per month/ }));
+    await user.click(screen.getByRole("button", { name: /Per Month/ }));
 
     // The mean of 90% and 10%. A tiny month counts as much as a big one, which
     // is the whole reason this isn't the headline number.
-    expect(screen.getByText("Average month").previousSibling).toHaveTextContent("50%");
+    expect(screen.getByText("Average Month").previousSibling).toHaveTextContent("50%");
     expect(screen.getByText("Each month counts once")).toBeInTheDocument();
   });
 
@@ -101,18 +101,18 @@ describe("the two savings rates", () => {
     const user = userEvent.setup();
     await show();
 
-    expect(screen.getByText("Total earned")).toBeInTheDocument();
-    expect(screen.queryByText("Months tracked")).not.toBeInTheDocument();
+    expect(screen.getByText("Total Earned")).toBeInTheDocument();
+    expect(screen.queryByText("Months Tracked")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Per month/ }));
-    expect(screen.getByText("Months tracked")).toBeInTheDocument();
-    expect(screen.queryByText("Total earned")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Per Month/ }));
+    expect(screen.getByText("Months Tracked")).toBeInTheDocument();
+    expect(screen.queryByText("Total Earned")).not.toBeInTheDocument();
   });
 
   it("doesn't divide by zero when nothing was ever earned", async () => {
     fetchAllSummaries.mockResolvedValue([summary(2026, 0, 0, 0)]);
     await show();
-    expect(screen.getByText("Savings rate").previousSibling).toHaveTextContent("0%");
+    expect(screen.getByText("Savings Rate").previousSibling).toHaveTextContent("0%");
   });
 });
 
@@ -143,7 +143,7 @@ describe("the daily calendar", () => {
     // chrome that would come with one.
     expect(day.getAttribute("aria-label")).not.toMatch(/budget/);
     expect(screen.queryByText(/Today's budget/)).not.toBeInTheDocument();
-    expect(screen.queryByText("Within budget")).not.toBeInTheDocument();
+    expect(screen.queryByText("Within Budget")).not.toBeInTheDocument();
     expect(screen.queryByText(/budget adapts daily/)).not.toBeInTheDocument();
   });
 
@@ -182,7 +182,7 @@ describe("the daily calendar", () => {
     await show();
 
     // The page still renders; only the calendar's detail is missing.
-    expect(screen.getByText("Total earned")).toBeInTheDocument();
+    expect(screen.getByText("Total Earned")).toBeInTheDocument();
   });
 
   it("is left out entirely when there's no history", async () => {
@@ -257,8 +257,60 @@ describe("the calendar's 12-month cap", () => {
     // 30 months x $1000 earned. Capping the calendar must not cap the maths.
     fetchAllSummaries.mockResolvedValue(monthsBack(30));
     await show();
-    expect(screen.getByText("Total earned").previousSibling).toHaveTextContent(
+    expect(screen.getByText("Total Earned").previousSibling).toHaveTextContent(
       "$30,000.00"
     );
+  });
+});
+
+// The breakdown lists the month that is still running alongside finished ones,
+// and its percentage means something different: money not yet spent, not money
+// saved. Home and Tracker were fixed for exactly this; the row here has to say
+// which kind of figure it is rather than let the reader assume.
+describe("the month still in progress", () => {
+  // `localToday` is mocked to 2026-03-20 at the top of this file, so March
+  // 2026 is the running month and February is a finished one.
+  it("says 'unspent so far' for the running month, not 'saved'", async () => {
+    fetchAllSummaries.mockResolvedValue([summary(2026, 2, 1000, 200)]);
+    await show();
+    expect(await screen.findByText("80% unspent so far")).toBeInTheDocument();
+    expect(screen.queryByText("80% saved")).not.toBeInTheDocument();
+  });
+
+  it("still says 'saved' for a month that has finished", async () => {
+    fetchAllSummaries.mockResolvedValue([summary(2026, 1, 1000, 200)]);
+    await show();
+    expect(await screen.findByText("80% saved")).toBeInTheDocument();
+    expect(screen.queryByText("80% unspent so far")).not.toBeInTheDocument();
+  });
+
+  // The all-time totals sum the partial month in too. With one month tracked
+  // that tile *is* the running month, so it needs the caveat most exactly when
+  // the reader has least history to judge it against.
+  it("says the all-time totals include a month still running", async () => {
+    fetchAllSummaries.mockResolvedValue([summary(2026, 2, 1000, 200)]);
+    await show();
+    expect(
+      await screen.findAllByText("Includes this month, still running")
+    ).toHaveLength(2);
+  });
+
+  it("drops the caveat once every month has finished", async () => {
+    fetchAllSummaries.mockResolvedValue([summary(2026, 1, 1000, 200)]);
+    await show();
+    expect(
+      screen.queryByText("Includes this month, still running")
+    ).not.toBeInTheDocument();
+  });
+
+  it("leaves the plain sums uncaveated — they aren't making a claim", async () => {
+    fetchAllSummaries.mockResolvedValue([summary(2026, 2, 1000, 200)]);
+    await show();
+    // Earned and Spent are facts about a partial month, not flattery, so the
+    // hint sits only on the two accent tiles.
+    for (const label of ["Total Earned", "Total Spent"]) {
+      const tile = screen.getByText(label).closest("div");
+      expect(tile).not.toHaveTextContent("still running");
+    }
   });
 });
