@@ -234,15 +234,10 @@ export default function StreakCard() {
                 {daysAfterToday > 0 ? (
                   <>
                     {formatMoney(dynamicDaily)}/day for the {daysAfterToday}{" "}
-                    {daysAfterToday === 1 ? "day" : "days"} after today, with
-                    today&apos;s spending and your {formatMoney(periodSavings)} set
-                    aside counted. Moves with every entry.
+                    {daysAfterToday === 1 ? "day" : "days"} after today.
                   </>
                 ) : (
-                  <>
-                    Last day of this {noun}, so today&apos;s budget is everything
-                    left after your {formatMoney(periodSavings)} set aside.
-                  </>
+                  <>Last day of this {noun}.</>
                 )}
               </p>
             )}

@@ -67,8 +67,9 @@ describe("within budget", () => {
       })
     );
     render(<StreakCard />);
-    expect(await screen.findByText(/\$40\.00\/day for the 105 days after today/))
-      .toHaveTextContent("your $150.00 set aside counted");
+    expect(
+      await screen.findByText("$40.00/day for the 105 days after today.")
+    ).toBeInTheDocument();
   });
 
   it("names the last day instead of dividing by zero days", async () => {
