@@ -129,6 +129,7 @@ export default function StreakCard() {
     restore,
     periodSavings,
     overspentBy = 0,
+    leftToSpend = 0,
     period: activePeriod,
   } = data;
   // Past the whole period's budget: the daily figure is negative and clamped to
@@ -146,6 +147,13 @@ export default function StreakCard() {
   // three. Long periods show a count instead of an unreadable row of icons.
   const savesTotal = activePeriod?.savesTotal ?? 3;
   const showShields = savesTotal <= 5;
+  // The rate the period is actually on now, not the one it handed out this
+  // morning: what's left after today's spending, spread over the days after
+  // today. Same figure as Plan's hero, so the reader doesn't have to go there
+  // to find out what logging an expense just did to their budget.
+  const daysAfterToday = Math.max(0, daysLeft - 1);
+  const dynamicDaily =
+    daysAfterToday > 0 ? Math.max(leftToSpend, 0) / daysAfterToday : 0;
 
   return (
     <motion.div variants={fadeUp} initial="initial" animate="animate">
@@ -207,7 +215,8 @@ export default function StreakCard() {
                 {daysLeft} {daysLeft === 1 ? "day" : "days"} left
               </p>
             </div>
-            {/* How the daily budget is worked out (keeps the number transparent). */}
+            {/* What the rest of the period is on now that today has been spent
+                — the number Plan leads with, so Home can answer it too. */}
             {overspent ? (
               <div className="mt-2.5 flex items-start gap-2 rounded-md bg-negative/[0.08] p-3">
                 <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-negative" />
@@ -222,8 +231,19 @@ export default function StreakCard() {
               </div>
             ) : (
               <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">
-                {formatMoney(today.budget)}/day, after setting aside{" "}
-                {formatMoney(periodSavings)}. Not including today&apos;s spending.
+                {daysAfterToday > 0 ? (
+                  <>
+                    {formatMoney(dynamicDaily)}/day for the {daysAfterToday}{" "}
+                    {daysAfterToday === 1 ? "day" : "days"} after today, with
+                    today&apos;s spending and your {formatMoney(periodSavings)} set
+                    aside counted. Moves with every entry.
+                  </>
+                ) : (
+                  <>
+                    Last day of this {noun}, so today&apos;s budget is everything
+                    left after your {formatMoney(periodSavings)} set aside.
+                  </>
+                )}
               </p>
             )}
             <button

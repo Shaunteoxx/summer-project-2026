@@ -34,7 +34,13 @@ const rename = (legacy) => {
 
 /** Drop the fields that only exist post-periods before comparing. */
 const comparable = (current) => {
-  const { period: _p, periodStatus: _s, overspentBy: _o, ...rest } = current;
+  const {
+    period: _p,
+    periodStatus: _s,
+    overspentBy: _o,
+    leftToSpend: _l,
+    ...rest
+  } = current;
   return rest;
 };
 
@@ -389,6 +395,39 @@ describe("period day grid", () => {
       daysMode([period("2026-08-01", 5)])
     );
     assert.deepEqual(result.periodDays, []);
+  });
+});
+
+describe("what the period has left to spend", () => {
+  // Home divides this by the days after today to show a daily budget that
+  // moves with the day's spending, so it has to count today itself.
+  const periods = [period("2026-08-01", 31, 150)];
+
+  it("counts today's spending, unlike the daily budget", () => {
+    const result = computeStreak(
+      [
+        txn("2026-08-01", "income", 1000),
+        txn("2026-08-05", "expense", 200),
+        txn("2026-08-20", "expense", 50),
+      ],
+      [],
+      "2026-08-20",
+      daysMode(periods)
+    );
+    // $1000 in, $150 aside, $250 out — today's $50 included.
+    assert.equal(result.leftToSpend, 600);
+    assert.equal(result.today.spent, 50);
+  });
+
+  it("goes negative by exactly what overspentBy reports", () => {
+    const result = computeStreak(
+      [txn("2026-08-01", "income", 1000), txn("2026-08-05", "expense", 1200)],
+      [],
+      "2026-08-20",
+      daysMode(periods)
+    );
+    assert.equal(result.leftToSpend, -350);
+    assert.equal(result.overspentBy, 350);
   });
 });
 

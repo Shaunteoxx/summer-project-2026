@@ -1,5 +1,5 @@
 import Transaction from "../models/Transaction.js";
-import { parseYmd, resolveClientToday } from "../lib/validation.js";
+import { parseYmd, resolveClientToday, roundMoney } from "../lib/validation.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
 import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
 import { ensureRecurringDue } from "../lib/recurring.js";
@@ -66,6 +66,7 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
     hasData: false,
     hasIncome: false,
     overspentBy: 0,
+    leftToSpend: activePeriod ? roundMoney(-activePeriod.savings) : 0,
     periodSavings: activePeriod?.savings ?? 0,
     period: periodInfo(activePeriod),
     periodStatus: activePeriod ? "active" : "inactive",
@@ -247,6 +248,11 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
   const overspentBy = activePeriod
     ? Math.max(0, Math.round((periodSpent - spendable) * 100) / 100)
     : 0;
+  // The same figure home stats call `leftToSpend`: what the period has left
+  // after its savings target, today's spending included. The client divides it
+  // by the days after today to get a daily budget that moves as you spend,
+  // rather than the fixed one today was handed this morning.
+  const leftToSpend = activePeriod ? roundMoney(spendable - periodSpent) : 0;
 
   return {
     hasData: true,
@@ -254,6 +260,7 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
       ? (incomeByPeriod.get(activePeriod.key) || 0) > 0
       : false,
     overspentBy,
+    leftToSpend,
     periodSavings: activePeriod?.savings ?? 0,
     period: periodInfo(activePeriod),
     periodStatus: activePeriod ? "active" : "inactive",

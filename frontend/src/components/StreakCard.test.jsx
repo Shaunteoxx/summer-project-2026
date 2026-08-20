@@ -28,6 +28,8 @@ const streak = (over = {}) => ({
   hasData: true,
   hasIncome: true,
   overspentBy: 0,
+  // $40/day was spread over the 106 days left, and $10 of today is gone.
+  leftToSpend: 4230,
   periodSavings: 150,
   periodStatus: "active",
   period: { start: "2026-08-01", end: "2026-12-29", days: 151, daysLeft: 106, savesTotal: 15 },
@@ -49,8 +51,33 @@ describe("within budget", () => {
     render(<StreakCard />);
 
     expect(await screen.findByText("$30.00 left to spend today")).toBeInTheDocument();
-    expect(screen.getByText(/\$40\.00\/day, after setting aside \$150\.00/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/\$40\.29\/day for the 105 days after today/)
+    ).toBeInTheDocument();
     expect(screen.queryByText(/past this period's budget/)).not.toBeInTheDocument();
+  });
+
+  it("recalculates the daily budget once today's spending is counted", async () => {
+    // The point of the caption: spending today should visibly move the rate
+    // the rest of the period runs at, without a trip to the Plan page.
+    fetchStreak.mockResolvedValue(
+      streak({
+        leftToSpend: 4200,
+        today: { spent: 40, budget: 40, remaining: 0, within: true },
+      })
+    );
+    render(<StreakCard />);
+    expect(await screen.findByText(/\$40\.00\/day for the 105 days after today/))
+      .toHaveTextContent("your $150.00 set aside counted");
+  });
+
+  it("names the last day instead of dividing by zero days", async () => {
+    fetchStreak.mockResolvedValue(
+      streak({ period: { ...streak().period, daysLeft: 1 } })
+    );
+    render(<StreakCard />);
+    expect(await screen.findByText(/Last day of this period/)).toBeInTheDocument();
+    expect(screen.queryByText(/\/day for the/)).not.toBeInTheDocument();
   });
 
   it("shows the overshoot when only today is over", async () => {
@@ -98,7 +125,7 @@ describe("past the period's budget", () => {
     fetchStreak.mockResolvedValue(overspent);
     render(<StreakCard />);
     await screen.findByText(/past this period's budget/);
-    expect(screen.queryByText(/\/day, after setting aside/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\/day for the/)).not.toBeInTheDocument();
   });
 });
 
