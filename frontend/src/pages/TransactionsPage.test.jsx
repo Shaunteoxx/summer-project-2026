@@ -6,6 +6,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+// Every fixture on this page is dated inside August 2026, and the add sheet
+// dates a new entry "today" — so today has to be in that window too. Left to
+// the real clock this suite passed until September 2026 and then started
+// dropping newly added rows outside the period it was showing.
+vi.mock("@/lib/utils", async (importOriginal) => ({
+  ...(await importOriginal()),
+  localToday: () => "2026-08-12",
+}));
+
 const addTransaction = vi.fn();
 const updateTransaction = vi.fn();
 const addCategory = vi.fn();

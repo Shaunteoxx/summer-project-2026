@@ -63,6 +63,12 @@ export const updatePeriod = (id, payload) =>
   api.patch(`/period/${id}`, payload).then((r) => r.data);
 export const deletePeriod = (id) =>
   api.delete(`/period/${id}`).then((r) => r.data);
+export const startTerm = (payload) =>
+  api.post("/period/term", payload).then((r) => r.data);
+export const updateTerm = (id, payload) =>
+  api.patch(`/period/term/${id}`, payload).then((r) => r.data);
+export const deleteTerm = (id) =>
+  api.delete(`/period/term/${id}`).then((r) => r.data);
 
 // --- Streak ---
 export const fetchStreak = (today) =>

@@ -49,6 +49,23 @@ const makeUser = (overrides = {}) => {
 
 const todayYmd = () => new Date().toISOString().slice(0, 10);
 
+/**
+ * The `day`th of the month `n` months on from today.
+ *
+ * Rules can't be back-dated — the API clamps startKey up to today — so these
+ * tests start one today and run the materialiser forward to see it come due.
+ * Those run dates have to move with the clock. Pinned to fixed strings they
+ * dated the suite: written in August 2026, they ran "a month on" at
+ * 2026-09-05, and once the real date reached 2026-09-05 the run was happening
+ * on the rule's own start day with nothing yet due.
+ */
+const dayInMonth = (n, day) => {
+  const t = new Date();
+  return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + n, day))
+    .toISOString()
+    .slice(0, 10);
+};
+
 const RENT = {
   description: "Rent",
   amount: 800,
@@ -171,19 +188,20 @@ describe("materialising", () => {
     await makeRule(token, { ...RENT, dayOfMonth: 1, startKey: todayYmd() });
 
     // A month on, rent has come due once.
-    const written = await runAt(user._id, "2026-09-05");
+    const written = await runAt(user._id, dayInMonth(1, 5));
     assert.equal(written, 1);
 
+    const due = dayInMonth(1, 1);
     const rows = await rowsFor(user._id);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].description, "Rent");
     assert.equal(rows[0].amount, 800);
-    assert.equal(rows[0].dueKey, "2026-09-01");
-    assert.equal(rows[0].date.toISOString().slice(0, 10), "2026-09-01");
+    assert.equal(rows[0].dueKey, due);
+    assert.equal(rows[0].date.toISOString().slice(0, 10), due);
     // The history views group by these, so they have to match the due date
     // rather than the day it happened to be written.
-    assert.equal(rows[0].month, 8);
-    assert.equal(rows[0].year, 2026);
+    assert.equal(rows[0].month, Number(due.slice(5, 7)) - 1);
+    assert.equal(rows[0].year, Number(due.slice(0, 4)));
   });
 
   it("stays at one row however many times it runs", async () => {
@@ -191,7 +209,7 @@ describe("materialising", () => {
     const token = signToken(user);
     await makeRule(token, { startKey: todayYmd() });
 
-    for (let i = 0; i < 4; i += 1) await runAt(user._id, "2026-09-05");
+    for (let i = 0; i < 4; i += 1) await runAt(user._id, dayInMonth(1, 5));
 
     assert.equal((await rowsFor(user._id)).length, 1);
   });
@@ -205,8 +223,8 @@ describe("materialising", () => {
     // occurrence — exactly the app-open race. The unique index is what stops
     // the second one landing.
     const [a, b] = await Promise.all([
-      runAt(user._id, "2026-09-05"),
-      runAt(user._id, "2026-09-05"),
+      runAt(user._id, dayInMonth(1, 5)),
+      runAt(user._id, dayInMonth(1, 5)),
     ]);
 
     assert.equal(a + b, 2, "both runs should have attempted the write");
@@ -219,12 +237,12 @@ describe("materialising", () => {
     await makeRule(token, { startKey: todayYmd() });
 
     // Away for three months, then one visit.
-    await runAt(user._id, "2026-11-10");
+    await runAt(user._id, dayInMonth(3, 10));
 
     const rows = await rowsFor(user._id);
     assert.deepEqual(
       rows.map((r) => r.dueKey),
-      ["2026-09-01", "2026-10-01", "2026-11-01"]
+      [dayInMonth(1, 1), dayInMonth(2, 1), dayInMonth(3, 1)]
     );
   });
 
@@ -246,7 +264,7 @@ describe("materialising", () => {
     const id = await makeRule(token, { startKey: todayYmd() });
 
     await call(`/api/auth/recurring/${id}`, token, "PATCH", { paused: true });
-    await runAt(user._id, "2026-11-10");
+    await runAt(user._id, dayInMonth(3, 10));
 
     assert.equal((await rowsFor(user._id)).length, 0);
   });
@@ -260,7 +278,7 @@ describe("materialising", () => {
     // months behind, which is what a back-fill would work from.
     await User.updateOne(
       { _id: user._id },
-      { $set: { "recurring.0.paused": true, "recurring.0.lastRunKey": "2026-01-05" } }
+      { $set: { "recurring.0.paused": true, "recurring.0.lastRunKey": dayInMonth(-8, 5) } }
     );
 
     const resumed = await call(`/api/auth/recurring/${id}`, token, "PATCH", {
@@ -278,21 +296,21 @@ describe("materialising", () => {
     const user = await makeUser();
     const token = signToken(user);
     await makeRule(token, { startKey: todayYmd() });
-    await runAt(user._id, "2026-09-05");
+    await runAt(user._id, dayInMonth(1, 5));
     const [row] = await rowsFor(user._id);
 
     // The row is moved off its due date, and the rule is rewound so it really
     // does reconsider that occurrence.
     await Transaction.updateOne(
       { _id: row._id },
-      { $set: { date: new Date("2026-09-03T00:00:00.000Z") } }
+      { $set: { date: new Date(`${dayInMonth(1, 3)}T00:00:00.000Z`) } }
     );
     await User.updateOne(
       { _id: user._id },
-      { $set: { "recurring.0.lastRunKey": "2026-08-25" } }
+      { $set: { "recurring.0.lastRunKey": dayInMonth(0, 25) } }
     );
 
-    await runAt(user._id, "2026-09-05");
+    await runAt(user._id, dayInMonth(1, 5));
 
     // Only dueKey decides whether an occurrence exists. Had it keyed off the
     // date, correcting a row would quietly earn you a second rent.
@@ -301,7 +319,7 @@ describe("materialising", () => {
 
   it("does nothing at all for a user with no rules", async () => {
     const user = await makeUser();
-    assert.equal(await runAt(user._id, "2026-09-05"), 0);
+    assert.equal(await runAt(user._id, dayInMonth(1, 5)), 0);
   });
 
   it("reaches the streak as an ordinary expense on its due date", async () => {
@@ -465,7 +483,7 @@ describe("managing rules", () => {
     const user = await makeUser();
     const token = signToken(user);
     const id = await makeRule(token, { startKey: todayYmd() });
-    await runAt(user._id, "2026-09-05");
+    await runAt(user._id, dayInMonth(1, 5));
 
     await call(`/api/auth/recurring/${id}`, token, "PATCH", { amount: 950 });
     const rows = await rowsFor(user._id);
@@ -474,7 +492,7 @@ describe("managing rules", () => {
     assert.equal(rows.length, 1);
     assert.equal(rows[0].amount, 800);
 
-    await runAt(user._id, "2026-10-05");
+    await runAt(user._id, dayInMonth(2, 5));
     const after = await rowsFor(user._id);
     assert.deepEqual(after.map((r) => r.amount), [800, 950]);
   });
@@ -483,7 +501,7 @@ describe("managing rules", () => {
     const user = await makeUser();
     const token = signToken(user);
     const id = await makeRule(token, { startKey: todayYmd() });
-    await runAt(user._id, "2026-09-05");
+    await runAt(user._id, dayInMonth(1, 5));
 
     const res = await call(`/api/auth/recurring/${id}`, token, "DELETE");
     assert.equal(res.status, 200);

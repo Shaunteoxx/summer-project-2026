@@ -314,3 +314,37 @@ describe("the month still in progress", () => {
     }
   });
 });
+
+// These rows divide by the month's income, while Home, the tracker and the
+// leaderboard divide by the window's budget. For a term cycle funded by a lump
+// sum banked months earlier those are different numbers for the same month —
+// September read 95% here and 91% everywhere else — so the denominator has to
+// be on screen, and a month with no income at all can't claim to have saved
+// none of it.
+describe("saying what the percentages are of", () => {
+  it("names the denominator once, not on every row", async () => {
+    fetchAllSummaries.mockResolvedValue([
+      summary(2026, 1, 1000, 200),
+      summary(2026, 0, 800, 300),
+    ]);
+    await show();
+    expect(
+      await screen.findByText("Percentages are of that month's income.")
+    ).toBeInTheDocument();
+  });
+
+  it("reports a month with no income as such, not as 0% saved", async () => {
+    // A month funded by an earlier lump sum: money out, nothing in.
+    fetchAllSummaries.mockResolvedValue([summary(2026, 1, 0, 1374.4)]);
+    await show();
+    expect(await screen.findByText("No income logged")).toBeInTheDocument();
+    expect(screen.queryByText("0% saved")).not.toBeInTheDocument();
+  });
+
+  it("keeps the percentage on a month that had income", async () => {
+    fetchAllSummaries.mockResolvedValue([summary(2026, 1, 1000, 200)]);
+    await show();
+    expect(await screen.findByText("80% saved")).toBeInTheDocument();
+    expect(screen.queryByText("No income logged")).not.toBeInTheDocument();
+  });
+});

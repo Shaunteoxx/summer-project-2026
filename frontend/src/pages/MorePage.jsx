@@ -43,11 +43,14 @@ import { AVATARS, avatarSrc } from "@/lib/avatars";
 import { cn, formatMoney, monthName, localToday } from "@/lib/utils";
 import {
   MAX_PERIOD_DAYS,
+  MAX_TERM_MONTHS,
   MIN_PERIOD_DAYS,
+  MIN_TERM_MONTHS,
   addDaysYmd,
   formatDay,
   formatPeriodLabel,
   periodEnd,
+  termEnd,
 } from "@/lib/period";
 import {
   updateProfile,
@@ -57,6 +60,9 @@ import {
   startPeriod,
   updatePeriod,
   deletePeriod,
+  startTerm,
+  updateTerm,
+  deleteTerm,
 } from "@/api/endpoints";
 import { fadeUp, SHAKE } from "@/animations/variants";
 
@@ -83,6 +89,9 @@ export default function MorePage() {
   const toast = useToast();
   const guard = useDemoGuard();
   const isDays = period.mode === "days";
+  // Term cycles are calendar months, so everything about savings follows the
+  // month path — only the Budget Period row and sheet need to know.
+  const isTerm = period.mode === "term";
   const { active: activeAccounts } = useAccounts();
   const accountCount = activeAccounts.length;
   const { custom: customCategories } = useCategories();
@@ -132,6 +141,9 @@ export default function MorePage() {
   // Id of the period awaiting an inline "really delete?" confirmation.
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const periodShake = useAnimationControls();
+  // Term form: a window, so only a start and a length.
+  const [termStart, setTermStart] = useState(localToday());
+  const [termMonths, setTermMonths] = useState("6");
 
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -220,6 +232,8 @@ export default function MorePage() {
     );
     setPeriodLength(String(period.current?.days ?? period.previous?.days ?? 15));
     setPeriodTarget("");
+    setTermStart(period.term?.start ?? localToday());
+    setTermMonths(String(period.term?.months ?? 6));
     setPeriodError("");
     setConfirmDeleteId(null);
     setPeriodOpen(true);
@@ -233,7 +247,11 @@ export default function MorePage() {
       await setPeriodMode(mode);
       await Promise.all([refresh(), period.refresh()]);
       toast.success(
-        mode === "month" ? "Budgeting by calendar month" : "Budgeting by custom days"
+        {
+          month: "Budgeting by calendar month",
+          days: "Budgeting by custom days",
+          term: "Budgeting one month at a time",
+        }[mode]
       );
     } catch (err) {
       setPeriodError(err?.response?.data?.message || "Couldn't change the mode.");
@@ -266,6 +284,65 @@ export default function MorePage() {
       toast.success(`Period started — ${length} days`);
     } catch (err) {
       setPeriodError(err?.response?.data?.message || "Couldn't start the period.");
+      periodShake.start(SHAKE);
+    } finally {
+      setSavingPeriod(false);
+    }
+  };
+
+  const validateTerm = () => {
+    const months = Number(termMonths);
+    if (!termStart) return "Pick the day the money arrived.";
+    if (termStart > localToday()) return "Start Date can't be in the future.";
+    if (!Number.isInteger(months) || months < MIN_TERM_MONTHS || months > MAX_TERM_MONTHS)
+      return `Enter a whole number of months between ${MIN_TERM_MONTHS} and ${MAX_TERM_MONTHS}.`;
+    return "";
+  };
+
+  const saveTerm = async (run, done) => {
+    const error = validateTerm();
+    if (error) {
+      setPeriodError(error);
+      periodShake.start(SHAKE);
+      return;
+    }
+    setPeriodError("");
+    setSavingPeriod(true);
+    try {
+      await run();
+      await Promise.all([refresh(), period.refresh()]);
+      setPeriodOpen(false);
+      toast.success(done);
+    } catch (err) {
+      setPeriodError(err?.response?.data?.message || "Couldn't save your allowance.");
+      periodShake.start(SHAKE);
+    } finally {
+      setSavingPeriod(false);
+    }
+  };
+
+  const handleStartTerm = () =>
+    saveTerm(
+      () => startTerm({ start: termStart, months: Number(termMonths) }),
+      `Allowance set up — ${termMonths} months`
+    );
+
+  const handleUpdateTerm = () =>
+    saveTerm(
+      () => updateTerm(period.term.id, { start: termStart, months: Number(termMonths) }),
+      "Allowance updated"
+    );
+
+  const handleDeleteTerm = async () => {
+    setSavingPeriod(true);
+    try {
+      await deleteTerm(period.term.id);
+      await Promise.all([refresh(), period.refresh()]);
+      setConfirmDeleteId(null);
+      setPeriodOpen(false);
+      toast.success("Allowance removed");
+    } catch (err) {
+      setPeriodError(err?.response?.data?.message || "Couldn't remove your allowance.");
       periodShake.start(SHAKE);
     } finally {
       setSavingPeriod(false);
@@ -437,22 +514,30 @@ export default function MorePage() {
           icon={CalendarRange}
           title="Budget Period"
           meta={
-            !isDays
+            !isDays && !isTerm
               ? "Resets on the 1st"
               : period.current
-                ? formatPeriodLabel(period.current)
+                ? isTerm
+                  ? `Month ${period.current.cycle} of ${period.current.cycles}`
+                  : formatPeriodLabel(period.current)
                 : period.status === "lapsed"
-                  ? "Ended — start the next one"
+                  ? isTerm
+                    ? "Ended — set up the next one"
+                    : "Ended — start the next one"
                   : "Not set up yet"
           }
           value={
-            isDays && period.status !== "active" ? (
+            (isDays || isTerm) && period.status !== "active" ? (
               <span className="shrink-0 rounded-xs bg-surface-2 px-1.5 py-[3px] text-[11px] font-medium text-ink-2">
                 Action Needed
               </span>
             ) : (
               <RowValue>
-                {!isDays ? "Monthly" : `${period.current?.days ?? 0} days`}
+                {isTerm
+                  ? "Allowance"
+                  : !isDays
+                    ? "Monthly"
+                    : `${period.current?.days ?? 0} days`}
               </RowValue>
             )
           }
@@ -745,7 +830,7 @@ export default function MorePage() {
         <motion.div animate={periodShake} className="space-y-5">
           {/* Mode toggle */}
           <div
-            className="grid grid-cols-2 gap-0.5 rounded-md bg-surface-2 p-[3px]"
+            className="grid grid-cols-3 gap-0.5 rounded-md bg-surface-2 p-[3px]"
             role="group"
             aria-label="Budget period mode"
           >
@@ -754,7 +839,7 @@ export default function MorePage() {
                 right below, and made this the only two-line segmented control
                 in the app. */}
             <ModeTab
-              active={!isDays}
+              active={!isDays && !isTerm}
               disabled={savingPeriod}
               onClick={() => switchMode("month")}
               label="Month"
@@ -765,14 +850,48 @@ export default function MorePage() {
               onClick={() => switchMode("days")}
               label="Days"
             />
+            {/* "Allowance" rather than "Term": nobody calls it a term, and it
+                would sit one row above "Savings Target" reading like a pair. */}
+            <ModeTab
+              active={isTerm}
+              disabled={savingPeriod}
+              onClick={() => switchMode("term")}
+              label="Allowance"
+            />
           </div>
 
-          {!isDays ? (
+          {/* Switching modes re-scores every day you've logged, because the
+              streak resolves each one against whichever mode is current. It's
+              been true since days mode shipped, but a six-month allowance makes
+              it dramatic — a best streak can read 51 in Month and 8 in
+              Allowance — and with nothing said, that looks like lost data. */}
+          <p className="text-[12px] leading-relaxed text-ink-3">
+            Changing this re-scores your streak against the new windows. Your
+            entries never change, and switching back restores the old figures.
+          </p>
+
+          {isTerm ? (
+            <TermPanel
+              period={period}
+              start={termStart}
+              months={termMonths}
+              onStart={setTermStart}
+              onMonths={setTermMonths}
+              disabled={savingPeriod}
+              confirming={confirmDeleteId === period.term?.id}
+              onConfirm={() => setConfirmDeleteId(period.term?.id)}
+              onCancelConfirm={() => setConfirmDeleteId(null)}
+              onDelete={handleDeleteTerm}
+              onSave={period.term ? handleUpdateTerm : handleStartTerm}
+            />
+          ) : !isDays ? (
             <p className="text-[13px] leading-relaxed text-ink-3">
               Your budget runs from the 1st to the last day of each calendar
               month, and your daily budget is what's left spread over the days
               remaining. Switch to <strong>Days</strong> if your allowance covers
-              something other than a month — a fortnight, or five weeks.
+              something other than a month — a fortnight, or five weeks. Switch to{" "}
+              <strong>Allowance</strong> if one lump sum has to last several
+              months.
             </p>
           ) : (
             <>
@@ -1091,6 +1210,142 @@ function ModeTab({ active, disabled, onClick, label }) {
  * new period" form, so changing the length of a running one meant clearing a
  * number field and typing — the harder half of the same job.
  */
+/**
+ * The Allowance tab: one lump sum, budgeted a month at a time.
+ *
+ * Only two fields, because a term stores only a window — the money is the
+ * income the user logs as normal, so asking for a total here would be asking
+ * twice and would double-count it in the budget.
+ */
+function TermPanel({
+  period,
+  start,
+  months,
+  onStart,
+  onMonths,
+  disabled,
+  confirming,
+  onConfirm,
+  onCancelConfirm,
+  onDelete,
+  onSave,
+}) {
+  const monthCount = Number(months);
+  const valid =
+    start &&
+    Number.isInteger(monthCount) &&
+    monthCount >= MIN_TERM_MONTHS &&
+    monthCount <= MAX_TERM_MONTHS;
+  const last = valid ? termEnd(start, monthCount) : null;
+  const current = period.current;
+
+  return (
+    <div className="space-y-4">
+      {current && (
+        <div className="rounded-xl bg-surface-2 p-4">
+          <p className="text-overline text-ink-3">Running now</p>
+          <p className="mt-1.5 text-[15px] font-semibold tracking-[-0.01em]">
+            {formatPeriodLabel(current, { mode: "term" })}
+          </p>
+          <p className="mt-0.5 text-[12.5px] text-ink-3">
+            Month {current.cycle} of {current.cycles} ·{" "}
+            {current.daysLeft === 0 ? "ends today" : `${current.daysLeft} days left`}
+            {current.funding != null && ` · ${formatMoney(current.funding)} this month`}
+          </p>
+        </div>
+      )}
+
+      <p className="text-[13px] leading-relaxed text-ink-3">
+        For one lump sum that has to last a while. Log the money as income the
+        way you always would, and it gets spread across the months it covers —
+        spend more one month and the rest shrink to match, spend less and they
+        grow.
+      </p>
+
+      <div className="space-y-2">
+        <Label htmlFor="term-start">Start Date</Label>
+        <Input
+          id="term-start"
+          type="date"
+          max={localToday()}
+          value={start}
+          disabled={disabled}
+          onChange={(e) => onStart(e.target.value)}
+        />
+        <p className="text-[12px] text-ink-3">The day the money arrived.</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="term-months">How Many Months</Label>
+        <Input
+          id="term-months"
+          type="number"
+          inputMode="numeric"
+          min={MIN_TERM_MONTHS}
+          max={MAX_TERM_MONTHS}
+          value={months}
+          disabled={disabled}
+          onChange={(e) => onMonths(e.target.value)}
+        />
+        <div className="flex flex-wrap gap-1.5">
+          {[3, 4, 6, 12].map((n) => (
+            <button
+              key={n}
+              type="button"
+              disabled={disabled}
+              aria-pressed={monthCount === n}
+              onClick={() => onMonths(String(n))}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                monthCount === n
+                  ? "border-transparent bg-ink text-surface"
+                  : "border-hairline-strong text-ink-2 hover:bg-surface-2"
+              }`}
+            >
+              {n} months
+            </button>
+          ))}
+        </div>
+        {last && (
+          <p className="text-[12px] text-ink-3">
+            Runs to {formatDay(last, { withYear: true })}. Resets on the 1st.
+          </p>
+        )}
+      </div>
+
+      <Button className="w-full" onClick={onSave} disabled={disabled || !valid}>
+        {disabled ? "Saving…" : period.term ? "Save Changes" : "Set Up Allowance"}
+      </Button>
+
+      {period.term &&
+        (confirming ? (
+          <div className="space-y-2">
+            <p className="text-[12.5px] leading-relaxed text-ink-3">
+              Your entries stay put. Only the budget window goes, so these days
+              stop being tracked.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="ghost" onClick={onCancelConfirm} disabled={disabled}>
+                Keep It
+              </Button>
+              <Button variant="destructive" onClick={onDelete} disabled={disabled}>
+                Remove
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={disabled}
+            className="w-full rounded-sm py-1 text-[12.5px] font-medium text-ink-3 transition-colors hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Remove This Allowance
+          </button>
+        ))}
+    </div>
+  );
+}
+
 function LengthField({ id, value, onChange, disabled, children }) {
   return (
     <div className="space-y-2">

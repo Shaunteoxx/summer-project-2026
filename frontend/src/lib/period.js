@@ -46,6 +46,30 @@ export const daysBetween = (a, b) =>
 
 export const periodEnd = (start, length) => addDaysYmd(start, length - 1);
 
+export const MIN_TERM_MONTHS = 1;
+export const MAX_TERM_MONTHS = 12;
+
+const daysInMonth = (year, month) => new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+
+/**
+ * The same day of month `n` months on, clamped to the target month's length so
+ * the 31st lands on the 28th in February rather than overflowing into March.
+ * Mirrors backend/lib/period.js; the server stays the authority, this is only
+ * so the setup form can preview what it is about to create.
+ */
+export function addMonthsYmd(value, n) {
+  const date = dayFromYmd(value);
+  const anchor = date.getUTCDate();
+  const months = date.getUTCFullYear() * 12 + date.getUTCMonth() + n;
+  const year = Math.floor(months / 12);
+  const month = months - year * 12;
+  const day = Math.min(anchor, daysInMonth(year, month));
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** Last day of a term that starts at `start` and runs `months` whole months. */
+export const termEnd = (start, months) => addDaysYmd(addMonthsYmd(start, months), -1);
+
 /** Days remaining in `period` counting today; 0 once it has ended. */
 export function daysLeftInPeriod(today, period) {
   if (!period || today > period.end) return 0;
@@ -63,12 +87,38 @@ export function periodDayList(period) {
   return days;
 }
 
-/** "14 Aug" / "14 Aug 2027" — the year only when it isn't the current one. */
-export function formatDay(value, { withYear = false } = {}) {
+/**
+ * "14 Aug" / "14 Aug 2027" — the year only when it isn't the current one.
+ *
+ * `shortYear` gives "14 Aug 27" instead, for lines too tight to spend four
+ * characters on it. Same convention the stats chart's axis already uses.
+ */
+export function formatDay(value, { withYear = false, shortYear = false } = {}) {
   if (!value) return "";
   const d = dayFromYmd(value);
   const base = `${d.getUTCDate()} ${SHORT_MONTHS[d.getUTCMonth()]}`;
-  return withYear ? `${base} ${d.getUTCFullYear()}` : base;
+  if (!withYear) return base;
+  const year = d.getUTCFullYear();
+  return `${base} ${shortYear ? String(year).slice(2) : year}`;
+}
+
+/**
+ * A window as plain dates — "1 – 30 Sep", "25 Aug – 7 Sep", years only when it
+ * crosses one. Unlike formatPeriodLabel this never collapses a whole calendar
+ * month to its name, because the caller wants the span itself.
+ */
+export function formatDayRange(period, { shortYear = false } = {}) {
+  if (!period) return "";
+  const start = dayFromYmd(period.start);
+  const end = dayFromYmd(period.end);
+  const sameMonth =
+    start.getUTCMonth() === end.getUTCMonth() &&
+    start.getUTCFullYear() === end.getUTCFullYear();
+  if (sameMonth) {
+    return `${start.getUTCDate()} – ${end.getUTCDate()} ${SHORT_MONTHS[end.getUTCMonth()]}`;
+  }
+  const crossesYear = start.getUTCFullYear() !== end.getUTCFullYear();
+  return `${formatDay(period.start, { withYear: crossesYear, shortYear })} – ${formatDay(period.end, { withYear: crossesYear, shortYear })}`;
 }
 
 /**
@@ -91,14 +141,7 @@ export function formatPeriodLabel(period, { mode = "days" } = {}) {
     return `${MONTH_NAMES[start.getUTCMonth()]} ${start.getUTCFullYear()}`;
   }
 
-  const sameMonth =
-    start.getUTCMonth() === end.getUTCMonth() &&
-    start.getUTCFullYear() === end.getUTCFullYear();
-  if (sameMonth) {
-    return `${start.getUTCDate()} – ${end.getUTCDate()} ${SHORT_MONTHS[end.getUTCMonth()]}`;
-  }
-  const crossesYear = start.getUTCFullYear() !== end.getUTCFullYear();
-  return `${formatDay(period.start, { withYear: crossesYear })} – ${formatDay(period.end, { withYear: crossesYear })}`;
+  return formatDayRange(period);
 }
 
 /** "August 2026" for the calendar month a day falls in. */

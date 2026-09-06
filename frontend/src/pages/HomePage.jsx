@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/useToast";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
 import { formatMoney, localToday } from "@/lib/utils";
-import { formatDay } from "@/lib/period";
+import { formatDay, formatDayRange } from "@/lib/period";
 import { fadeUp } from "@/animations/variants";
 
 /** How many recent entries the home list shows. */
@@ -71,22 +71,17 @@ export default function HomePage() {
   // The pace bar. Fill is how much of the period's budget has gone; the tick is
   // where you'd be if you spent evenly. Ahead of the tick is trouble, behind it
   // is fine — both numbers already exist, they were just never compared.
-  const budget = Math.max((stats?.periodIncome ?? 0) - (stats?.periodSavings ?? 0), 0);
+  // In term mode the window's money is its slice of the lump sum, which
+  // arrived in an earlier cycle — periodIncome is 0 from cycle two on, and
+  // dividing by it would peg the bar at "behind pace" forever.
+  const periodBudget = stats?.periodFunding ?? stats?.periodIncome ?? 0;
+  const budget = Math.max(periodBudget - (stats?.periodSavings ?? 0), 0);
   const spent = stats?.periodExpenses ?? 0;
   const spentPct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
   const totalDays = activePeriod?.days ?? 0;
   const elapsedPct =
     totalDays > 0 ? Math.min(((totalDays - daysLeft) / totalDays) * 100, 100) : 0;
   const fillPct = overspent ? 100 : spentPct;
-  // The "Unspent So Far" tile, derived from the bar so it cannot contradict it.
-  // Two things matter here. First the denominator: this shares the bar's budget
-  // (income - savings), where the API's `percentageSaved` divides by income, so
-  // mid-period that field reads 77% under a bar showing 31% spent. Second the
-  // rounding: subtracting from the *rounded* fill, not the raw percentage,
-  // guarantees the pair always sums to 100 — round(100 - 30.5) would print 70
-  // beside a bar reading 31. Overspent means fillPct is 100, so nothing is
-  // unspent, which is true.
-  const unspentPct = budget > 0 ? 100 - Math.round(fillPct) : 0;
   // Spending less of the budget than the period has used up is the good case.
   // The two percentages sit either side of the bar, so the verdict is now
   // backed by figures the reader can check rather than asserted on its own.
@@ -98,6 +93,38 @@ export default function HomePage() {
       : "Behind pace";
   // With no budget and no period there is nothing to be ahead or behind of.
   const showVerdict = !loading && (overspent || (totalDays > 0 && budget > 0));
+
+  // Which window all of the above is about. The greeting says what day it is
+  // and the overline says what the figure is; neither says which span it
+  // covers, and "this month" is only true of one of the three modes.
+  //
+  // Named the way the Budget Period sheet names them, so what you chose there
+  // is what you read here. Days mode gets its length, which is the point of it.
+  const windowLine = (() => {
+    if (!activePeriod?.start) return null;
+    // Two-digit years here only. A term crossing a new year is the one case
+    // that spends four characters on each, and at 320px that is exactly what
+    // pushes this line onto a second row — measured, not guessed. Everywhere
+    // else the year stays in full; "Runs to 31 Dec 26" reads worse in the
+    // setup form, which has the width for it.
+    const range = formatDayRange(activePeriod, { shortYear: true });
+    const mode = stats?.mode ?? period.mode;
+    if (mode === "term") {
+      const cycle = activePeriod.cycles
+        ? ` · Month ${activePeriod.cycle} of ${activePeriod.cycles}`
+        : "";
+      // The whole term's span, not this cycle's. The cycle's dates are already
+      // implied twice over — the overline says "this month" and the cycle
+      // counter says which one — while the term's are on no other part of this
+      // screen. Falls back to the cycle if the term hasn't loaded.
+      const span = period.term
+        ? formatDayRange(period.term, { shortYear: true })
+        : range;
+      return `Allowance · ${span}${cycle}`;
+    }
+    if (mode === "days") return `${activePeriod.days}-Day Period · ${range}`;
+    return `Monthly · ${range}`;
+  })();
 
   // The verdict is pinned to the right of the same line the spent label tracks
   // along, so the label needs its width to know where to stop. Measured rather
@@ -352,6 +379,14 @@ export default function HomePage() {
               )}
             </div>
 
+            {/* Sits under the figures rather than above them: the hero states
+                the amount, this qualifies it. In term mode it also carries the
+                cycle, which is the only place on Home the whole allowance's
+                shape shows. */}
+            {!loading && windowLine && (
+              <p className="mt-3 text-center text-[12px] text-ink-3">{windowLine}</p>
+            )}
+
             {overspent && (
               <div className="mt-[18px] rounded-md bg-negative/[0.08] p-3.5">
                 <div className="flex items-start gap-2.5">
@@ -401,10 +436,20 @@ export default function HomePage() {
         )}
       </motion.div>
 
-      {/* In / Out / Reserved — a hairline strip, not three more cards */}
+      {/* In / Out / Reserved — a hairline strip, not three more cards.
+          In term mode the first cell is the month's share of the allowance
+          rather than income logged, which from month two on is nothing: "In
+          $0.00" under a hero reading "$1,055.00 left to spend" leaves the
+          headline figure with no visible source. Named for what it is, the
+          three cells subtract to the hero exactly. */}
       {!noPeriod && (
         <div className="mt-[10px] flex border-y border-hairline text-center ">
-          <StripCell label="In" value={stats?.periodIncome} loading={loading} accent />
+          <StripCell
+            label={stats?.periodFunding == null ? "In" : "Allowance"}
+            value={stats?.periodFunding ?? stats?.periodIncome}
+            loading={loading}
+            accent
+          />
           <span className="my-3 w-px bg-hairline" />
           <StripCell label="Out" value={stats?.periodExpenses} loading={loading} inset />
           <span className="my-3 w-px bg-hairline" />
@@ -425,29 +470,6 @@ export default function HomePage() {
       )}
 
       {/* Totals */}
-      <motion.div
-        variants={fadeUp}
-        initial="initial"
-        animate="animate"
-        className="mt-3 grid grid-cols-2 gap-2.5"
-      >
-        <StatCard
-          label="Total Saved"
-          value={stats?.totalSavings ?? 0}
-          prefix="$"
-          decimals={2}
-          loading={loading}
-        />
-        <StatCard
-          label="Unspent So Far"
-          value={unspentPct}
-          suffix="%"
-          decimals={0}
-          loading={loading}
-          accent
-        />
-      </motion.div>
-
       {/* Recent — replaces the old Quick actions block, three of whose four
           links went to tabs already one tap away. "What did I just spend" is
           the actual reason people open a manual tracker. */}
@@ -577,28 +599,3 @@ function StripCell({ label, value, loading, accent }) {
   );
 }
 
-function StatCard({ label, value, prefix, suffix, decimals, loading, accent }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-[12.5px] text-ink-3">{label}</p>
-        {loading ? (
-          <Skeleton className="mt-2 h-[19px] w-24" />
-        ) : (
-          <p
-            className={`num mt-1.5 text-[22px] font-medium ${
-              accent ? "text-positive" : "text-ink"
-            }`}
-          >
-            <AnimatedNumber
-              value={value}
-              prefix={prefix}
-              suffix={suffix}
-              decimals={decimals}
-            />
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}

@@ -12,8 +12,8 @@ const BudgetPeriodContext = createContext(null);
  *
  * `status` is one of:
  *   active   — a period covers today (always true in month mode)
- *   lapsed   — days mode, the last period has ended; the user starts the next
- *   none     — days mode, nothing set up yet
+ *   lapsed   — days or term mode, the last window has ended
+ *   none     — days or term mode, nothing set up yet
  */
 export function BudgetPeriodProvider({ children }) {
   const { user } = useAuth();
@@ -23,6 +23,7 @@ export function BudgetPeriodProvider({ children }) {
     current: null,
     previous: null,
     history: [],
+    term: null,
   });
   const [loading, setLoading] = useState(true);
 
@@ -42,6 +43,7 @@ export function BudgetPeriodProvider({ children }) {
         current: null,
         previous: null,
         history: [],
+        term: null,
       });
     } finally {
       setLoading(false);
@@ -56,8 +58,10 @@ export function BudgetPeriodProvider({ children }) {
     ...state,
     loading,
     refresh: load,
-    // Convenience for the many "this month" / "this period" strings.
-    noun: state.mode === "month" ? "month" : "period",
+    // Convenience for the many "this month" / "this period" strings. Term
+    // cycles are calendar months, so they take the reader-familiar word too;
+    // only days mode budgets a window that isn't a month.
+    noun: state.mode === "days" ? "period" : "month",
   };
 
   return (

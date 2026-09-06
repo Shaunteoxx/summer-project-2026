@@ -6,7 +6,9 @@ import { ensureRecurringDue } from "../lib/recurring.js";
 import {
   addDays,
   createPeriodResolver,
+  cyclesOfTerm,
   daysLeftInPeriod,
+  priceCycles,
   savesForPeriod,
   ymdOf as ymd,
 } from "../lib/period.js";
@@ -14,6 +16,29 @@ import {
 const MAX_STREAK_DAYS = 3660;
 
 const dayFromYmd = (s) => new Date(`${s}T00:00:00.000Z`);
+
+/**
+ * Price every cycle of every term the user has: `key -> funding`.
+ *
+ * Settled here by definition — the streak only ever grades days that have
+ * happened, so no cycle it asks about is in the future.
+ *
+ * Empty in month and days mode, which is what leaves their budgets untouched.
+ */
+function fundingByCycleFor(config, incomeByPeriod, expenseByPeriod) {
+  const funding = new Map();
+  if (config.mode !== "term") return funding;
+  for (const term of config.terms ?? []) {
+    const cycles = cyclesOfTerm(term, config.savingsByMonth ?? {});
+    for (const [key, value] of priceCycles(cycles, {
+      incomeByCycle: incomeByPeriod,
+      expenseByCycle: expenseByPeriod,
+    })) {
+      funding.set(key, value);
+    }
+  }
+  return funding;
+}
 
 /**
  * Compute the daily-budget streak from a user's transaction history.
@@ -43,6 +68,38 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
   const todayKey = ymd(today);
 
   const activePeriod = resolve(todayKey);
+
+  // Aggregate: expenses per day, and both sides per period. Income logged on an
+  // untracked day belongs to no period, so it funds no daily budget — it still
+  // counts towards lifetime totals elsewhere.
+  const expenseByDay = new Map();
+  const incomeByPeriod = new Map();
+  const expenseByPeriod = new Map();
+  for (const t of transactions) {
+    const key = ymd(new Date(t.date));
+    const period = resolve(key);
+    if (t.type === "expense") {
+      expenseByDay.set(key, (expenseByDay.get(key) || 0) + t.amount);
+      if (period) {
+        expenseByPeriod.set(period.key, (expenseByPeriod.get(period.key) || 0) + t.amount);
+      }
+    } else if (period) {
+      incomeByPeriod.set(period.key, (incomeByPeriod.get(period.key) || 0) + t.amount);
+    }
+  }
+
+  const fundingByCycle = fundingByCycleFor(config, incomeByPeriod, expenseByPeriod);
+
+  /**
+   * The money a window has to spread across its days, before its savings
+   * target. A term cycle draws its share of the pot; everywhere else it is
+   * simply the income logged inside the window.
+   */
+  const grossFor = (period) => {
+    if (!period) return 0;
+    return fundingByCycle.get(period.key) ?? incomeByPeriod.get(period.key) ?? 0;
+  };
+
   const savesUsedIn = (period) =>
     period
       ? [...restored].filter((d) => resolve(d)?.key === period.key).length
@@ -59,14 +116,21 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
           daysLeft: daysLeftInPeriod(todayKey, period),
           savings: period.savings,
           savesTotal: savesForPeriod(period.days),
+          // null outside term mode, where the budget's numerator is the income
+          // logged in the window rather than a slice of a pot.
+          funding: fundingByCycle.get(period.key) ?? null,
+          cycle: period.index === undefined ? null : period.index + 1,
+          cycles: period.cycles ?? null,
         }
       : null;
 
   const empty = {
     hasData: false,
-    hasIncome: false,
+    hasIncome: grossFor(activePeriod) > 0,
     overspentBy: 0,
-    leftToSpend: activePeriod ? roundMoney(-activePeriod.savings) : 0,
+    leftToSpend: activePeriod
+      ? roundMoney(grossFor(activePeriod) - activePeriod.savings)
+      : 0,
     periodSavings: activePeriod?.savings ?? 0,
     period: periodInfo(activePeriod),
     periodStatus: activePeriod ? "active" : "inactive",
@@ -80,23 +144,6 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
   };
 
   if (!transactions.length) return empty;
-
-  // Aggregate: expenses per day, income per period. Income logged on an
-  // untracked day belongs to no period, so it funds no daily budget — it still
-  // counts towards lifetime totals elsewhere.
-  const expenseByDay = new Map();
-  const incomeByPeriod = new Map();
-  for (const t of transactions) {
-    const key = ymd(new Date(t.date));
-    if (t.type === "expense") {
-      expenseByDay.set(key, (expenseByDay.get(key) || 0) + t.amount);
-    } else {
-      const period = resolve(key);
-      if (period) {
-        incomeByPeriod.set(period.key, (incomeByPeriod.get(period.key) || 0) + t.amount);
-      }
-    }
-  }
 
   // Walk from the first transaction: days before it have no history to judge,
   // and counting them as no-spend wins would hand out a streak for time the
@@ -130,11 +177,10 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
     if (!period) {
       status = "untracked";
     } else {
-      const periodIncome = incomeByPeriod.get(period.key) || 0;
       const daysLeft = daysLeftInPeriod(key, period);
       // Reserve the period's savings target before spreading what's left.
       budget =
-        daysLeft > 0 ? (periodIncome - period.savings - cumExpense) / daysLeft : 0;
+        daysLeft > 0 ? (grossFor(period) - period.savings - cumExpense) / daysLeft : 0;
 
       if (spent === 0 || spent <= budget + 1e-9) status = "win";
       else if (restored.has(key)) status = "saved";
@@ -242,9 +288,7 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
   const periodSpent = activePeriod
     ? days.reduce((sum, d) => (d.periodKey === activePeriod.key ? sum + d.spent : sum), 0)
     : 0;
-  const spendable = activePeriod
-    ? (incomeByPeriod.get(activePeriod.key) || 0) - activePeriod.savings
-    : 0;
+  const spendable = activePeriod ? grossFor(activePeriod) - activePeriod.savings : 0;
   const overspentBy = activePeriod
     ? Math.max(0, Math.round((periodSpent - spendable) * 100) / 100)
     : 0;
@@ -256,9 +300,10 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
 
   return {
     hasData: true,
-    hasIncome: activePeriod
-      ? (incomeByPeriod.get(activePeriod.key) || 0) > 0
-      : false,
+    // Funded, not just "income logged" — a term cycle after the first has money
+    // to spend without a single income row of its own, and gating on income
+    // would sit an "add your income" empty state on top of a live budget.
+    hasIncome: grossFor(activePeriod) > 0,
     overspentBy,
     leftToSpend,
     periodSavings: activePeriod?.savings ?? 0,
@@ -306,6 +351,7 @@ export async function getStreak(req, res) {
       mode: context.mode,
       savingsByMonth: context.savingsByMonth,
       periods: context.periods,
+      terms: context.terms,
     })
   );
 }
@@ -330,6 +376,7 @@ export async function restoreStreak(req, res) {
     mode: context.mode,
     savingsByMonth: context.savingsByMonth,
     periods: context.periods,
+    terms: context.terms,
   };
   const result = computeStreak(transactions, req.user.restoredDays, todayKey, config);
 

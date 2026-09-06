@@ -40,7 +40,7 @@ const account = (over = {}) => ({
 });
 
 const payload = (over = {}) => ({
-  period: { start: "2026-08-01", end: "2026-08-31", savings: 200 },
+  period: { start: "2026-08-01", end: "2026-08-31", savings: 200, funding: null },
   accounts: [
     account({ id: "a1", name: "Trust", spent: 448 }),
     account({ id: "a2", name: "DBS", color: "#1290CC", income: 800 }),
@@ -197,5 +197,87 @@ describe("account activity", () => {
     const { container } = render(<AccountsCard />);
 
     await waitFor(() => expect(container).toBeEmptyDOMElement());
+  });
+});
+
+// Term mode: the cycle's money is a slice of a lump sum spread over several
+// months. It must not become a row — in the month the money actually lands it
+// is already sitting in an account, and a row would total it twice.
+describe("a funded term cycle", () => {
+  const funded = (over = {}) => ({
+    period: { start: "2026-08-01", end: "2026-08-31", savings: 200, funding: 1000 },
+    accounts: [
+      account({ id: "a1", name: "Trust", spent: 448 }),
+      account({ id: "a2", name: "DBS", color: "#1290CC" }),
+    ],
+    totals: { income: 0, spent: 448, funding: 1000, net: -448, reserved: 200, leftToSpend: 352 },
+    ...over,
+  });
+
+  it("explains where the money came from", async () => {
+    fetchAccountTotals.mockResolvedValue(funded());
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+
+    expect(screen.getByText(/Your allowance gives you/)).toBeInTheDocument();
+    expect(screen.getByText("$1,000.00")).toBeInTheDocument();
+    expect(screen.getByText(/left to spend/)).toBeInTheDocument();
+  });
+
+  it("keeps the Total equal to the account rows, not the allowance", async () => {
+    fetchAccountTotals.mockResolvedValue(funded());
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+
+    // Nothing came in through an account this month, so Total In is nil — the
+    // allowance is explained underneath rather than counted as activity.
+    expect(cellsFor("Total")).toEqual(["$0.00", "$448.00"]);
+  });
+
+  it("does not double-count the lump sum in the month it arrives", async () => {
+    // Cycle one: the $6,000 really is in DBS, and $1,000 of it is this month's.
+    fetchAccountTotals.mockResolvedValue(
+      funded({
+        accounts: [
+          account({ id: "a1", name: "Trust", spent: 448 }),
+          account({ id: "a2", name: "DBS", color: "#1290CC", income: 6000 }),
+        ],
+        totals: {
+          income: 6000, spent: 448, funding: 1000,
+          net: 5552, reserved: 200, leftToSpend: 352,
+        },
+      })
+    );
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+
+    // $6,000, not $7,000.
+    expect(cellsFor("Total")).toEqual(["$6,000.00", "$448.00"]);
+  });
+
+  it("says nothing about an allowance outside term mode", async () => {
+    fetchAccountTotals.mockResolvedValue(payload());
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+
+    expect(screen.queryByText(/Your allowance gives you/)).not.toBeInTheDocument();
+  });
+});
+
+// The card is a set of sums over one window and used to name none of them.
+describe("naming the window", () => {
+  it("says which window the sums cover", async () => {
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+    expect(screen.getByText("August 2026")).toBeInTheDocument();
+  });
+
+  it("names a part-month window by its dates", async () => {
+    fetchAccountTotals.mockResolvedValue(
+      payload({ period: { start: "2026-08-15", end: "2026-08-31", savings: 0, funding: null } })
+    );
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+    expect(screen.getByText("15 – 31 Aug")).toBeInTheDocument();
   });
 });

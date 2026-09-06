@@ -137,7 +137,9 @@ export async function getFriends(req, res) {
  *
  * Everyone is scored on their own active budget period, so each person's
  * number is the one they see on their own home screen. Savings % is a ratio,
- * so it stays comparable even when two people run different length periods.
+ * so it stays comparable even when two people run different length periods —
+ * or when one of them is spending a slice of a lump sum rather than income
+ * logged inside the window.
  * Anyone with no period running right now simply scores 0.
  */
 export async function getComparison(req, res) {
@@ -195,7 +197,11 @@ export async function getComparison(req, res) {
 
   const board = entries.map(({ user, isMe, period }) => {
     const summary = totals.get(String(user._id));
-    const income = summary?.income || 0;
+    // Same numerator the rest of the app budgets from: a term cycle's money is
+    // its slice of the lump sum, not the income that landed inside it — which
+    // from the second month on is none. Scoring on income alone would park
+    // every term-mode friend at 0% with a negative saved figure.
+    const income = period?.funding ?? summary?.income ?? 0;
     const totalSaved = roundMoney(income - (summary?.expenses || 0));
     return {
       id: user._id,

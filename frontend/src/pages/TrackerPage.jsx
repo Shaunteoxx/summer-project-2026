@@ -12,8 +12,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchTransactions, fetchStreak } from "@/api/endpoints";
-import { formatMoney, localToday } from "@/lib/utils";
-import { formatPeriodLabel } from "@/lib/period";
+import { cn, formatMoney, localToday, monthName } from "@/lib/utils";
+import { formatDay, formatPeriodLabel } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
 import { useChartColors } from "@/hooks/useChartColors";
@@ -69,13 +69,28 @@ export default function TrackerPage() {
     },
     { income: 0, spent: 0 }
   );
-  const income = totals.income;
   const spent = totals.spent;
+  // What this window has to spend. In term mode that's its slice of the
+  // allowance, not the income logged inside it — a cycle after the first has
+  // none, and using it would put a different figure here from the one Home is
+  // showing for the very same month.
+  const funding = current?.funding ?? null;
+  const income = funding ?? totals.income;
+  // The captions say "of income" everywhere else, which stops being true once
+  // the money came from a lump sum months ago.
+  const budgetNoun = funding == null ? "income" : "allowance";
+  // Title case, for labels rather than sentences — see design/COPY_CONVENTIONS.md.
+  const titleNoun = budgetPeriod.noun === "period" ? "Period" : "Month";
   const saved = Math.max(income - spent, 0);
   const hasData = income > 0 || spent > 0;
   const periodSavings = current?.savings ?? 0;
   const percentageSaved = income > 0 ? Math.round(((income - spent) / income) * 100) : 0;
   const percentageSpent = income > 0 ? Math.round((spent / income) * 100) : 0;
+
+  // The whole allowance behind the cycles, so the page can say where the term
+  // stands as well as where this month does. Null outside term mode.
+  const term = budgetPeriod.term;
+  const showTerm = Boolean(term && term.left != null && current?.cycles);
 
   // Expenses grouped by category, largest first. Keep the donut to <=6 slices
   // (top 5 + a neutral "Other") so it stays readable as categories grow.
@@ -107,7 +122,9 @@ export default function TrackerPage() {
       >
         <div className="min-w-0">
           <h1 className="text-title-lg">
-            {budgetPeriod.mode === "month" ? "Monthly Tracker" : "Period Tracker"}
+            {/* Term cycles are calendar months, so "Period Tracker" over a
+                heading reading "September 2026" just contradicted itself. */}
+            {budgetPeriod.mode === "days" ? "Period Tracker" : "Monthly Tracker"}
           </h1>
           <p className="mt-1 text-[13px] text-ink-3">
             {current
@@ -221,6 +238,15 @@ export default function TrackerPage() {
             />
           </motion.div>
 
+          {/* The whole allowance, next to the month it funds. The cards above
+              are about September; this one is about the six months September
+              is month three of, which is the only place that shows. */}
+          {showTerm && (
+            <motion.div variants={fadeUp} initial="initial" animate="animate">
+              <TermCard term={term} current={current} cycles={budgetPeriod.history} />
+            </motion.div>
+          )}
+
           {/* Savings goal */}
           <SavingsGoalCard
             target={periodSavings}
@@ -234,6 +260,7 @@ export default function TrackerPage() {
           <DailySpendingCard
             transactions={transactions}
             income={income}
+            budgetNoun={budgetNoun}
             period={current}
             periodDays={streak?.periodDays ?? []}
             todayBudget={streak?.today?.budget ?? 0}
@@ -258,20 +285,26 @@ export default function TrackerPage() {
           >
             {/* "Unspent", not "Saved", for the same reason as the ring above:
                 this is a live period, so income minus spending is money not
-                spent yet. The "% of income" caption stays true either way —
-                it's the denominator this tile has always used. */}
+                spent yet. The "% of…" caption names the denominator.
+
+                Named for the window rather than "Total": these sit at the foot
+                of a long page, well out of sight of the heading that says which
+                month they belong to, and "Total Spent" over one month's figure
+                reads as everything ever spent. */}
             <BreakdownCard
               icon={PiggyBank}
-              label="Total Unspent"
+              label={`Unspent This ${titleNoun}`}
               amount={income - spent}
               percent={percentageSaved}
+              noun={budgetNoun}
               accent
             />
             <BreakdownCard
               icon={CreditCard}
-              label="Total Spent"
+              label={`Spent This ${titleNoun}`}
               amount={spent}
               percent={percentageSpent}
+              noun={budgetNoun}
             />
           </motion.div>
 
@@ -336,9 +369,17 @@ export function SavedVsSpentCard({
           saved put an apparent 3x win directly above a "Goal: set aside $300"
           footnote. The SavingsGoalCard below is the one place that answers
           "am I actually saving?", and it says "covers" for the same reason. */}
-      <CardContent className="px-8 py-[22px]">
+      {/* Padding and gap are the give here. The ring is a fixed 128px and the
+          amounts are tabular, so on a narrow phone the pair had nowhere to go
+          and "$1,162.75" ran outside the card — 16px past it at 399px wide,
+          95px at 320px. Trimming both reclaims ~50px, and flex-wrap catches
+          whatever is left by dropping the amounts under the ring rather than
+          letting them escape. No breakpoint: Tailwind's sm: is 640px, above
+          every phone, so a responsive variant here would only ever apply the
+          narrow case. */}
+      <CardContent className="px-5 py-[22px]">
         {hasData ? (
-          <div className="flex items-center gap-[50px]">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
             <div className="relative h-32 w-32 shrink-0">
               <PieChart width={128} height={128} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                 <Pie
@@ -453,7 +494,7 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
           /* The gap is tight: every pixel the ring doesn't take is a pixel of
              gutter between a category and its amount, and the app's real labels
              ("Entertainment") run longer than the mockup's ("Fun"). */
-          <div className="mt-4 flex items-center gap-4 ml-3">
+          <div className="mt-4 ml-3 flex flex-wrap items-center gap-x-4 gap-y-4">
             <div className="relative h-28 w-28 shrink-0">
               <PieChart width={112} height={112} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                 <Pie
@@ -478,10 +519,14 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
                 </Pie>
               </PieChart>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                {/* Whole dollars only: this is a chart label, and the card
-                    above already carries the figure to the cent. */}
+                {/* To the cent, matching the per-category rows immediately to
+                    the right. This was whole dollars on the grounds that a
+                    chart label needn't be exact and the card above carries the
+                    precise figure — but the rows it sits beside are in this
+                    same card and do show cents, so "$110" read as disagreeing
+                    with the $70.60 + $38.90 next to it. */}
                 <span className="num text-[18px] font-medium leading-none">
-                  <AnimatedNumber value={spent} prefix="$" />
+                  <AnimatedNumber value={spent} prefix="$" decimals={2} />
                 </span>
                 <span className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.07em] text-ink-3">
                   Spent
@@ -530,7 +575,150 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
  * spent figure is ink rather than red: spending is the normal case in a
  * spending tracker, and red has to still mean "over budget" when it appears.
  */
-function BreakdownCard({ icon: Icon, label, amount, percent, accent }) {
+/**
+ * Where the whole allowance stands, as opposed to the month drawn from it.
+ *
+ * Deliberately a bar and not a second donut: the page already has one, and two
+ * rings side by side invite you to compare figures that are measured over
+ * different spans.
+ */
+function TermCard({ term, current, cycles = [] }) {
+  const income = term.income ?? 0;
+  const spent = term.spent ?? 0;
+  const left = term.left ?? 0;
+  const pct = income > 0 ? Math.min((spent / income) * 100, 100) : 0;
+  const monthsLeft = current.cycles - current.cycle;
+
+  // What each month of the allowance gets. The server prices every cycle up to
+  // this one; the ones after it can't be priced, because their share depends on
+  // what still gets spent this month. They're shown at this month's rate, which
+  // is what they'd actually be if it's spent in full — the split is calibrated
+  // so that spending exactly your share leaves the next month's share alone.
+  const crossesYear = term.start.slice(0, 4) !== term.end.slice(0, 4);
+  const months = [...cycles]
+    .sort((a, b) => (a.start < b.start ? -1 : 1))
+    .map((c) => {
+      const month = Number(c.start.slice(5, 7)) - 1;
+      return {
+        start: c.start,
+        label: `${monthName(month).slice(0, 3)}${crossesYear ? ` ${c.start.slice(2, 4)}` : ""}`,
+        amount: c.funding ?? current.funding ?? 0,
+        projected: c.funding == null,
+        isCurrent: c.start === current.start,
+      };
+    });
+  const hasProjected = months.some((m) => m.projected);
+
+  return (
+    <Card>
+      <CardContent className="px-[18px] py-5">
+        {/* 15px, not text-title's 19px: every other card on this page — Daily
+            Spending, Savings Target, Spending by Category — heads itself this
+            way, and 19px was borrowed from Account Activity, which lives on a
+            different page. */}
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-[15px] font-semibold tracking-[-0.015em]">
+            Your Allowance
+          </h2>
+          <span className="shrink-0 text-meta text-ink-3">
+            Month {current.cycle} of {current.cycles}
+          </span>
+        </div>
+        <p className="mt-0.5 text-[12px] text-ink-3">
+          {formatDay(term.start, { withYear: true })} –{" "}
+          {formatDay(term.end, { withYear: true })}
+        </p>
+
+        <div className="mt-3 flex items-baseline gap-1.5">
+          <span
+            className={cn(
+              "num text-[26px] font-medium",
+              left < 0 ? "text-negative" : "text-ink"
+            )}
+          >
+            {formatMoney(left)}
+          </span>
+          <span className="text-[13px] text-ink-3">left of {formatMoney(income)}</span>
+        </div>
+
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-3">
+          <div
+            className={cn(
+              "h-full rounded-full transition-[width] duration-enter ease-out",
+              left < 0 ? "bg-negative" : "bg-ink"
+            )}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
+        <p className="mt-2.5 text-[11.5px] leading-relaxed text-ink-3">
+          {formatMoney(spent)} spent since it started
+          {monthsLeft > 0
+            ? `, with ${monthsLeft} month${monthsLeft === 1 ? "" : "s"} to go after this one.`
+            : " — this is the last month."}
+        </p>
+
+        {months.length > 0 && (
+          <>
+            {/* A grid, not a list: four of six months carry the same projected
+                figure, and printed one per row that reads as padding rather
+                than as information. Three across puts a six-month allowance in
+                two rows and a year-long one in four. */}
+            <div className="mt-3.5 grid grid-cols-3 gap-2 border-t border-hairline pt-3.5">
+              {months.map((m) => (
+                <div
+                  key={m.start}
+                  className={cn(
+                    "rounded-md border px-2 py-1.5",
+                    m.isCurrent
+                      ? "border-transparent bg-surface-2"
+                      : m.projected
+                        ? // Same dashes the spending calendar puts on days that
+                          // haven't happened.
+                          "border-dashed border-hairline-strong"
+                        : "border-transparent"
+                  )}
+                >
+                  <p
+                    className={cn(
+                      "text-[11px] leading-none",
+                      m.isCurrent ? "text-ink-2" : "text-ink-3"
+                    )}
+                  >
+                    {m.label}
+                    {/* The highlight says which month is current to anyone
+                        looking; this says it to anyone listening. */}
+                    {m.isCurrent && <span className="sr-only"> (this month)</span>}
+                  </p>
+                  <p
+                    className={cn(
+                      "num mt-1 text-[13px] leading-none",
+                      m.isCurrent
+                        ? "font-medium text-ink"
+                        : m.projected
+                          ? "text-ink-3"
+                          : "text-ink-2"
+                    )}
+                  >
+                    {formatMoney(m.amount)}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {hasProjected && (
+              <p className="mt-2.5 text-[11.5px] leading-relaxed text-ink-3">
+                Dashed months are at this month&apos;s rate. They move as you
+                spend — go under and they grow, go over and they shrink.
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function BreakdownCard({ icon: Icon, label, amount, percent, noun = "income", accent }) {
   // A negative "total unspent" is the over-budget case — the one thing red is
   // reserved for. Green is only for money still unspent.
   const over = accent && amount < 0;
@@ -556,7 +744,7 @@ function BreakdownCard({ icon: Icon, label, amount, percent, accent }) {
           </p>
           <p className="mt-1 text-meta text-ink-2">{label}</p>
           <p className="mt-0.5 text-meta text-ink-3">
-            <AnimatedNumber value={percent} suffix="%" /> of income
+            <AnimatedNumber value={percent} suffix="%" /> of {noun}
           </p>
         </CardContent>
       </Card>

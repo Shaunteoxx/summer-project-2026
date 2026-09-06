@@ -5,13 +5,16 @@ import { describe, it, expect } from "vitest";
 
 import {
   addDaysYmd,
+  addMonthsYmd,
   daysBetween,
+  formatDayRange,
   daysLeftInPeriod,
   formatDay,
   formatMonthLabel,
   formatPeriodLabel,
   periodDayList,
   periodEnd,
+  termEnd,
 } from "@/lib/period";
 
 const period = (start, length) => ({ start, end: periodEnd(start, length), days: length });
@@ -90,6 +93,17 @@ describe("labels", () => {
     );
   });
 
+  it("names a whole term cycle by its month and a stub by its dates", () => {
+    // Term mode leans on the same geometric check rather than forcing the month
+    // name: a clipped first cycle really is 15–31 Aug, not "August 2026".
+    expect(formatPeriodLabel(period("2026-09-01", 30), { mode: "term" })).toBe(
+      "September 2026"
+    );
+    expect(formatPeriodLabel(period("2026-08-15", 17), { mode: "term" })).toBe(
+      "15 – 31 Aug"
+    );
+  });
+
   it("reads a part-month as a day range", () => {
     expect(formatPeriodLabel(period("2026-08-01", 15))).toBe("1 – 15 Aug");
     expect(formatPeriodLabel(period("2026-08-10", 6))).toBe("10 – 15 Aug");
@@ -115,5 +129,60 @@ describe("labels", () => {
     expect(formatPeriodLabel(null)).toBe("");
     expect(formatDay(null)).toBe("");
     expect(formatMonthLabel(undefined)).toBe("");
+  });
+});
+
+// addMonthsYmd mirrors backend/lib/period.js so the setup form can preview a
+// term before the server has seen it. The clamping is the part that drifts.
+describe("month arithmetic", () => {
+  it("clamps to the target month's length", () => {
+    expect(addMonthsYmd("2026-01-31", 1)).toBe("2026-02-28");
+    expect(addMonthsYmd("2028-01-31", 1)).toBe("2028-02-29");
+  });
+
+  it("clamps from the original day, not the previous clamped one", () => {
+    expect(addMonthsYmd("2026-01-31", 2)).toBe("2026-03-31");
+  });
+
+  it("derives a term's last day", () => {
+    expect(termEnd("2026-01-01", 6)).toBe("2026-06-30");
+    expect(termEnd("2026-08-15", 6)).toBe("2027-02-14");
+  });
+});
+
+// formatPeriodLabel collapses a whole calendar month to its name; Home wants
+// the span itself, so the range half is shared rather than duplicated.
+describe("day ranges", () => {
+  it("never collapses a whole month to its name", () => {
+    expect(formatDayRange(period("2026-09-01", 30))).toBe("1 – 30 Sep");
+    expect(formatPeriodLabel(period("2026-09-01", 30))).toBe("September 2026");
+  });
+
+  it("spells out both months when the window straddles one", () => {
+    expect(formatDayRange(period("2026-08-25", 14))).toBe("25 Aug – 7 Sep");
+  });
+
+  it("adds years only when the window crosses one", () => {
+    expect(formatDayRange(period("2026-12-20", 20))).toBe("20 Dec 2026 – 8 Jan 2027");
+  });
+
+  it("can shorten those years for a line with no room for them", () => {
+    expect(formatDayRange(period("2026-12-20", 20), { shortYear: true })).toBe(
+      "20 Dec 26 – 8 Jan 27"
+    );
+    // A window inside one year never showed them, so nothing changes there.
+    expect(formatDayRange(period("2026-09-01", 30), { shortYear: true })).toBe(
+      "1 – 30 Sep"
+    );
+  });
+
+  it("leaves every other caller on four digits", () => {
+    expect(formatDay("2026-08-04", { withYear: true })).toBe("4 Aug 2026");
+    expect(formatDay("2026-08-04", { withYear: true, shortYear: true })).toBe("4 Aug 26");
+    expect(formatDay("2026-08-04")).toBe("4 Aug");
+  });
+
+  it("is empty without a window", () => {
+    expect(formatDayRange(null)).toBe("");
   });
 });

@@ -102,6 +102,9 @@ function DayTick({ x, y, payload, days, today, axis, primary }) {
 export default function DailySpendingCard({
   transactions = [],
   income = 0,
+  // What the window's money is called. "income" everywhere except term mode,
+  // where it came from a lump sum months back rather than this month's ledger.
+  budgetNoun = "income",
   period,
   periodDays = [],
   todayBudget = 0,
@@ -385,8 +388,8 @@ export default function DailySpendingCard({
               </div>
               {budgetsAvailable && (
                 <p className="mt-2.5 text-[12px] leading-relaxed text-ink-3">
-                  Your budget adapts daily: remaining income after savings ÷
-                  days left.
+                  Your budget adapts daily: remaining {budgetNoun} after
+                  savings ÷ days left.
                 </p>
               )}
             </>

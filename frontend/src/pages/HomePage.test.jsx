@@ -31,7 +31,7 @@ vi.mock("@/hooks/useCategories", () => ({
   useCategories: () => ({ getCategory: () => ({ color: "#666", icon: () => null }) }),
 }));
 // Overridden per-test where the absence of a period is the subject.
-let mockPeriod = { current: null, noun: "month", status: "active" };
+let mockPeriod = { current: null, noun: "month", status: "active", term: null };
 vi.mock("@/hooks/useBudgetPeriod", () => ({
   useBudgetPeriod: () => mockPeriod,
 }));
@@ -83,7 +83,7 @@ const show = async (overrides = {}, transactions = [entry]) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockPeriod = { current: null, noun: "month", status: "active" };
+  mockPeriod = { current: null, noun: "month", status: "active", term: null };
 });
 
 describe("the pace bar", () => {
@@ -103,18 +103,19 @@ describe("the pace bar", () => {
   // divides by income: (1240 - 287.40) / 1240 = 77%, printed beneath a bar
   // reading 31% spent. Those don't complement, and 100 - 31 = 69 says so. It
   // now comes off the bar, so the two always sum to 100.
-  it("shows the unspent share of the budget, not of income", async () => {
+  // This used to be read off the "Unspent So Far" tile, which has since gone —
+  // it was this bar's own complement restated. The property it guarded is the
+  // bar's, so assert it there: 287.40 of the 940 budget is 31%, where dividing
+  // by the 1240 income would say 23%.
+  it("spends against the budget, not against income", async () => {
     await show();
-    expect(await screen.findByText("Unspent So Far")).toBeInTheDocument();
-    // The figure counts up, so wait for it to land rather than reading 0.
-    expect(await screen.findByText("69%")).toBeInTheDocument();
-    expect(screen.queryByText("77%")).not.toBeInTheDocument();
+    expect(await screen.findByText("31% spent")).toBeInTheDocument();
+    expect(screen.queryByText("23% spent")).not.toBeInTheDocument();
   });
 
-  it("has nothing unspent once the budget is gone", async () => {
+  it("fills completely once the budget is gone", async () => {
     await show({ periodExpenses: 1100, leftToSpend: -160 });
     expect(await screen.findByText("100% spent")).toBeInTheDocument();
-    expect(await screen.findByText("0%")).toBeInTheDocument();
   });
 
   // The overspent state names the way out, so it has to be tappable: this is
@@ -286,5 +287,164 @@ describe("with nothing logged yet", () => {
     expect(navigate).toHaveBeenCalledWith("/transactions", {
       state: { openAdd: "income" },
     });
+  });
+});
+
+// Term mode: the window's money is its slice of a lump sum that arrived in an
+// earlier cycle, so `periodIncome` is 0 from month two on. The page used to
+// divide by that, which pegged the bar at 0% and the verdict at "Behind pace"
+// for every month but the first.
+describe("a funded term cycle", () => {
+  const funded = {
+    mode: "term",
+    leftToSpend: 712.6,
+    periodIncome: 0,
+    periodFunding: 1000,
+    periodExpenses: 287.4,
+    periodSavings: 0,
+    period: {
+      start: "2026-08-01",
+      end: "2026-08-31",
+      days: 31,
+      daysLeft: 20,
+      cycle: 2,
+      cycles: 6,
+    },
+  };
+
+  it("draws a real pace bar with no income logged this month", async () => {
+    await show(funded);
+    // 287.40 of 1000, not of 0.
+    expect(await screen.findByText("29% spent")).toBeInTheDocument();
+  });
+
+  it("does not call a funded cycle behind pace", async () => {
+    await show(funded);
+    expect(screen.queryByText("Behind pace")).not.toBeInTheDocument();
+    expect(screen.getByText("Ahead of pace")).toBeInTheDocument();
+  });
+
+  it("names the strip's first cell for what actually funds the month", async () => {
+    await show(funded);
+    // "In $0.00" under a hero reading "$1,000 left to spend" gives the headline
+    // no visible source; these three now subtract to it exactly.
+    expect(screen.getByText("Allowance")).toBeInTheDocument();
+    expect(screen.queryByText("In")).not.toBeInTheDocument();
+  });
+
+  it("still says In outside term mode", async () => {
+    await show();
+    expect(screen.getByText("In")).toBeInTheDocument();
+    expect(screen.queryByText("Allowance")).not.toBeInTheDocument();
+  });
+
+  it("names the whole term's span, not just this cycle's", async () => {
+    mockPeriod = {
+      ...mockPeriod,
+      mode: "term",
+      term: { start: "2026-07-01", end: "2026-12-31", months: 6 },
+    };
+    await show(funded);
+    // The cycle's own dates are implied by "this month" plus "Month 2 of 6";
+    // the term's appear nowhere else on this screen.
+    expect(
+      screen.getByText("Allowance · 1 Jul – 31 Dec · Month 2 of 6")
+    ).toBeInTheDocument();
+  });
+
+  it("adds years when the term crosses one", async () => {
+    mockPeriod = {
+      ...mockPeriod,
+      mode: "term",
+      term: { start: "2026-08-15", end: "2027-02-14", months: 6 },
+    };
+    await show(funded);
+    // Two digits, so a term crossing a new year still fits one line at 320px.
+    expect(
+      screen.getByText("Allowance · 15 Aug 26 – 14 Feb 27 · Month 2 of 6")
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to the cycle's dates until the term loads", async () => {
+    mockPeriod = { ...mockPeriod, mode: "term", term: null };
+    await show(funded);
+    expect(
+      screen.getByText("Allowance · 1 – 31 Aug · Month 2 of 6")
+    ).toBeInTheDocument();
+  });
+});
+
+// Home carried two tiles here. They shared neither unit nor window — an
+// all-time dollar total beside this month's percentage — and each turned out to
+// restate something already on screen: the percentage was the pace bar's own
+// complement, and the allowance pair that briefly replaced it repeated the
+// window line's cycle counter and the tracker's allowance card.
+describe("no summary tiles", () => {
+  it("shows none of them, in any mode", async () => {
+    await show();
+    for (const label of [
+      "Total Saved",
+      "Unspent So Far",
+      "Allowance Left",
+      "Months Left",
+    ]) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
+  });
+
+  it("shows none of them in allowance mode either", async () => {
+    mockPeriod = {
+      ...mockPeriod,
+      mode: "term",
+      term: { start: "2026-07-01", end: "2026-12-31", months: 6, income: 6985.33, spent: 2005.84, left: 4979.49 },
+    };
+    await show({
+      mode: "term",
+      periodIncome: 0,
+      periodFunding: 1000,
+      period: { start: "2026-08-01", end: "2026-08-31", days: 31, daysLeft: 20, cycle: 2, cycles: 6 },
+    });
+    expect(screen.queryByText("Allowance Left")).not.toBeInTheDocument();
+    // The window line still carries where the allowance stands.
+    expect(screen.getByText(/Month 2 of 6/)).toBeInTheDocument();
+  });
+
+  it("ends on the streak card and what you just spent", async () => {
+    await show();
+    expect(screen.getByText("Recent")).toBeInTheDocument();
+  });
+});
+
+// The greeting says what day it is and the overline says what the figure is;
+// neither says which span it covers, and "this month" is only true of one of
+// the three modes.
+describe("naming the window", () => {
+  it("names a calendar month and its dates", async () => {
+    await show();
+    expect(screen.getByText("Monthly · 1 – 31 Aug")).toBeInTheDocument();
+  });
+
+  it("gives a custom period its length", async () => {
+    mockPeriod = { ...mockPeriod, mode: "days", noun: "period" };
+    await show({
+      mode: "days",
+      period: { start: "2026-08-01", end: "2026-08-15", days: 15, daysLeft: 4 },
+    });
+    expect(screen.getByText("15-Day Period · 1 – 15 Aug")).toBeInTheDocument();
+  });
+
+  it("spells out both months when the window straddles one", async () => {
+    mockPeriod = { ...mockPeriod, mode: "days", noun: "period" };
+    await show({
+      mode: "days",
+      period: { start: "2026-08-25", end: "2026-09-07", days: 14, daysLeft: 3 },
+    });
+    expect(screen.getByText("14-Day Period · 25 Aug – 7 Sep")).toBeInTheDocument();
+  });
+
+  it("says nothing when no period is running", async () => {
+    mockPeriod = { current: null, noun: "month", status: "none" };
+    await show({ period: null });
+    expect(screen.queryByText(/Monthly ·/)).not.toBeInTheDocument();
   });
 });

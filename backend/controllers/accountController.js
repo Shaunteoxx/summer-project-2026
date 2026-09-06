@@ -114,9 +114,12 @@ export async function getAccountTotals(req, res) {
     accounts.reduce((sum, a) => sum + a.spent, 0) + unassigned.spent
   );
   const reserved = roundMoney(period.savings || 0);
+  // A term cycle's money came from the lump sum, which arrived in an earlier
+  // cycle and belongs to no account any more. Null outside term mode.
+  const funding = period.funding ?? null;
 
   res.json({
-    period: { start: period.start, end: period.end, savings: reserved },
+    period: { start: period.start, end: period.end, savings: reserved, funding },
     accounts,
     // Omitted entirely once everything is tagged, so the client doesn't have to
     // decide whether a row of zeroes is worth showing.
@@ -124,9 +127,13 @@ export async function getAccountTotals(req, res) {
     totals: {
       income,
       spent,
+      funding,
+      // Still strictly what moved through the accounts, so the per-account nets
+      // go on summing to it. Funding sits outside that identity on purpose: it
+      // is in no account, and putting it in one would be a fabrication.
       net: roundMoney(income - spent),
       reserved,
-      leftToSpend: roundMoney(income - spent - reserved),
+      leftToSpend: roundMoney((funding ?? income) - spent - reserved),
     },
   });
 }

@@ -367,9 +367,17 @@ export default function StatsPage() {
 
           {/* Per-month breakdown */}
           <motion.div variants={fadeUp} initial="initial" animate="animate">
-            <h2 className="mb-2.5 px-0.5 text-overline text-ink-3">
-              Monthly breakdown
-            </h2>
+            <h2 className="px-0.5 text-overline text-ink-3">Monthly breakdown</h2>
+            {/* Named once here rather than on every row, which would repeat the
+                same four words a dozen times down a narrow column.
+                Worth naming at all because Home, Tracker and the leaderboard
+                divide by the window's *budget* while these rows divide by the
+                month's income — for a term cycle funded by an earlier lump sum
+                those are different numbers for the same month, and without the
+                denominator on screen they just look like a contradiction. */}
+            <p className="mb-2.5 px-0.5 text-[11.5px] text-ink-3">
+              Percentages are of that month&apos;s income.
+            </p>
             <Card>
               <CardContent className="p-2">
                 <ul>
@@ -405,9 +413,17 @@ export default function StatsPage() {
                               {formatMoney(Math.abs(s.totalSaved))}
                             </p>
                             <p className="num mt-0.5 text-meta text-ink-3">
-                              {`${s.percentageSaved}% ${
-                                isRunningMonth(s) ? "unspent so far" : "saved"
-                              }`}
+                              {/* percentageSaved divides by income, so a month
+                                  that had none reads "0% saved" — which looks
+                                  like a wipe-out when the spending was simply
+                                  funded before it. State the fact rather than
+                                  the artefact; naming *where* the money came
+                                  from would be a guess this view can't make. */}
+                              {s.totalIncome === 0
+                                ? "No income logged"
+                                : `${s.percentageSaved}% ${
+                                    isRunningMonth(s) ? "unspent so far" : "saved"
+                                  }`}
                             </p>
                           </div>
                         </motion.li>

@@ -19,8 +19,10 @@ const userSchema = new mongoose.Schema(
     restoredDays: { type: [String], default: [] },
     // How the budget window is worked out. "month" derives it from the calendar
     // (and reads savingsByMonth below); "days" uses the BudgetPeriod rows the
-    // user starts by hand. Switching modes leaves the other mode's data intact.
-    budgetMode: { type: String, enum: ["month", "days"], default: "month" },
+    // user starts by hand; "term" slices a BudgetTerm into calendar-month
+    // cycles, for one lump sum that has to last a while. Switching modes leaves
+    // every other mode's data intact.
+    budgetMode: { type: String, enum: ["month", "days", "term"], default: "month" },
     // Amount the user wants to set aside per month, keyed by "YYYY-M" (M is the
     // 0-based month). Reserved before the spendable daily budget is calculated.
     //

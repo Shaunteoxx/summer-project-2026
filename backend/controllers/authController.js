@@ -621,9 +621,15 @@ export async function getHomeStats(req, res) {
   // spend, so the headline matches the daily-budget model.
   const periodSavings = roundMoney(active?.savings ?? 0);
 
-  // "Left to spend" = income this period minus expenses so far minus the
+  // In term mode the window's money is its slice of the lump sum, not the
+  // income that happens to have landed inside it — which for every cycle after
+  // the first is none. Null everywhere else, so nothing changes there.
+  const periodFunding = active?.funding ?? null;
+  const budget = periodFunding ?? income;
+
+  // "Left to spend" = the window's money minus expenses so far minus the
   // savings set aside. Can go negative if you've overspent your target.
-  const leftToSpend = roundMoney(income - expenses - periodSavings);
+  const leftToSpend = roundMoney(budget - expenses - periodSavings);
 
   res.json({
     username: req.user.username,
@@ -636,14 +642,18 @@ export async function getHomeStats(req, res) {
           end: active.end,
           days: active.days,
           daysLeft: daysLeftInPeriod(todayKey, active),
+          // Term mode only: which cycle of the term this is, for "month 2 of 6".
+          cycle: active.index === undefined ? null : active.index + 1,
+          cycles: active.cycles ?? null,
         }
       : null,
     periodIncome: income,
+    periodFunding,
     periodExpenses: expenses,
     periodSavings,
     leftToSpend,
     totalSavings,
     percentageSaved:
-      income > 0 ? Math.round(((income - expenses) / income) * 100) : 0,
+      budget > 0 ? Math.round(((budget - expenses) / budget) * 100) : 0,
   });
 }

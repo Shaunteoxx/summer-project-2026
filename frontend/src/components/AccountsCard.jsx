@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAccountTotals } from "@/api/endpoints";
 import { useAccounts } from "@/hooks/useAccounts";
 import { formatMoney, localToday } from "@/lib/utils";
+import { formatPeriodLabel } from "@/lib/period";
 import { fadeUp } from "@/animations/variants";
 
 /**
@@ -78,6 +79,16 @@ export default function AccountsCard({ onTransfer = null }) {
 
   // Summed from the rows on screen rather than taken from the API, so the Total
   // line always equals what's directly above it.
+  // Term mode: this month's share of a lump sum that has to last several.
+  //
+  // Deliberately NOT a row in the list. In the month the money actually arrives
+  // it is already in an account, so a row would show it twice — $6,000 in from
+  // DBS plus $1,000 "from your allowance", totalling $7,000 that never existed.
+  // The columns stay what they say they are, money that moved, and the sentence
+  // under the Total does the reconciling — which is what it already does for
+  // the savings reserve.
+  const funding = data.period.funding ?? null;
+
   const shown = [...rows, ...(unassigned ? [unassigned] : [])];
   const totalIn = round(shown.reduce((n, a) => n + a.in, 0));
   const totalOut = round(shown.reduce((n, a) => n + a.out, 0));
@@ -87,7 +98,15 @@ export default function AccountsCard({ onTransfer = null }) {
       <Card>
         <CardContent className="p-[18px]">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-title">Account Activity</h2>
+            <div className="min-w-0">
+              <h2 className="text-title">Account Activity</h2>
+              {/* The card is a set of sums over one window and never says
+                  which, and it sits far enough down the page that the heading
+                  naming the month has scrolled away. */}
+              <p className="mt-0.5 text-[12px] text-ink-3">
+                {formatPeriodLabel(data.period)}
+              </p>
+            </div>
             {/* Transfers move money between the accounts listed right below,
                 so this is where the action belongs — it used to be a
                 full-width button competing with adding a transaction, which
@@ -135,6 +154,13 @@ export default function AccountsCard({ onTransfer = null }) {
 
           {/* One sentence instead of three reconciliation rows. */}
           <p className="mt-3 border-t border-hairline pt-3 text-[11.5px] leading-relaxed text-ink-3">
+            {funding != null && (
+              <>
+                Your allowance gives you{" "}
+                <b className="font-medium text-ink-2">{formatMoney(funding)}</b> this
+                month.{" "}
+              </>
+            )}
             Minus {formatMoney(totals.reserved)} for savings,{" "}
             {overspent ? (
               <>

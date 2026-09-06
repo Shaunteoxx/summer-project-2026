@@ -67,7 +67,9 @@ export default function PlanPage() {
   // day-of-month, but measured against the period rather than the calendar.
   const dayOfPeriod = periodDays - daysLeft + 1;
 
-  const income = stats?.periodIncome ?? 0;
+  // A term cycle is funded from the lump sum rather than by income logged
+  // inside it; all four planners divide by this.
+  const income = stats?.periodFunding ?? stats?.periodIncome ?? 0;
   const spentSoFar = stats?.periodExpenses ?? 0;
   const savings = stats?.periodSavings ?? 0;
   const todayBudget = streak?.today?.budget ?? 0;
