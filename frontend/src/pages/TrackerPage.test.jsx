@@ -146,7 +146,9 @@ describe("a term cycle", () => {
     expect(screen.getByText("Jul")).toBeInTheDocument();
     expect(screen.getByText("$797.56")).toBeInTheDocument();
     expect(screen.getByText("$852.68")).toBeInTheDocument();
-    expect(screen.getAllByText("$1,272.25").length).toBe(4); // Sep + Oct/Nov/Dec
+    // Sep + Oct/Nov/Dec in the grid, plus the donut card's total row — the
+    // month's share is what its Unspent and Spent add up to.
+    expect(screen.getAllByText("$1,272.25").length).toBe(5);
     expect(screen.getByText(/Dashed months are at this month/)).toBeInTheDocument();
   });
 
@@ -177,7 +179,31 @@ describe("a term cycle", () => {
     expect(screen.getByText("Month 3 of 6")).toBeInTheDocument();
     expect(screen.getByText("$4,979.49")).toBeInTheDocument();
     expect(screen.getByText(/left of \$6,985\.33/)).toBeInTheDocument();
-    expect(screen.getByText(/3 months to go after this one/)).toBeInTheDocument();
+  });
+
+  it("keeps the term caption to one line", async () => {
+    await show();
+    // "with 3 months to go after this one" is what the "Month 3 of 6" chip
+    // five lines above already says, and it was what wrapped the line.
+    expect(screen.getByText("$2,005.84 spent since it started.")).toBeInTheDocument();
+    expect(screen.queryByText(/months to go/)).not.toBeInTheDocument();
+  });
+
+  it("marks the last month on the chip the months-to-go line used to", async () => {
+    mockPeriod = { ...termPeriod() };
+    mockPeriod.current = { ...termPeriod().current, cycle: 6, cycles: 6 };
+    await show();
+    expect(screen.getByText(/Month 6 of 6 · last/)).toBeInTheDocument();
+  });
+
+  it("prints the denominator the ring and the tiles are percentages of", async () => {
+    await show();
+    // The ring reads "% Unspent" and the tiles read "% of allowance"; without
+    // this row the month's share appeared nowhere on the card, and in term
+    // mode nowhere else on the page either — the allowance card below covers
+    // the whole term, not the month drawn from it.
+    expect(screen.getByText("Allowance")).toBeInTheDocument();
+    expect(screen.queryByText("Income")).not.toBeInTheDocument();
   });
 
   it("names the breakdown tiles for the window they cover", async () => {

@@ -152,34 +152,64 @@ export default function AccountsCard({ onTransfer = null }) {
             </span>
           </div>
 
-          {/* One sentence instead of three reconciliation rows. */}
-          <p className="mt-3 border-t border-hairline pt-3 text-[11.5px] leading-relaxed text-ink-3">
-            {funding != null && (
-              <>
-                Your allowance gives you{" "}
-                <b className="font-medium text-ink-2">{formatMoney(funding)}</b> this
-                month.{" "}
-              </>
-            )}
-            Minus {formatMoney(totals.reserved)} for savings,{" "}
-            {overspent ? (
-              <>
-                you&apos;re{" "}
-                <b className="font-semibold text-negative">
-                  {formatMoney(Math.abs(totals.leftToSpend))}
-                </b>{" "}
-                past this period&apos;s budget.
-              </>
-            ) : (
-              <>
-                that&apos;s {" "}
-                <b className="font-medium text-ink-2">
-                  {formatMoney(totals.leftToSpend)}
-                </b>{" "}
-                left to spend.
-              </>
-            )}
-          </p>
+          {/* Term mode only, and its job is to reconcile the columns rather
+              than to restate the budget. In a cycle after the first nothing
+              came in through an account, so "Total In $0.00" sits above a month
+              that nonetheless has money to spend — that is the one thing this
+              card cannot explain on its own. Outside term mode there is nothing
+              to reconcile (Total In is the income, Total Out the spending) and
+              Home already carries all three figures — the Allowance/In strip
+              cell, Reserved, and leftToSpend as its hero — so the sentence was
+              three duplicated numbers and it is gone.
+
+              It also now states the whole subtraction. It used to narrate
+              funding − reserved and then print leftToSpend, which is
+              funding − reserved − spent: "$1,000.00 … minus $200.00 … that's
+              $352.00". The missing term was the spending in the Out column
+              directly above it.
+
+              Spending comes from totals.spent, not the Out total: Out includes
+              transfers between the user's own accounts, which cancel across
+              rows and never touched the budget. The two agree whenever there
+              were no transfers, which is most of the time.
+
+              The first clause has two versions because the term's first cycle
+              is not like the rest: the lump sum lands *in* it, so it really is
+              in the In column above and "it arrived earlier" would be a lie
+              about a figure the reader can see. From the second cycle on
+              nothing comes in, which is the case that needed explaining. */}
+          {funding != null && (
+            <p className="mt-3 border-t border-hairline pt-3 text-[11.5px] leading-relaxed text-ink-3">
+              <b className="font-medium text-ink-2">{formatMoney(funding)}</b>{" "}
+              {totals.income > 0 ? (
+                <>of what came in is this month&apos;s share of your allowance.</>
+              ) : (
+                <>
+                  of your allowance is this month&apos;s — it arrived earlier, so
+                  it isn&apos;t in the In column.
+                </>
+              )}{" "}
+              Less {formatMoney(totals.reserved)} reserved and{" "}
+              {formatMoney(totals.spent)} spent,{" "}
+              {overspent ? (
+                <>
+                  you&apos;re{" "}
+                  <b className="font-semibold text-negative">
+                    {formatMoney(Math.abs(totals.leftToSpend))}
+                  </b>{" "}
+                  past this month&apos;s budget.
+                </>
+              ) : (
+                <>
+                  that&apos;s{" "}
+                  <b className="font-medium text-ink-2">
+                    {formatMoney(totals.leftToSpend)}
+                  </b>{" "}
+                  left to spend.
+                </>
+              )}
+            </p>
+          )}
         </CardContent>
       </Card>
     </motion.div>

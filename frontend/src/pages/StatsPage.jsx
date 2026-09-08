@@ -19,6 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAllSummaries, fetchTransactions } from "@/api/endpoints";
 import { monthName, formatMoney, localToday, LOCALE } from "@/lib/utils";
+import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useToast } from "@/hooks/useToast";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
@@ -58,8 +59,41 @@ function calendarSpan(summaries, today) {
   return { start: capped ? floor : first, end: today, capped };
 }
 
+/** A summary row's month as the "YYYY-MM" key the cycle list is grouped by. */
+const monthKey = (s) => `${s.year}-${String(s.month + 1).padStart(2, "0")}`;
+
+/** Last day of the calendar month a "YYYY-MM-DD" starts, in UTC. */
+function lastDayOfMonth(ymd) {
+  const year = Number(ymd.slice(0, 4));
+  const month = Number(ymd.slice(5, 7));
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
+/**
+ * `"YYYY-MM" -> what that month's share of an allowance was`, from the budget
+ * period's cycle list.
+ *
+ * Only whole calendar months are taken. A term that starts mid-month has a
+ * first cycle covering, say, 15–31 July while the summary row for July covers
+ * all of it — charging the share against the whole month's spending would
+ * count purchases made before the term began. That month keeps its own income,
+ * which is where the lump sum usually landed anyway.
+ */
+function fundingByMonth(history = []) {
+  const map = new Map();
+  for (const cycle of history) {
+    if (cycle?.funding == null || !cycle.start?.endsWith("-01")) continue;
+    if (cycle.end !== lastDayOfMonth(cycle.start)) continue;
+    map.set(cycle.start.slice(0, 7), cycle.funding);
+  }
+  return map;
+}
+
+const round = (n) => Math.round(n * 100) / 100;
+
 export default function StatsPage() {
   const colors = useChartColors();
+  const budgetPeriod = useBudgetPeriod();
   const toast = useToast();
   const [summaries, setSummaries] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -96,10 +130,62 @@ export default function StatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const data = summaries.map((s) => ({
-    label: `${monthName(s.month).slice(0, 3)} ${String(s.year).slice(2)}`,
-    Saved: Math.max(s.totalSaved, 0),
-    Spent: s.totalExpenses,
+  // This list includes the month currently running, and that row is not like
+  // the others: its rate divides money not yet spent by the month's budget, so
+  // on day 2 it reads ~97%. For a finished month that figure is a real savings
+  // rate; for this one it's a rate that will fall every time the reader buys
+  // lunch. Same wording as Home and Tracker — "unspent so far", not "saved" —
+  // so the one in-progress row stops claiming to be an outcome.
+  const [todayYear, todayMonth] = (() => {
+    const d = localToday().split("-");
+    return [Number(d[0]), Number(d[1]) - 1];
+  })();
+  const isRunningMonth = (s) => s.year === todayYear && s.month === todayMonth;
+
+  // A term pays for several months out of one lump sum, so every month after
+  // the one it landed in has no income of its own. Read straight off
+  // /summary/all — which is transaction-only and has never heard of terms —
+  // those months each showed a large red deficit for spending that was funded
+  // all along, and the month the money arrived showed a saving that was really
+  // five other months' worth.
+  //
+  // /api/period already prices each cycle and is in context app-wide, so the
+  // fix is a join here rather than term-awareness inside an aggregate that
+  // lifetime savings and the friends leaderboard also run on.
+  const funded = fundingByMonth(budgetPeriod.history);
+
+  // One shape for the three places that judge a month: the rows, the chart and
+  // the Per Month average. `budget` is what the month had to spend — its share
+  // of an allowance where there is one, its own income otherwise — which is
+  // the same figure Home and Tracker show for that month.
+  const months = summaries.map((s) => {
+    const funding = funded.get(monthKey(s)) ?? null;
+    const budget = funding ?? s.totalIncome;
+    const saved = round(budget - s.totalExpenses);
+    return {
+      ...s,
+      funding,
+      budget,
+      saved,
+      // Cycles of a *finished* term come back unpriced: loadPeriodContext only
+      // costs the term containing today. So a month can be known to belong to
+      // a term without its share being known. Say that, rather than printing a
+      // deficit the reader never had. Outside term mode a month with spending
+      // and no income really is a deficit, and keeps its red figure.
+      unpriced:
+        funding == null && s.totalIncome === 0 && budgetPeriod.mode === "term",
+      percent: budget > 0 ? Math.round((saved / budget) * 100) : 0,
+    };
+  });
+
+  // Months whose figures mean something. An unpriced one would otherwise enter
+  // the average as a flat 0%, which is not a bad month — it's an unknown one.
+  const judged = months.filter((m) => !m.unpriced);
+
+  const data = months.map((m) => ({
+    label: `${monthName(m.month).slice(0, 3)} ${String(m.year).slice(2)}`,
+    Saved: Math.max(m.saved, 0),
+    Spent: m.totalExpenses,
   }));
 
   // Headline insights across the tracked history.
@@ -108,22 +194,20 @@ export default function StatsPage() {
   // weighs as much as a $2,000 one. Deliberately not the same number as the
   // all-time rate below, which is why they're labelled apart.
   //
-  // `percentageSaved` divides by income. That's defensible for the finished
-  // months this average is mostly made of, and it's the figure the backend
-  // has always returned, so it stays.
+  // Each rate divides by that month's budget, which is its income in month and
+  // days mode and its share of the allowance in term mode. Reading income for
+  // every month made this tile meaningless under a term — the mean of one 85%
+  // month and five 0% ones — because five of the six had no income to divide
+  // by. It is the same number as before wherever no allowance is in play.
   //
   // But be honest about the edge: this list includes the *running* month, and
   // its row reads "77% saved" on day 18 for the same reason Home's tile used
   // to — most of that money is still earmarked. Home now derives "Unspent So
-  // Far" from its budget-denominated pace bar instead. Don't "fix" Stats to
-  // match Home: for a history view the income denominator is the right one,
-  // and the two answer different questions. The open question is whether the
-  // in-progress row should be labelled apart from the finished ones.
-  const avgSavingsRate = monthsTracked
-    ? Math.round(
-        summaries.reduce((acc, s) => acc + (s.percentageSaved ?? 0), 0) /
-          monthsTracked
-      )
+  // Far" from its budget-denominated pace bar instead. The open question is
+  // whether the in-progress row should be labelled apart from the finished
+  // ones.
+  const avgSavingsRate = judged.length
+    ? Math.round(judged.reduce((acc, m) => acc + m.percent, 0) / judged.length)
     : 0;
 
   const lifetime = summaries.reduce(
@@ -142,18 +226,6 @@ export default function StatsPage() {
 
   const historySpan = calendarSpan(summaries, localToday());
 
-  // This list includes the month currently running, and that row is not like
-  // the others: its `percentageSaved` divides money not yet spent by income,
-  // so on day 2 it reads ~97%. For a finished month that figure is a real
-  // savings rate; for this one it's a rate that will fall every time the
-  // reader buys lunch. Same wording as Home and Tracker — "unspent so far",
-  // not "saved" — so the one in-progress row stops claiming to be an outcome.
-  const [todayYear, todayMonth] = (() => {
-    const d = localToday().split("-");
-    return [Number(d[0]), Number(d[1]) - 1];
-  })();
-  const isRunningMonth = (s) => s.year === todayYear && s.month === todayMonth;
-
   // The all-time totals sum that same partial month in, which matters most for
   // the reader who can least afford it: with one month tracked, "Total Saved"
   // *is* the running month and reads like an achievement on day 2. The share
@@ -169,7 +241,7 @@ export default function StatsPage() {
 
   // Summaries arrive oldest-first; show the breakdown newest-first, collapsed
   // to the most recent few until the user asks to see all months.
-  const monthsNewestFirst = [...summaries].reverse();
+  const monthsNewestFirst = [...months].reverse();
   const visibleMonths = showAllMonths
     ? monthsNewestFirst
     : monthsNewestFirst.slice(0, COLLAPSED_COUNT);
@@ -367,26 +439,32 @@ export default function StatsPage() {
 
           {/* Per-month breakdown */}
           <motion.div variants={fadeUp} initial="initial" animate="animate">
-            <h2 className="px-0.5 text-overline text-ink-3">Monthly breakdown</h2>
-            {/* Named once here rather than on every row, which would repeat the
-                same four words a dozen times down a narrow column.
-                Worth naming at all because Home, Tracker and the leaderboard
-                divide by the window's *budget* while these rows divide by the
-                month's income — for a term cycle funded by an earlier lump sum
-                those are different numbers for the same month, and without the
-                denominator on screen they just look like a contradiction. */}
-            <p className="mb-2.5 px-0.5 text-[11.5px] text-ink-3">
-              Percentages are of that month&apos;s income.
+            {/* A heading, not an overline. It's the last section of a long
+                page and the only one that isn't self-titling — the chart and
+                the calendar both head themselves — so at 11px grey it read as
+                a caption on the card above it. text-title matches Account
+                Activity, the app's other card-external section heading, and
+                title case follows from no longer being CSS-uppercased. */}
+            <h2 className="px-0.5 text-title">Monthly Breakdown</h2>
+            {/* Named once here rather than on every row, which would repeat
+                the same words a dozen times down a narrow column. Worth naming
+                at all because the denominator isn't the same for every row: a
+                month funded by a lump sum banked earlier divides by its share
+                of that allowance, which is what Home and Tracker show for it,
+                while an ordinary month divides by the income it took in. */}
+            <p className="mb-2.5 mt-0.5 px-0.5 text-[12px] text-ink-3">
+              Percentages are of that month&apos;s income, or of its share of an
+              allowance.
             </p>
             <Card>
               <CardContent className="p-2">
                 <ul>
                   <AnimatePresence initial={false}>
-                    {visibleMonths.map((s) => {
-                      const positive = s.totalSaved >= 0;
+                    {visibleMonths.map((m) => {
+                      const positive = m.saved >= 0;
                       return (
                         <motion.li
-                          key={`${s.year}-${s.month}`}
+                          key={`${m.year}-${m.month}`}
                           layout
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: "auto" }}
@@ -396,35 +474,72 @@ export default function StatsPage() {
                         >
                           <div className="min-w-0">
                             <p className="text-[15px] font-medium tracking-[-0.01em]">
-                              {monthName(s.month)} {s.year}
+                              {monthName(m.month)} {m.year}
                             </p>
                             <p className="num mt-0.5 text-meta text-ink-3">
-                              +{formatMoney(s.totalIncome)} in · −
-                              {formatMoney(s.totalExpenses)} out
+                              {/* A funded month names its share rather than the
+                                  income it never took in: from the second cycle
+                                  on, "+$0.00 in" was true and useless.
+
+                                  Each half is one unbreakable unit. Left to
+                                  itself the line broke after the minus sign at
+                                  320px — "· −" ending one line and "$1,256.14
+                                  out" starting the next — which reads as a
+                                  stray dash rather than as a negative amount.
+                                  The separator trails the first half rather
+                                  than leading the second, so a wrap leaves
+                                  "… allowance ·" and starts the new line on
+                                  the amount. */}
+                              <span className="whitespace-nowrap">
+                                {m.funding != null
+                                  ? `${formatMoney(m.funding)} allowance`
+                                  : `+${formatMoney(m.totalIncome)} in`}{" "}
+                                ·
+                              </span>{" "}
+                              <span className="whitespace-nowrap">
+                                −{formatMoney(m.totalExpenses)} out
+                              </span>
                             </p>
                           </div>
                           <div className="shrink-0 text-right">
-                            <p
-                              className={`num text-[15px] font-medium ${
-                                positive ? "text-positive" : "text-negative"
-                              }`}
-                            >
-                              {positive ? "+" : "−"}
-                              {formatMoney(Math.abs(s.totalSaved))}
-                            </p>
-                            <p className="num mt-0.5 text-meta text-ink-3">
-                              {/* percentageSaved divides by income, so a month
-                                  that had none reads "0% saved" — which looks
-                                  like a wipe-out when the spending was simply
-                                  funded before it. State the fact rather than
-                                  the artefact; naming *where* the money came
-                                  from would be a guess this view can't make. */}
-                              {s.totalIncome === 0
-                                ? "No income logged"
-                                : `${s.percentageSaved}% ${
-                                    isRunningMonth(s) ? "unspent so far" : "saved"
+                            {/* A month inside a term whose share we can't price
+                                — see `unpriced` above. A red deficit would be
+                                the artefact of an allowance this view can't
+                                see, so state what is actually known. */}
+                            {m.unpriced ? (
+                              <p className="text-meta text-ink-3">
+                                From your allowance
+                              </p>
+                            ) : (
+                              <>
+                                <p
+                                  className={`num text-[15px] font-medium ${
+                                    positive ? "text-positive" : "text-negative"
                                   }`}
-                            </p>
+                                >
+                                  {positive ? "+" : "−"}
+                                  {formatMoney(Math.abs(m.saved))}
+                                </p>
+                                <p className="num mt-0.5 text-meta text-ink-3">
+                                  {/* Three readings, because one sentence
+                                      can't carry them. Nothing to divide by is
+                                      a fact, not a 0% wipe-out. A month that
+                                      went past its budget is "47% over", not
+                                      "−47% saved" — a negative quantity of
+                                      saving is not a thing, and judging months
+                                      against a share rather than against
+                                      income makes an overspend a normal
+                                      outcome rather than a rarity. */}
+                                  {m.budget === 0
+                                    ? "No income logged"
+                                    : positive
+                                      ? `${m.percent}% ${
+                                          isRunningMonth(m) ? "unspent so far" : "saved"
+                                        }`
+                                      : `${Math.abs(m.percent)}% over`}
+                                </p>
+                              </>
+                            )}
                           </div>
                         </motion.li>
                       );

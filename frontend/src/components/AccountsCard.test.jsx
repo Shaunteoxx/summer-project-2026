@@ -7,6 +7,11 @@
 // Second, it still reconciles. Total In − Total Out − the savings reserve is
 // the same "left to spend" the budget is built from — transfers cancel across
 // accounts, so including them in the columns doesn't break the arithmetic.
+//
+// Third, the sentence under the Total is term mode's alone. Its job is to
+// explain a "Total In $0.00" sitting above a month that still has money, which
+// only happens when the money was banked in an earlier cycle. Everywhere else
+// the columns need no explaining and Home already carries all three figures.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
@@ -97,31 +102,23 @@ describe("account activity", () => {
     expect(cellsFor("Total")).toEqual(["$1,200.00", "$848.00"]);
   });
 
-  it("totals what is on screen, and reconciles to left-to-spend", async () => {
+  it("totals what is on screen", async () => {
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Total")).toBeInTheDocument());
 
     expect(cellsFor("Total")).toEqual(["$800.00", "$448.00"]);
-    // 800 − 448 = 352, less the 200 reserve, leaves 152.
-    expect(screen.getByText(/Minus \$200\.00 for savings/)).toBeInTheDocument();
-    expect(screen.getByText("$152.00")).toBeInTheDocument();
   });
 
-  it("says how far past you are when the period is overspent", async () => {
-    fetchAccountTotals.mockResolvedValue(
-      payload({
-        accounts: [
-          account({ id: "a1", name: "Trust", spent: 700 }),
-          account({ id: "a2", name: "DBS", income: 800 }),
-        ],
-        totals: { income: 800, spent: 700, net: 100, reserved: 200, leftToSpend: -100 },
-      })
-    );
+  it("leaves the budget to Home when nothing needs reconciling", async () => {
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Total")).toBeInTheDocument());
 
-    expect(screen.getByText(/past this period's budget/)).toBeInTheDocument();
-    expect(screen.getByText("$100.00")).toBeInTheDocument();
+    // Total In is the income and Total Out the spending, so the columns speak
+    // for themselves. The sentence that used to sit here restated the reserve
+    // and left-to-spend, both of which Home already shows.
+    expect(screen.queryByText(/for savings/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/left to spend/)).not.toBeInTheDocument();
+    expect(screen.queryByText("$152.00")).not.toBeInTheDocument();
   });
 
   it("keeps untagged rows visible so the arithmetic still ties out", async () => {
@@ -219,9 +216,65 @@ describe("a funded term cycle", () => {
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
 
-    expect(screen.getByText(/Your allowance gives you/)).toBeInTheDocument();
+    expect(screen.getByText(/of your allowance is this month's/)).toBeInTheDocument();
     expect(screen.getByText("$1,000.00")).toBeInTheDocument();
-    expect(screen.getByText(/left to spend/)).toBeInTheDocument();
+    expect(screen.getByText(/isn't in the In column/)).toBeInTheDocument();
+  });
+
+  it("states the whole subtraction, not two thirds of it", async () => {
+    fetchAccountTotals.mockResolvedValue(funded());
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+
+    // It used to narrate $1,000 less $200 and then announce $352, leaving the
+    // reader to find the missing $448 in the Out column above.
+    expect(
+      screen.getByText(/Less \$200\.00 reserved and \$448\.00 spent/)
+    ).toBeInTheDocument();
+    expect(screen.getByText("$352.00")).toBeInTheDocument();
+  });
+
+  it("says how far past you are when the cycle is overspent", async () => {
+    fetchAccountTotals.mockResolvedValue(
+      funded({
+        accounts: [
+          account({ id: "a1", name: "Trust", spent: 900 }),
+          account({ id: "a2", name: "DBS", color: "#1290CC" }),
+        ],
+        totals: {
+          income: 0,
+          spent: 900,
+          funding: 1000,
+          net: -900,
+          reserved: 200,
+          leftToSpend: -100,
+        },
+      })
+    );
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+
+    expect(screen.getByText(/past this month's budget/)).toBeInTheDocument();
+    expect(screen.getByText("$100.00")).toBeInTheDocument();
+  });
+
+  it("counts spending, not the Out column, when transfers moved money", async () => {
+    // Out includes transfers between the user's own accounts. They cancel and
+    // never touched the budget, so quoting the Out total here would announce a
+    // subtraction that doesn't reach leftToSpend.
+    fetchAccountTotals.mockResolvedValue(
+      funded({
+        accounts: [
+          account({ id: "a1", name: "Trust", spent: 448, transfersOut: 300 }),
+          account({ id: "a2", name: "DBS", color: "#1290CC", transfersIn: 300 }),
+        ],
+      })
+    );
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+
+    expect(cellsFor("Total")).toEqual(["$300.00", "$748.00"]);
+    expect(screen.getByText(/and \$448\.00 spent/)).toBeInTheDocument();
   });
 
   it("keeps the Total equal to the account rows, not the allowance", async () => {
@@ -255,12 +308,41 @@ describe("a funded term cycle", () => {
     expect(cellsFor("Total")).toEqual(["$6,000.00", "$448.00"]);
   });
 
+  it("doesn't claim the money arrived earlier in the month it arrived", async () => {
+    // Cycle one is the exception: the lump sum is right there in the In
+    // column, so "it isn't in the In column" would be a lie about a figure
+    // the reader can see three rows above.
+    fetchAccountTotals.mockResolvedValue(
+      funded({
+        accounts: [
+          account({ id: "a1", name: "Trust", spent: 448 }),
+          account({ id: "a2", name: "DBS", color: "#1290CC", income: 6000 }),
+        ],
+        totals: {
+          income: 6000, spent: 448, funding: 1000,
+          net: 5552, reserved: 200, leftToSpend: 352,
+        },
+      })
+    );
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+
+    expect(
+      screen.getByText(/of what came in is this month's share of your allowance/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/it arrived earlier/)).not.toBeInTheDocument();
+    // The subtraction is the same either way.
+    expect(
+      screen.getByText(/Less \$200\.00 reserved and \$448\.00 spent/)
+    ).toBeInTheDocument();
+  });
+
   it("says nothing about an allowance outside term mode", async () => {
     fetchAccountTotals.mockResolvedValue(payload());
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
 
-    expect(screen.queryByText(/Your allowance gives you/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/allowance/)).not.toBeInTheDocument();
   });
 });
 

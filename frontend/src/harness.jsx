@@ -38,7 +38,7 @@ import { BudgetPeriodProvider } from "./hooks/useBudgetPeriod.jsx";
 import AmountCalculator from "./components/AmountCalculator.jsx";
 import SwitchRow from "./components/SwitchRow.jsx";
 import { LensTab, StatTile } from "./pages/StatsPage.jsx";
-import { SavedVsSpentCard, CategoryCard } from "./pages/TrackerPage.jsx";
+import { SavedVsSpentCard, CategoryCard, TermCard } from "./pages/TrackerPage.jsx";
 import {
   DynamicDailyHero,
   WhatIfCard,
@@ -188,6 +188,46 @@ function useViewportReadout() {
       document.body.dataset.viewport = `${window.innerWidth}x${window.innerHeight}`;
     };
     publish();
+    window.addEventListener("resize", publish);
+    return () => window.removeEventListener("resize", publish);
+  }, []);
+}
+
+/**
+ * Publish how many lines each `[data-measure]` element actually wrapped onto,
+ * as `body[data-lines="name:1,other:3"]`.
+ *
+ * A Range over the element's contents returns one client rect per rendered
+ * line, so this is the browser's own answer rather than height divided by an
+ * assumed line-height. It exists because "does this copy fit on one line?" is
+ * the one question the test suite cannot answer — jsdom has no layout — and
+ * eyeballing a screenshot is how you end up confidently wrong about a caption
+ * that wraps only at 320px.
+ */
+function useLineReadout() {
+  useEffect(() => {
+    const publish = () => {
+      const parts = [...document.querySelectorAll("[data-measure]")].map((el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        // One rect per contiguous box, not per line: JSX splits a sentence
+        // with an interpolation in it into several text nodes, and each gets
+        // its own rect on the same line. Rects that share a top edge are one
+        // line, so count the distinct edges.
+        const tops = new Set(
+          [...range.getClientRects()].map((r) => Math.round(r.top))
+        );
+        // Also the box's left edge, which is how a wrap shows up: an element
+        // that dropped below its neighbour starts back at the container edge.
+        const box = el.getBoundingClientRect();
+        return `${el.dataset.measure}:${tops.size}@${Math.round(box.left)}`;
+      });
+      document.body.dataset.lines = parts.join(",");
+    };
+    // After paint, and again after fonts land — Inter arriving late changes
+    // every width on the page.
+    publish();
+    document.fonts?.ready.then(publish);
     window.addEventListener("resize", publish);
     return () => window.removeEventListener("resize", publish);
   }, []);
@@ -512,6 +552,8 @@ function TrackerView() {
         percentageSaved={empty ? 0 : 77}
         hasData={!empty}
         colors={colors}
+        total={empty ? 0 : saved + spent}
+        totalLabel="Income"
         footnote={empty ? null : "Goal: set aside $300.00 this month"}
       />
       <Providers>
@@ -1008,6 +1050,45 @@ function HeroView() {
   );
 }
 
+/**
+ * The term cards, for the two things about them that only layout can answer:
+ * whether the caption under the bar still fits on one line, and whether the
+ * donut card's total row survives a narrow phone.
+ *
+ * `?funded=1` puts the donut in term mode, where the total row's label is the
+ * longer of the two words it can carry.
+ */
+function TermView() {
+  const colors = useChartColors();
+  const funded = params.get("funded") === "1";
+  const term = { start: "2026-07-01", end: "2026-12-31", income: 6985.33, spent: 2005.84, left: 4979.49 };
+  const current = { start: "2026-09-01", cycle: Number(params.get("cycle") || 3), cycles: 6, funding: 1272.25 };
+  const cycles = [
+    { start: "2026-07-01", funding: 797.56 },
+    { start: "2026-08-01", funding: 852.68 },
+    { start: "2026-09-01", funding: 1272.25 },
+    { start: "2026-10-01", funding: null },
+    { start: "2026-11-01", funding: null },
+    { start: "2026-12-01", funding: null },
+  ];
+
+  return (
+    <div className="mx-auto w-full max-w-app space-y-3 p-4">
+      <SavedVsSpentCard
+        saved={1162.75}
+        spent={109.5}
+        percentageSaved={91}
+        hasData
+        colors={colors}
+        total={params.get("total") === "none" ? null : funded ? 1272.25 : 1240}
+        totalLabel={funded ? "Allowance" : "Income"}
+        footnote="Goal: set aside $300.00 this month"
+      />
+      <TermCard term={term} current={current} cycles={cycles} />
+    </div>
+  );
+}
+
 const VIEWS = {
   calculator: () => (
     <BottomSheet open onClose={() => {}} title="Calculator" closeLabel="Back to form">
@@ -1024,6 +1105,7 @@ const VIEWS = {
   keyboard: KeyboardView,
   ledger: LedgerView,
   tracker: TrackerView,
+  term: TermView,
   plan: PlanView,
   more: MoreView,
   recurring: RecurringView,
@@ -1036,6 +1118,7 @@ const VIEWS = {
 function Harness() {
   useViewportReadout();
   useScriptedPresses();
+  useLineReadout();
 
   const View = VIEWS[view];
   if (!View) {

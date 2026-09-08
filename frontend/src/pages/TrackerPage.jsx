@@ -230,6 +230,8 @@ export default function TrackerPage() {
               percentageSaved={percentageSaved}
               hasData={hasData}
               colors={colors}
+              total={income}
+              totalLabel={budgetNoun === "allowance" ? "Allowance" : "Income"}
               footnote={
                 periodSavings > 0
                   ? `Goal: set aside ${formatMoney(periodSavings)} this ${budgetPeriod.noun}`
@@ -343,6 +345,8 @@ export function SavedVsSpentCard({
   hasData,
   colors,
   footnote,
+  total = null,
+  totalLabel = "Income",
 }) {
   // Recharts sweeps a donut in by interpolating each sector's angle from zero,
   // and it does not consult prefers-reduced-motion the way the rest of the app
@@ -443,6 +447,42 @@ export function SavedVsSpentCard({
                   </dd>
                 </Fragment>
               ))}
+              {/* The denominator, printed. The ring reads "77% Unspent" and
+                  the two tiles at the foot of the page read "% of allowance" —
+                  three percentages whose base appeared nowhere on the card. In
+                  month mode you could add the two figures above yourself; in
+                  term mode you couldn't get it anywhere on this page at all,
+                  since the allowance card below is the whole term, not the
+                  month's share of it.
+
+                  A total, not a third headline: 15px and ink-2, under a rule,
+                  so it reads as the figure the two above sum to. The label is
+                  one word for the reason the two above are — the comment on
+                  the padding records what happened when this card's contents
+                  grew — and it swaps with the mode, because "Income" is a lie
+                  in a cycle funded by a lump sum banked months ago. */}
+              {total != null && (
+                <>
+                  <div
+                    className="col-span-2 mt-2 border-t border-hairline"
+                    aria-hidden="true"
+                  />
+                  <dt className="flex items-center gap-2">
+                    {/* Holds the swatch column open so all three labels line
+                        up; the total isn't a slice, so it has no colour. */}
+                    <span className="h-[9px] w-[9px] shrink-0" aria-hidden="true" />
+                    <span
+                      data-measure="donut-total-label"
+                      className="truncate text-meta text-ink-3"
+                    >
+                      {totalLabel}
+                    </span>
+                  </dt>
+                  <dd className="num text-right text-[15px] font-medium text-ink-2">
+                    <AnimatedNumber value={total} prefix="$" decimals={2} />
+                  </dd>
+                </>
+              )}
             </dl>
               {/* The goal sits under the two figures it relates to rather than
                   full-width beneath the ring, where it read as a footnote to
@@ -582,7 +622,7 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
  * rings side by side invite you to compare figures that are measured over
  * different spans.
  */
-function TermCard({ term, current, cycles = [] }) {
+export function TermCard({ term, current, cycles = [] }) {
   const income = term.income ?? 0;
   const spent = term.spent ?? 0;
   const left = term.left ?? 0;
@@ -622,6 +662,7 @@ function TermCard({ term, current, cycles = [] }) {
           </h2>
           <span className="shrink-0 text-meta text-ink-3">
             Month {current.cycle} of {current.cycles}
+            {monthsLeft === 0 && " · last"}
           </span>
         </div>
         <p className="mt-0.5 text-[12px] text-ink-3">
@@ -651,11 +692,18 @@ function TermCard({ term, current, cycles = [] }) {
           />
         </div>
 
-        <p className="mt-2.5 text-[11.5px] leading-relaxed text-ink-3">
-          {formatMoney(spent)} spent since it started
-          {monthsLeft > 0
-            ? `, with ${monthsLeft} month${monthsLeft === 1 ? "" : "s"} to go after this one.`
-            : " — this is the last month."}
+        {/* Just the figure. The tail used to add "with 3 months to go after
+            this one", which is the same fact as the "Month 3 of 6" chip five
+            lines above — and it was what pushed this line to two. The last
+            month's emphasis moved up into that chip rather than being lost. */}
+        {/* data-measure: this line has to fit on one, and jsdom has no layout
+            to prove it. The harness publishes the rendered line count, so the
+            constraint is checkable instead of eyeballed. */}
+        <p
+          data-measure="term-caption"
+          className="mt-2.5 text-[11.5px] leading-relaxed text-ink-3"
+        >
+          {formatMoney(spent)} spent since it started.
         </p>
 
         {months.length > 0 && (

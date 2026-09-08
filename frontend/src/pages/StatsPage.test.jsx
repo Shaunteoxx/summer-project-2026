@@ -37,6 +37,15 @@ vi.mock("@/hooks/useToast", () => ({
 // the labelling, so take the animation out of it altogether.
 vi.mock("@/hooks/useCountUp", () => ({ useCountUp: (value) => value }));
 
+// The page joins each month against the budget period's cycle list, so that a
+// month funded out of an earlier lump sum is judged against its share of it
+// rather than against income it never took in. Month mode has no cycles and no
+// funding, which is the default here.
+let mockPeriod;
+vi.mock("@/hooks/useBudgetPeriod", () => ({
+  useBudgetPeriod: () => mockPeriod,
+}));
+
 import StatsPage, { StatTile } from "@/pages/StatsPage";
 
 const summary = (year, month, totalIncome, totalExpenses) => ({
@@ -67,6 +76,7 @@ const show = async () => {
 };
 
 beforeEach(() => {
+  mockPeriod = { mode: "month", history: [] };
   fetchAllSummaries.mockReset().mockResolvedValue([]);
   fetchTransactions.mockReset().mockResolvedValue([]);
 });
@@ -329,7 +339,9 @@ describe("saying what the percentages are of", () => {
     ]);
     await show();
     expect(
-      await screen.findByText("Percentages are of that month's income.")
+      await screen.findByText(
+        "Percentages are of that month's income, or of its share of an allowance."
+      )
     ).toBeInTheDocument();
   });
 
@@ -346,5 +358,121 @@ describe("saying what the percentages are of", () => {
     await show();
     expect(await screen.findByText("80% saved")).toBeInTheDocument();
     expect(screen.queryByText("No income logged")).not.toBeInTheDocument();
+  });
+});
+
+// A term spends one lump sum across several months, so only the month it landed
+// in has income of its own. Judged on /summary/all alone — which is
+// transaction-only and has never heard of terms — February read "+$0.00 in ·
+// −$800.00 out" and a red −$800.00, for a month that was funded all along, and
+// January claimed a saving that was really five other months' worth. The page
+// joins each month to its priced cycle so the figures match Home and Tracker.
+describe("a month funded by an allowance", () => {
+  // Jan–Jun 2026, $6,000 banked in January. Today is 20 March.
+  const cycle = (start, end, funding) => ({ start, end, funding });
+  const term = () => ({
+    mode: "term",
+    history: [
+      cycle("2026-03-01", "2026-03-31", 1150),
+      cycle("2026-02-01", "2026-02-28", 1100),
+      cycle("2026-01-01", "2026-01-31", 1000),
+    ],
+  });
+  const spending = [
+    summary(2026, 0, 6000, 500),
+    summary(2026, 1, 0, 800),
+    summary(2026, 2, 0, 300),
+  ];
+
+  const showTerm = async () => {
+    mockPeriod = term();
+    fetchAllSummaries.mockResolvedValue(spending);
+    return show();
+  };
+
+  it("names the month's share instead of the income it never took in", async () => {
+    await showTerm();
+    expect(await screen.findByText(/\$1,100\.00 allowance/)).toBeInTheDocument();
+    expect(screen.queryByText(/\+\$0\.00 in/)).not.toBeInTheDocument();
+  });
+
+  it("stops reporting a funded month as a deficit", async () => {
+    await showTerm();
+    // $1,100 share less $800 spent. It used to read −$800.00 in red.
+    expect(await screen.findByText("+$300.00")).toBeInTheDocument();
+    expect(screen.queryByText("−$800.00")).not.toBeInTheDocument();
+    expect(screen.getByText("27% saved")).toBeInTheDocument();
+  });
+
+  it("judges the month the money arrived by its own share too", async () => {
+    await showTerm();
+    // Not (6000 − 500) / 6000 = 92%: five of those dollars belong to the
+    // months after it, which is the entire point of a term.
+    expect(await screen.findByText("50% saved")).toBeInTheDocument();
+    expect(screen.queryByText("92% saved")).not.toBeInTheDocument();
+  });
+
+  it("still says 'unspent so far' for the month in progress", async () => {
+    await showTerm();
+    expect(await screen.findByText("74% unspent so far")).toBeInTheDocument();
+  });
+
+  it("averages the months against their shares, not against income", async () => {
+    const user = userEvent.setup();
+    await showTerm();
+    await user.click(screen.getByRole("button", { name: /Per Month/ }));
+
+    // The mean of 50%, 27% and 74%. Read off income it was the mean of 92%
+    // and two zeroes — 31% — because two of the three months had no income.
+    expect(screen.getByText("Average Month").previousSibling).toHaveTextContent("50%");
+  });
+
+  it("leaves a mid-month first cycle to its own income", async () => {
+    // A term starting on the 15th funds half of January, but the summary row
+    // covers all of it — charging the share against the whole month's spending
+    // would count purchases made before the term began.
+    mockPeriod = { mode: "term", history: [cycle("2026-01-15", "2026-01-31", 520)] };
+    fetchAllSummaries.mockResolvedValue([summary(2026, 0, 6000, 500)]);
+    await show();
+    expect(await screen.findByText(/\+\$6,000\.00 in/)).toBeInTheDocument();
+    // Scoped to the row: the caption above the list names "allowance" too.
+    expect(screen.queryByText(/\$520\.00 allowance/)).not.toBeInTheDocument();
+  });
+
+  it("calls an overspent month over, not negatively saved", async () => {
+    // $852.68 share against $1,256.14 spent. Judging months against a share
+    // rather than against income makes this an ordinary outcome instead of a
+    // rarity, and "−47% saved" is not a quantity of saving.
+    mockPeriod = {
+      mode: "term",
+      history: [cycle("2026-02-01", "2026-02-28", 852.68)],
+    };
+    fetchAllSummaries.mockResolvedValue([summary(2026, 1, 0, 1256.14)]);
+    await show();
+    expect(await screen.findByText("47% over")).toBeInTheDocument();
+    expect(screen.queryByText(/-47% saved|−47% saved/)).not.toBeInTheDocument();
+    // The figure itself still carries the sign and the colour.
+    expect(screen.getByText("−$403.46")).toBeInTheDocument();
+  });
+
+  it("says what it knows about a month whose share was never priced", async () => {
+    // Cycles of a finished term come back unpriced — only the term containing
+    // today gets costed — so the share is unknown, not zero.
+    mockPeriod = { mode: "term", history: [] };
+    fetchAllSummaries.mockResolvedValue([summary(2025, 10, 0, 640)]);
+    await show();
+    expect(await screen.findByText("From your allowance")).toBeInTheDocument();
+    expect(screen.queryByText("−$640.00")).not.toBeInTheDocument();
+    expect(screen.queryByText("No income logged")).not.toBeInTheDocument();
+  });
+
+  it("still calls an unfunded month outside term mode a deficit", async () => {
+    // Nothing paid for this one in advance: the red figure is the truth.
+    mockPeriod = { mode: "month", history: [] };
+    fetchAllSummaries.mockResolvedValue([summary(2026, 1, 0, 640)]);
+    await show();
+    expect(await screen.findByText("−$640.00")).toBeInTheDocument();
+    expect(screen.getByText("No income logged")).toBeInTheDocument();
+    expect(screen.queryByText("From your allowance")).not.toBeInTheDocument();
   });
 });
