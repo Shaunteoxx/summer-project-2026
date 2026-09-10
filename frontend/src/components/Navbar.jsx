@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Eye } from "lucide-react";
+import { FlaskConical } from "lucide-react";
 
 import Avatar from "@/components/Avatar";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -40,18 +40,26 @@ export default function Navbar() {
           <button
             onClick={() => navigate("/more")}
             aria-label="Your profile"
-            className="ml-1 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="grid h-11 w-11 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
+            {/* The avatar stays 28px; the button around it is 44 so the tap
+                target matches every other control in the bar. */}
             <Avatar user={user} className="h-7 w-7" />
           </button>
         </div>
       </div>
 
       {user?.isDemo && (
+        // The banner used to read "Read-Only Demo" because the demo was one
+        // shared account nobody could be allowed to edit. It's a private,
+        // writable sandbox now, so the honest thing to flag isn't that you
+        // can't touch it — it's that what you do here doesn't last. Signing out
+        // deletes this sandbox, which is exactly what "Sign In" walks toward:
+        // trade the throwaway account for a real one.
         <div className="mx-auto flex max-w-app items-center justify-between gap-3 border-t border-hairline bg-surface-2 px-5 py-1.5 text-xs text-ink-2">
           <span className="flex items-center gap-1.5 font-medium">
-            <Eye className="h-3.5 w-3.5" />
-            Read-Only Demo
+            <FlaskConical className="h-3.5 w-3.5" />
+            Demo · resets when you sign out
           </span>
           <button
             onClick={logout}

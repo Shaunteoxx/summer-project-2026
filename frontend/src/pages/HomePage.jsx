@@ -22,11 +22,82 @@ import { useToast } from "@/hooks/useToast";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
 import { formatMoney, localToday } from "@/lib/utils";
-import { formatDay, formatDayRange } from "@/lib/period";
+import { formatDay, formatDayRange, noWindowCopy } from "@/lib/period";
 import { fadeUp } from "@/animations/variants";
 
 /** How many recent entries the home list shows. */
 const RECENT_COUNT = 4;
+
+/**
+ * The first-run script, per budget mode.
+ *
+ * `stepIndex` is which step is live once a window exists — 0 where there was
+ * never a window to start, 1 where step one was starting it. Everything else is
+ * copy the empty state and the checklist share, so the two can't drift.
+ */
+/**
+ * The first-run script, per budget mode.
+ *
+ * `stepIndex` is which step is live once a window exists — 0 where there was
+ * never a window to start, 1 where step one was starting it. Everything else is
+ * copy the empty state and the checklist share, so the two can't drift.
+ *
+ * Each step carries `go`, the thing it actually opens. The steps used to name
+ * the More row you had to go and find ("under More → Savings Target") because
+ * they were text and text was all they could do; now that each one is a button
+ * that opens the sheet itself, naming the route would describe a journey the
+ * tap skips. The one place a row name still earns its keep is the More screen
+ * itself, where the labels match.
+ */
+const SETUP = {
+  month: {
+    steps: [
+      { text: "Log the money coming in this month", go: "income" },
+      { text: "Set what you want to keep each month", go: "savings" },
+    ],
+    stepIndex: 0,
+    logBody: "Add your income for the month and your daily budget appears here.",
+    // Only month mode carries this. A new account is always in month mode
+    // (User.budgetMode defaults to it) and nothing on the first-run path
+    // otherwise says the other two exist — the days and term checklists
+    // explain themselves, but you can't see one until you've already chosen
+    // it. This app is for students, whose money often arrives as a semester's
+    // allowance rather than monthly, so leaving that undiscoverable quietly
+    // gives the wrong budget model to the reader it was built for.
+    //
+    // A line rather than a step: month mode needs no setup, so a step that is
+    // already done for almost everyone is busywork in a list whose whole job
+    // is saying what to do next. Switching is non-destructive either way.
+    alternatives:
+      "Money not monthly? Budget by a set number of days, or spread one allowance across a term.",
+  },
+  days: {
+    steps: [
+      { text: "Start a budget period, and say how long it runs", go: "period" },
+      { text: "Log the money coming in for it", go: "income" },
+      { text: "Set what you want to keep", go: "savings" },
+    ],
+    stepIndex: 1,
+    logBody:
+      "Add the money for this period and your daily budget appears here.",
+  },
+  term: {
+    steps: [
+      {
+        text: "Set your allowance term, and say how many months it covers",
+        go: "period",
+      },
+      {
+        text: "Log the lump sum once — it's split across those months for you",
+        go: "income",
+      },
+      { text: "Set what you want to keep each month", go: "savings" },
+    ],
+    stepIndex: 1,
+    logBody:
+      "Log your allowance once and it's split across the term, a month at a time.",
+  },
+};
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -66,7 +137,43 @@ export default function HomePage() {
   const nothingLogged = !loading && recent.length === 0;
   const daysLeft = activePeriod?.daysLeft ?? 0;
   const noun = period.noun;
+  // Month mode's window is the calendar, so there is always one. The other two
+  // are started by hand, and until one is there's nothing for a daily budget to
+  // divide — which makes starting it the genuine first step, not an optional
+  // extra mentioned on another screen.
+  const needsPeriod = noPeriod && period.mode !== "month";
+  // What setting this account up actually involves, in order. The steps differ
+  // by mode rather than by wording: a term is a span you declare once and then
+  // fund with a single lump sum, a days period is a span you re-start each time
+  // one ends, and a month needs no span at all. Each step opens the thing it
+  // describes rather than naming a row to go and find — see SETUP.
+  const setup = SETUP[period.mode] ?? SETUP.month;
+  // Title, sentence and button for the missing window come from lib/period so
+  // Tracker and Plan say the same thing about the same gap. Only the checklist
+  // below is Home's own.
+  const noWindow = noWindowCopy(period.mode, period.status);
   const overspent = (stats?.leftToSpend ?? 0) < 0;
+
+  /**
+   * Where a checklist step actually goes.
+   *
+   * The savings sheet needs a window to attach a target to: in days mode with
+   * nothing running, MorePage's own opener refuses and toasts "Start a budget
+   * period first". Sending the reader there to be told no is the dead end this
+   * whole change is about, so the step that can't run yet routes to the thing
+   * that unblocks it instead.
+   */
+  const goToStep = (go) => {
+    if (go === "income") {
+      navigate("/transactions", { state: { openAdd: "income" } });
+      return;
+    }
+    const needsWindowFirst =
+      go === "savings" && period.mode === "days" && !period.current;
+    navigate("/more", {
+      state: { open: needsWindowFirst ? "period" : go },
+    });
+  };
 
   // The pace bar. Fill is how much of the period's budget has gone; the tick is
   // where you'd be if you spent evenly. Ahead of the tick is trouble, behind it
@@ -166,54 +273,112 @@ export default function HomePage() {
       {/* Nothing logged, ever. The hero, the strip, the streak and the totals
           would all read zero, which says "you have no money" rather than "you
           haven't told me anything yet" — so none of them render. What's left is
-          the gap, named, and the two things that close it. */}
+          the gap, named, and the steps that close it.
+
+          Which gap, though, depends on the mode. Month mode always has a window
+          — the calendar supplies one — so the first thing to do really is log
+          some money. Days and term mode don't: you start a window yourself, and
+          until you have, logging income buys you nothing, because there is no
+          span for a daily budget to divide. This block used to ignore that and
+          tell every newcomer to "log the money coming in this period" over a
+          period that didn't exist, with the one mandatory step missing.
+
+          So the action offered is whichever step is actually first, and the
+          card below lists all of them in order. */}
       {nothingLogged && (
         <motion.div variants={fadeUp} initial="initial" animate="animate">
-          <EmptyState
-            icon={Receipt}
-            title="Nothing Logged Yet"
-            body={`Add your income for the ${noun} and your daily budget appears here.`}
-            action={
-              <Button
-                className="mt-[22px] w-auto px-5"
-                onClick={() =>
-                  navigate("/transactions", { state: { openAdd: "income" } })
-                }
-              >
-                <Plus className="h-[17px] w-[17px]" />
-                Add Your First Entry
-              </Button>
-            }
-          />
+          {needsPeriod ? (
+            <EmptyState
+              icon={CalendarRange}
+              title={noWindow.title}
+              body={noWindow.body}
+              action={
+                <Button
+                  className="mt-[22px] w-auto px-5"
+                  onClick={() => navigate("/more", { state: { open: "period" } })}
+                >
+                  {noWindow.action}
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={Receipt}
+              title="Nothing Logged Yet"
+              body={setup.logBody}
+              action={
+                <Button
+                  className="mt-[22px] w-auto px-5"
+                  onClick={() =>
+                    navigate("/transactions", { state: { openAdd: "income" } })
+                  }
+                >
+                  <Plus className="h-[17px] w-[17px]" />
+                  Add Your First Entry
+                </Button>
+              }
+            />
+          )}
 
           <Card className="mt-[34px]">
             <CardContent className="p-[18px]">
               <p className="text-[14px] font-semibold tracking-[-0.01em]">
-                Set Up in Two Steps
+                Set Up in {setup.steps.length === 2 ? "Two" : "Three"} Steps
               </p>
-              {[
-                `Log the money coming in this ${noun}`,
-                "Set a savings target under More",
-              ].map((step, i) => (
-                <div key={step} className="mt-3 flex items-start gap-3">
-                  {/* Step one is ink because it's the one to do now; step two
-                      is quiet until it is. */}
-                  <span
-                    className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
-                      i === 0 ? "bg-ink text-surface" : "bg-surface-2 text-ink-3"
-                    }`}
+              {setup.steps.map((step, i) => {
+                // The step to do now, rather than always the first. Once a
+                // window exists, "start a period" is behind you and lighting it
+                // would send the reader back to something they've done — but
+                // while it's still missing, it *is* the step, so `stepIndex`
+                // only applies from the point the window is there.
+                const current = i === (needsPeriod ? 0 : setup.stepIndex);
+                return (
+                  <button
+                    key={step.text}
+                    type="button"
+                    onClick={() => goToStep(step.go)}
+                    className="-mx-1 mt-1 flex w-[calc(100%+0.5rem)] items-start gap-3 rounded-sm px-1 py-2 text-left transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    {i + 1}
+                    {/* The current step is ink; the rest stay quiet until they
+                        are the one to do. */}
+                    <span
+                      className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
+                        current ? "bg-ink text-surface" : "bg-surface-2 text-ink-3"
+                      }`}
+                    >
+                      {i + 1}
+                    </span>
+                    <span
+                      className={`text-[13px] leading-relaxed ${
+                        current ? "text-ink-2" : "text-ink-3"
+                      }`}
+                    >
+                      {step.text}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {/* Under a rule rather than as a fourth row: it isn't a step, and
+                  numbering it would imply work the reader doesn't have to do.
+                  A button, not a line of prose with a page name in it, because
+                  every other instruction here names a row you have to go and
+                  find — this one can just take you there. */}
+              {setup.alternatives && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/more", { state: { open: "period" } })}
+                  className="mt-3.5 flex w-full items-center gap-1.5 rounded-sm border-t border-hairline pt-3 text-left text-[12.5px] leading-relaxed text-ink-3 transition-colors duration-base ease-out hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span>
+                    {setup.alternatives}{" "}
+                    <span className="font-medium text-ink-2">
+                      Change how you budget
+                    </span>
                   </span>
-                  <span
-                    className={`text-[13px] leading-relaxed ${
-                      i === 0 ? "text-ink-2" : "text-ink-3"
-                    }`}
-                  >
-                    {step}
-                  </span>
-                </div>
-              ))}
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 self-end text-ink-3" />
+                </button>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -249,7 +414,7 @@ export default function HomePage() {
             action={
               <Button
                 className="mt-[22px] w-auto px-5"
-                onClick={() => navigate("/more")}
+                onClick={() => navigate("/more", { state: { open: "period" } })}
               >
                 {period.status === "lapsed" ? "Start Next Period" : "Set Up a Period"}
               </Button>
@@ -317,7 +482,13 @@ export default function HomePage() {
                       type="button"
                       onClick={() => navigate("/plan", { state: { focus: "pace" } })}
                       aria-label={`${paceVerdict} — see your pace and forecast`}
-                      className={`absolute right-0 top-0 flex h-[15px] items-center gap-0.5 rounded-sm text-[11px] font-medium transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      // The label rides the bar line, so it can only be 15px
+                      // tall — well under a thumb. A transparent ::before opens
+                      // the tap area to ~47px without moving the text: there's
+                      // an 18px margin of nothing above it (the hero figure is
+                      // non-interactive) and only the bar and its spans below,
+                      // so the slop steals no other control's clicks.
+                      className={`absolute right-0 top-0 flex h-[15px] items-center gap-0.5 rounded-sm text-[11px] font-medium transition-colors duration-base ease-out before:absolute before:-inset-x-2 before:-top-4 before:-bottom-4 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         overspent
                           ? "text-negative"
                           : aheadOfPace
@@ -425,7 +596,9 @@ export default function HomePage() {
                     variant="outline"
                     size="sm"
                     className="w-auto px-3"
-                    onClick={() => navigate("/more")}
+                    onClick={() =>
+                      navigate("/more", { state: { open: "savings" } })
+                    }
                   >
                     Lower Target
                   </Button>
@@ -443,7 +616,17 @@ export default function HomePage() {
           headline figure with no visible source. Named for what it is, the
           three cells subtract to the hero exactly. */}
       {!noPeriod && (
-        <div className="mt-[10px] flex border-y border-hairline text-center ">
+        // The period's money in one line — and the way into the page that
+        // breaks it down. Home is a glance; these three figures (they subtract
+        // to the hero above) are exactly what Tracker's donut and calendar
+        // expand, so the strip doubles as the door to them rather than making
+        // the reader hunt for the right tab. The values stay readable to a
+        // screen reader; an sr-only line names the action the chevron implies.
+        <button
+          type="button"
+          onClick={() => navigate("/tracker")}
+          className="group mt-[10px] flex w-full items-stretch border-y border-hairline text-center transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
           <StripCell
             label={stats?.periodFunding == null ? "In" : "Allowance"}
             value={stats?.periodFunding ?? stats?.periodIncome}
@@ -454,7 +637,14 @@ export default function HomePage() {
           <StripCell label="Out" value={stats?.periodExpenses} loading={loading} inset />
           <span className="my-3 w-px bg-hairline" />
           <StripCell label="Reserved" value={stats?.periodSavings} loading={loading} inset />
-        </div>
+          <span
+            className="flex shrink-0 items-center pl-1 pr-0.5 text-ink-3"
+            aria-hidden="true"
+          >
+            <ChevronRight className="h-4 w-4 transition-transform duration-base ease-out group-hover:translate-x-0.5" />
+          </span>
+          <span className="sr-only">See the full breakdown on Tracker</span>
+        </button>
       )}
 
       {/* Today's budget + streak. Not while there's no period: the card's own
@@ -474,15 +664,29 @@ export default function HomePage() {
           links went to tabs already one tap away. "What did I just spend" is
           the actual reason people open a manual tracker. */}
       <section className="mt-4">
-        <header className="mb-2.5 flex items-baseline justify-between">
-          <h2 className="text-overline text-ink-3">Recent</h2>
+        {/* The heading is the link, and it sits on the left.
+            
+            The add button is fixed to the bottom-right of this same column, so
+            anything interactive at the right edge can end up underneath it —
+            measured: a real tap at the old "See All"'s centre opened the add
+            sheet instead of the ledger, and no amount of bottom padding moves a
+            mid-page header out from under a fixed button. Keeping the only
+            control on the left puts it permanently out of that lane.
+
+            Folding the link into the heading also makes it one 44px-tall target
+            instead of a 19px one, and drops a second tap target that said the
+            same thing the heading already implied. */}
+        <h2 className="mb-2.5">
           <button
+            type="button"
             onClick={() => navigate("/transactions")}
-            className="rounded-sm text-[12.5px] font-medium text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Recent entries — see all"
+            className="-my-2 flex min-h-[44px] items-center gap-1 rounded-sm py-2 text-left transition-colors duration-base ease-out hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            See All
+            <span className="text-overline text-ink-3">Recent</span>
+            <ChevronRight className="h-3.5 w-3.5 text-ink-3" aria-hidden="true" />
           </button>
-        </header>
+        </h2>
 
         {loading ? (
           <div className="-mx-4 border-y border-hairline bg-surface">

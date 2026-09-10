@@ -86,7 +86,7 @@ export default function StreakCard() {
                 between aren't counted for or against you.
               </p>
             </div>
-            <Button size="sm" onClick={() => navigate("/more")}>
+            <Button size="sm" onClick={() => navigate("/more", { state: { open: "period" } })}>
               Start a Period
             </Button>
           </CardContent>
@@ -249,12 +249,20 @@ export default function StreakCard() {
             </button>
           </div>
 
-          {/* Last 7 days */}
-          <div className="mt-3 flex justify-between gap-1.5">
+          {/* Last 7 days — the mini version. The full period calendar lives on
+              Tracker, so the row doubles as the way there. The cells inside are
+              decorative (role="img"), so wrapping them in the link nests
+              nothing interactive. */}
+          <button
+            type="button"
+            onClick={() => navigate("/tracker")}
+            aria-label="Your last 7 days — see the full period calendar"
+            className="mt-3 flex w-full justify-between gap-1.5 rounded-sm transition-opacity duration-base ease-out hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             {last7.map((d) => (
               <DayCell key={d.date} day={d} />
             ))}
-          </div>
+          </button>
 
           {/* Saves + restore */}
           <div className="mt-3 flex items-center justify-between gap-3 border-t border-hairline pt-3">

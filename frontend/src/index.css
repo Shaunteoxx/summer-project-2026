@@ -135,6 +135,11 @@
                     0 2px 8px hsl(0 0% 0% / 0.4);
 
     --success-foreground: 160 60% 6%;
+    /* Dark mode's negative is a lighter red than light mode's, so white text on
+       a filled destructive button drops to 3.3:1. A near-black red on it reads
+       5.8:1 — same trick as success-foreground above. Light mode keeps white
+       (6.1:1 on its darker red), so only this dark override is needed. */
+    --destructive-foreground: 4 62% 8%;
     --primary-foreground: var(--surface);
   }
 }

@@ -118,7 +118,9 @@ export default function SavingsGoalCard({
                 <button
                   onClick={openSheet}
                   aria-label="Edit savings target"
-                  className="-my-1 rounded-sm px-1.5 py-1 text-[12.5px] font-medium text-ink-2 transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  // -my-2/-mr-1 keeps the label where the header row put it
+                  // while the target underneath grows to 44px high.
+                  className="-my-2 -mr-1 flex min-h-[44px] items-center rounded-sm px-2 py-1 text-[12.5px] font-medium text-ink-2 transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Edit
                 </button>

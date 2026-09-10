@@ -150,3 +150,38 @@ export function formatMonthLabel(value) {
   const d = dayFromYmd(value);
   return `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
+
+/**
+ * What to say when there is no window running, per mode.
+ *
+ * Shared because three screens ask the same question — Home, Tracker and Plan
+ * all render this state — and they had drifted into three answers. Term mode is
+ * the one that made that visible: Home called it an allowance term while the
+ * other two called it a budget period, for the same missing thing on the same
+ * account.
+ *
+ * Month mode never reaches this: the calendar always supplies a window.
+ *
+ * `body` is the general-purpose sentence. A screen with something more specific
+ * to say about its own contents passes its own; the title and the action are
+ * what must not vary.
+ */
+export function noWindowCopy(mode, status) {
+  const lapsed = status === "lapsed";
+  if (mode === "term") {
+    return {
+      title: lapsed ? "Your Allowance Term Has Ended" : "No Allowance Term Set Up Yet",
+      body: lapsed
+        ? "Months since it ended aren't budgeted or counted towards your streak. Set up the next term to pick up where you left off."
+        : "A term is one lump sum spread over several months — a semester's allowance, say. Set the months it covers and each one gets its share.",
+      action: lapsed ? "Set Up Next Term" : "Set Up a Term",
+    };
+  }
+  return {
+    title: lapsed ? "Your Last Budget Period Has Ended" : "No Budget Period Running Yet",
+    body: lapsed
+      ? "Days since it ended aren't budgeted or counted towards your streak. Start the next one to pick up where you left off."
+      : "Your budget runs over a stretch you choose — a fortnight, five weeks, however your money arrives. Start one and the rest follows.",
+    action: lapsed ? "Start Next Period" : "Set Up a Period",
+  };
+}

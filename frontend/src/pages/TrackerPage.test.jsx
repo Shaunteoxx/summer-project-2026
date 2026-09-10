@@ -22,6 +22,12 @@ vi.mock("@/api/endpoints", () => ({
   updateTerm: vi.fn(),
 }));
 
+const navigate = vi.fn();
+vi.mock("react-router-dom", async (importOriginal) => ({
+  ...(await importOriginal()),
+  useNavigate: () => navigate,
+}));
+
 vi.mock("@/hooks/useToast", () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }),
 }));
@@ -120,14 +126,78 @@ beforeEach(() => {
   mockPeriod = termPeriod();
 });
 
+describe("doors out of the period detail", () => {
+  it("switches to History through the spending toggle", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    await show();
+    // The toggle is what unified this page with the old Stats screen.
+    await user.click(screen.getByRole("tab", { name: "History" }));
+    expect(navigate).toHaveBeenCalledWith("/stats");
+  });
+
+  it("sends the reader to the leaderboard, scored on this same period", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    await show();
+    // Friends had no entry point outside the More tab before this.
+    await user.click(await screen.findByRole("button", { name: /Friends/ }));
+    expect(navigate).toHaveBeenCalledWith("/friends");
+  });
+
+  it("frames the page as this window, day by day", async () => {
+    await show();
+    expect(await screen.findByText(/day by day/)).toBeInTheDocument();
+  });
+});
+
+describe("a month with a savings target set", () => {
+  // The state the ring never covered: every other fixture here has savings: 0.
+  // September gets $2,200 in, $109.50 out, and $500 reserved before any of it
+  // can be spent — so what is actually left to spend is $1,590.50, and the
+  // spendable base is $1,700, not $2,200.
+  const withTarget = () => ({
+    ...monthPeriod(),
+    current: { ...monthPeriod().current, savings: 500 },
+  });
+
+  it("counts the reserve as its own slice, so the parts still sum to income", async () => {
+    mockPeriod = withTarget();
+    await show();
+    // Reserved is money you have but may not spend. Folding it into "unspent"
+    // is what let the ring read 95% directly above "Goal: set aside $500".
+    expect(await screen.findByText("Reserved")).toBeInTheDocument();
+    expect(screen.getByText("Left to Spend")).toBeInTheDocument();
+    expect(screen.getAllByText("$500.00").length).toBeGreaterThan(0);
+    expect(screen.getByText("$1,590.50")).toBeInTheDocument();
+    // Spent + Reserved + Left to Spend = Income, printed under the rule.
+    expect(screen.getAllByText("$2,200.00").length).toBeGreaterThan(0);
+  });
+
+  it("prints the same fraction Home does, off the spendable budget", async () => {
+    mockPeriod = withTarget();
+    await show();
+    // $109.50 of a $1,700 spendable budget is 6% spent -> 94% left. Dividing by
+    // the full $2,200 gives 95%, which is the figure that disagreed with Home.
+    const ring = await screen.findByText("94%");
+    expect(ring).toBeInTheDocument();
+    expect(ring.closest("div").textContent).toMatch(/Left/);
+    // The breakdown tiles at the foot may still divide by income — they say so
+    // in their own caption ("% of income"), which is what the ring never did.
+    const byIncome = screen.queryByText("95%");
+    if (byIncome) {
+      expect(byIncome.closest("div").textContent).toMatch(/of income/i);
+    }
+  });
+});
+
 describe("a term cycle", () => {
   it("budgets from the cycle's allowance, not the income logged in it", async () => {
     await show();
     // $1,272.25 − $109.50, the same figure home shows. Reading the $2,200
-    // top-up instead gave $2,090.50. It lands twice — the donut legend and the
-    // breakdown tile — and both have to agree, which is the whole point.
+    // top-up instead gave $2,090.50. The ring legend is the one place it shows
+    // now that the foot tile is gone; the point is the page uses the
+    // allowance-based figure, not the logged-income one.
     const shown = await screen.findAllByText("$1,162.75");
-    expect(shown.length).toBe(2);
+    expect(shown.length).toBe(1);
     expect(screen.queryByText("$2,090.50")).not.toBeInTheDocument();
   });
 
@@ -196,30 +266,20 @@ describe("a term cycle", () => {
     expect(screen.getByText(/Month 6 of 6 · last/)).toBeInTheDocument();
   });
 
-  it("prints the denominator the ring and the tiles are percentages of", async () => {
+  it("labels the ring's total as the allowance, not income", async () => {
     await show();
-    // The ring reads "% Unspent" and the tiles read "% of allowance"; without
-    // this row the month's share appeared nowhere on the card, and in term
-    // mode nowhere else on the page either — the allowance card below covers
-    // the whole term, not the month drawn from it.
+    // The ring reads "% Left / % Unspent"; its total row names the base. In
+    // term mode that base is the cycle's slice of the allowance, so calling it
+    // "Income" (money logged in the cycle) would be wrong — the lump sum
+    // arrived months earlier.
     expect(screen.getByText("Allowance")).toBeInTheDocument();
     expect(screen.queryByText("Income")).not.toBeInTheDocument();
   });
 
-  it("names the breakdown tiles for the window they cover", async () => {
-    await show();
-    // "Total Spent" over one month's figure, at the foot of a page whose
-    // heading has long scrolled away, reads as everything ever spent.
-    expect(screen.getByText("Unspent This Month")).toBeInTheDocument();
-    expect(screen.getByText("Spent This Month")).toBeInTheDocument();
-    expect(screen.queryByText("Total Spent")).not.toBeInTheDocument();
-  });
-
-  it("stops calling the denominator income", async () => {
-    await show();
-    expect(screen.getAllByText(/of allowance/).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/of income/)).not.toBeInTheDocument();
-  });
+  // The foot "Unspent/Spent … of allowance" tiles were removed: they restated
+  // the ring on a different (income) base, which put two green figures for the
+  // same month on one screen. The ring's own "Allowance" total row carries the
+  // allowance wording now — asserted just above.
 });
 
 describe("outside term mode", () => {
@@ -229,20 +289,124 @@ describe("outside term mode", () => {
 
   it("still budgets from logged income", async () => {
     await show();
-    // $2,200 in, $109.50 out.
-    expect((await screen.findAllByText("$2,090.50")).length).toBe(2);
+    // $2,200 in, $109.50 out. No target in this fixture, so the ring's
+    // "Unspent" legend is income − spent — the only place it appears now that
+    // the foot tile that restated it is gone.
+    expect((await screen.findAllByText("$2,090.50")).length).toBe(1);
   });
 
   it("shows no allowance card and keeps the income wording", async () => {
     await show();
     expect(screen.queryByText("Your Allowance")).not.toBeInTheDocument();
-    expect(screen.getAllByText(/of income/).length).toBeGreaterThan(0);
+    // The income wording now lives on the ring's total row, not the removed
+    // "% of income" tiles.
+    expect(screen.getAllByText("Income").length).toBeGreaterThan(0);
   });
 
   it("still says Period Tracker in days mode", async () => {
     mockPeriod = { ...monthPeriod(), mode: "days", noun: "period" };
     await show();
     expect(screen.getByText("Period Tracker")).toBeInTheDocument();
-    expect(screen.getByText("Spent This Period")).toBeInTheDocument();
+  });
+});
+
+// A window running with nothing in it used to render the whole page anyway: an
+// empty donut, a savings-target prompt, a calendar of $0.00 days, an empty
+// category card and two "$0.00 · 0% of income" tiles. Five cards, all honest,
+// none useful — and three of them told the reader to go to the Transactions
+// page while the + button sat on this one.
+describe("a window with nothing in it", () => {
+  const showEmpty = async (period = monthPeriod()) => {
+    mockPeriod = period;
+    fetchTransactions.mockResolvedValue([]);
+    fetchStreak.mockResolvedValue(null);
+    render(
+      <MemoryRouter>
+        <TrackerPage />
+      </MemoryRouter>
+    );
+    return screen.findByText("Nothing to Track Yet");
+  };
+
+  it("shows one empty state rather than five empty cards", async () => {
+    await showEmpty();
+    expect(screen.queryByText("Daily Spending")).not.toBeInTheDocument();
+    expect(screen.queryByText("Spending by Category")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Unspent This Month/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Spent This Month/)).not.toBeInTheDocument();
+  });
+
+  it("doesn't ask for a savings target before there's anything to save from", async () => {
+    await showEmpty();
+    expect(screen.queryByText(/No target for/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Set Target/ })).not.toBeInTheDocument();
+  });
+
+  it("offers the entry sheet rather than naming another page", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    await showEmpty();
+    await user.click(screen.getByRole("button", { name: /Add Your First Entry/ }));
+    expect(navigate).toHaveBeenCalledWith("/transactions", {
+      state: { openAdd: "income" },
+    });
+  });
+
+  it("keeps the way through to the history", async () => {
+    await showEmpty();
+    // Via the This period / History toggle, which sits above the empty state
+    // so history is reachable before anything is logged this period.
+    expect(screen.getByRole("tab", { name: "History" })).toBeInTheDocument();
+  });
+
+  it("still renders the page once a single entry exists", async () => {
+    mockPeriod = monthPeriod();
+    fetchTransactions.mockResolvedValue([txns[1]]);
+    fetchStreak.mockResolvedValue(null);
+    render(
+      <MemoryRouter>
+        <TrackerPage />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText("Daily Spending")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing to Track Yet")).not.toBeInTheDocument();
+  });
+});
+
+// Home, Tracker and Plan all render "there is no window". They had drifted into
+// three answers, which term mode made obvious: Home called it an allowance term
+// while the other two called it a budget period, for the same missing thing.
+describe("naming the missing window", () => {
+  const showNoWindow = async (mode) => {
+    mockPeriod = {
+      loading: false, mode, noun: mode === "days" ? "period" : "month",
+      status: "none", current: null, term: null, history: [], refresh: vi.fn(),
+    };
+    fetchTransactions.mockResolvedValue([]);
+    fetchStreak.mockResolvedValue(null);
+    render(
+      <MemoryRouter>
+        <TrackerPage />
+      </MemoryRouter>
+    );
+  };
+
+  it("says allowance term in term mode, as Home does", async () => {
+    await showNoWindow("term");
+    expect(await screen.findByText("No Allowance Term Set Up Yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set Up a Term" })).toBeInTheDocument();
+  });
+
+  it("says budget period in days mode, as Home does", async () => {
+    await showNoWindow("days");
+    expect(await screen.findByText("No Budget Period Running Yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set Up a Period" })).toBeInTheDocument();
+  });
+
+  // Home guards the same thing: the page subheading used to name the missing
+  // window too, so the reader was told about it twice, three lines apart.
+  it("doesn't ask twice", async () => {
+    await showNoWindow("days");
+    await screen.findByText("No Budget Period Running Yet");
+    expect(screen.getAllByText(/No Budget Period Running/)).toHaveLength(1);
   });
 });

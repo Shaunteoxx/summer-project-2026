@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion, useAnimationControls } from "framer-motion";
 import {
-  BarChart3,
+  Calculator,
   Users,
   Sun,
   Moon,
@@ -66,12 +66,21 @@ import {
 } from "@/api/endpoints";
 import { fadeUp, SHAKE } from "@/animations/variants";
 
+// What each mode is called in the sheet's own tabs, so the confirm step names
+// the thing the reader just tapped rather than an internal key.
+const MODE_LABEL = { month: "Month", days: "Days", term: "Allowance" };
+
 const shortcuts = [
+  // Plan lives here rather than in the bottom tab bar: it's an occasional
+  // what-if tool that runs on the same numbers as Home, not a daily
+  // destination, so it didn't earn one of four tab slots. It's still one tap
+  // from Home (the pace card and the streak card both link into it). Stats is
+  // no longer here at all — it became the History view of the Tracker.
   {
-    to: "/stats",
-    label: "Stats",
-    desc: "Spending breakdown & trends",
-    icon: BarChart3,
+    to: "/plan",
+    label: "Plan",
+    desc: "See what today's spending leaves ahead",
+    icon: Calculator,
   },
   {
     to: "/friends",
@@ -140,6 +149,15 @@ export default function MorePage() {
   const [savingPeriod, setSavingPeriod] = useState(false);
   // Id of the period awaiting an inline "really delete?" confirmation.
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  // A mode the reader has picked but not yet committed. Tapping a segment used
+  // to fire the PUT on the spot, so anyone tapping "Allowance" to find out what
+  // it was re-scored their streak to find out. Null means nothing pending.
+  const [pendingMode, setPendingMode] = useState(null);
+  // Which segment reads as chosen. A pending pick shows immediately so the tap
+  // registers, while `isDays`/`isTerm` above still describe the *committed*
+  // mode — which is what keeps the panel under the tabs from swapping out
+  // before the reader has said yes.
+  const selectedMode = pendingMode ?? period.mode;
   const periodShake = useAnimationControls();
   // Term form: a window, so only a start and a length.
   const [termStart, setTermStart] = useState(localToday());
@@ -239,8 +257,79 @@ export default function MorePage() {
     setPeriodOpen(true);
   };
 
-  const switchMode = async (mode) => {
-    if (mode === period.mode) return;
+  // Another screen can ask for one of these sheets by name — the same trick
+  // /transactions uses for `openAdd`. Without it, a button saying "Start Next
+  // Period" could only drop the reader on this page and leave them to find the
+  // row themselves, which is what made every prompt in the app a dead end.
+  //
+  // Consumed once and wiped off the history entry: router state lives in
+  // history.state and survives a reload, so leaving it there would re-open the
+  // sheet on every refresh, long after the tap that asked for it. Replacing
+  // state alone doesn't remount the page — App.jsx keys the outlet on pathname.
+  const { state: navState, pathname } = useLocation();
+  // When a deep link opens one of these sheets, hand the reader back where they
+  // came from once it closes. The CTA that sent them here (Home, Plan, Tracker)
+  // pushed /more onto history, so the entry right behind /more is that origin —
+  // navigate(-1) returns to it whether they saved or backed out, instead of
+  // stranding them on this settings list. Only armed for a deep link, so
+  // opening a sheet from the More list itself stays put.
+  const [deepReturn, setDeepReturn] = useState(null); // { which, opened } | null
+  useEffect(() => {
+    const which = navState?.open;
+    if (!which) return;
+    navigate(pathname, { replace: true, state: null });
+    const openers = {
+      period: openPeriod,
+      savings: openSavings,
+      accounts: () => !guard() && setAccountsOpen(true),
+      categories: () => !guard() && setCategoriesOpen(true),
+      recurring: () => !guard() && setRecurringOpen(true),
+    };
+    if (openers[which]) {
+      setDeepReturn({ which, opened: false });
+      openers[which]();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navState, pathname]);
+
+  // Fire the return once the deep-linked sheet has actually opened and then
+  // closed. The "opened" gate matters: arming and opening happen in the same
+  // render, so without waiting for open to go true first this would read the
+  // still-closed sheet and navigate away on the spot. Watching the open flags
+  // (rather than a sheet's onClose) also catches the programmatic close on a
+  // successful save, which never fires onClose.
+  const sheetOpen = {
+    period: periodOpen,
+    savings: savingsOpen,
+    accounts: accountsOpen,
+    categories: categoriesOpen,
+    recurring: recurringOpen,
+  };
+  useEffect(() => {
+    if (!deepReturn) return;
+    const isOpen = sheetOpen[deepReturn.which];
+    if (isOpen && !deepReturn.opened) {
+      setDeepReturn((r) => (r ? { ...r, opened: true } : r));
+    } else if (deepReturn.opened && !isOpen) {
+      setDeepReturn(null);
+      navigate(-1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepReturn, periodOpen, savingsOpen, accountsOpen, categoriesOpen, recurringOpen]);
+
+  // Tapping a segment proposes a mode; it does not change one. What comes back
+  // if you change your mind is only the streak's *scoring* — entries and stored
+  // windows survive either way — but the figure moves enough (a best streak can
+  // read 51 in Month and 8 in Allowance) that finding out by accident reads as
+  // lost data.
+  const chooseMode = (mode) => {
+    setPeriodError("");
+    setPendingMode(mode === period.mode ? null : mode);
+  };
+
+  const confirmMode = async () => {
+    const mode = pendingMode;
+    if (!mode || mode === period.mode) return;
     setPeriodError("");
     setSavingPeriod(true);
     try {
@@ -253,6 +342,7 @@ export default function MorePage() {
           term: "Budgeting one month at a time",
         }[mode]
       );
+      setPendingMode(null);
     } catch (err) {
       setPeriodError(err?.response?.data?.message || "Couldn't change the mode.");
       periodShake.start(SHAKE);
@@ -839,23 +929,23 @@ export default function MorePage() {
                 right below, and made this the only two-line segmented control
                 in the app. */}
             <ModeTab
-              active={!isDays && !isTerm}
+              active={selectedMode === "month"}
               disabled={savingPeriod}
-              onClick={() => switchMode("month")}
+              onClick={() => chooseMode("month")}
               label="Month"
             />
             <ModeTab
-              active={isDays}
+              active={selectedMode === "days"}
               disabled={savingPeriod}
-              onClick={() => switchMode("days")}
+              onClick={() => chooseMode("days")}
               label="Days"
             />
             {/* "Allowance" rather than "Term": nobody calls it a term, and it
                 would sit one row above "Savings Target" reading like a pair. */}
             <ModeTab
-              active={isTerm}
+              active={selectedMode === "term"}
               disabled={savingPeriod}
-              onClick={() => switchMode("term")}
+              onClick={() => chooseMode("term")}
               label="Allowance"
             />
           </div>
@@ -864,11 +954,36 @@ export default function MorePage() {
               streak resolves each one against whichever mode is current. It's
               been true since days mode shipped, but a six-month allowance makes
               it dramatic — a best streak can read 51 in Month and 8 in
-              Allowance — and with nothing said, that looks like lost data. */}
-          <p className="text-[12px] leading-relaxed text-ink-3">
-            Changing this re-scores your streak against the new windows. Your
-            entries never change, and switching back restores the old figures.
-          </p>
+              Allowance — and with nothing said, that looks like lost data.
+
+              It sits above the tabs now: below them it was a footnote you read
+              after committing, which is the wrong order for a warning. */}
+          {pendingMode ? (
+            <div className="space-y-2 rounded-md bg-surface-2 p-3">
+              <p className="text-[12.5px] leading-relaxed text-ink-2">
+                Switching to {MODE_LABEL[pendingMode]} re-scores your streak
+                against the new windows. Your entries never change, and
+                switching back restores the old figures.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => setPendingMode(null)}
+                  disabled={savingPeriod}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={confirmMode} disabled={savingPeriod}>
+                  {savingPeriod ? "Switching…" : "Switch"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[12px] leading-relaxed text-ink-3">
+              Changing this re-scores your streak against the new windows. Your
+              entries never change, and switching back restores the old figures.
+            </p>
+          )}
 
           {isTerm ? (
             <TermPanel

@@ -18,6 +18,10 @@ export function useChartColors() {
 
   return {
     saved: isDark ? "#45D19C" : "#0F7A56",
+    // Money set aside: still yours, but not spendable this period. One step
+    // back from `saved` rather than a fourth hue, so the ring reads as a single
+    // scale — available, committed, gone — instead of three unrelated colours.
+    reserved: isDark ? "#2A7D63" : "#7FB8A0",
     spent: isDark ? "#3F4045" : "#C9C9C4",
     // Emphasis (today) + the over-budget signal in the daily tracker.
     primary: isDark ? "#F4F4F3" : "#17181A",

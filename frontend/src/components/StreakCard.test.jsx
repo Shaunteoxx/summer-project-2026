@@ -9,7 +9,11 @@ vi.mock("@/api/endpoints", () => ({
   fetchStreak: (...args) => fetchStreak(...args),
   restoreStreak: vi.fn(),
 }));
-vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
+const navigate = vi.fn();
+vi.mock("react-router-dom", async (importOriginal) => ({
+  ...(await importOriginal()),
+  useNavigate: () => navigate,
+}));
 vi.mock("@/hooks/useToast", () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }),
 }));
@@ -43,7 +47,23 @@ const streak = (over = {}) => ({
   ...over,
 });
 
-beforeEach(() => fetchStreak.mockReset());
+beforeEach(() => {
+  fetchStreak.mockReset();
+  navigate.mockReset();
+});
+
+describe("drilling into the calendar", () => {
+  it("opens the full period calendar on Tracker from the week strip", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    fetchStreak.mockResolvedValue(streak());
+    render(<StreakCard />);
+    // The seven-day row is a mini calendar; the full one lives on Tracker.
+    await user.click(
+      await screen.findByRole("button", { name: /Your last 7 days/i })
+    );
+    expect(navigate).toHaveBeenCalledWith("/tracker");
+  });
+});
 
 describe("within budget", () => {
   it("shows what is left to spend today", async () => {

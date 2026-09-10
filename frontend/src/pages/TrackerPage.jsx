@@ -1,24 +1,26 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, useReducedMotion } from "framer-motion";
-import { PieChart, Pie, Cell } from "recharts";
-import { BarChart3, PiggyBank, CreditCard } from "lucide-react";
+import { motion } from "framer-motion";
+import { CalendarRange, Plus, Receipt, Users } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
+import SpendingTabs from "@/components/SpendingTabs";
+import DonutChart from "@/components/DonutChart";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import DailySpendingCard from "@/components/DailySpendingCard";
+import EmptyState from "@/components/EmptyState";
 import SavingsGoalCard from "@/components/SavingsGoalCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchTransactions, fetchStreak } from "@/api/endpoints";
 import { cn, formatMoney, localToday, monthName } from "@/lib/utils";
-import { formatDay, formatPeriodLabel } from "@/lib/period";
+import { formatDay, formatPeriodLabel, noWindowCopy } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useToast } from "@/hooks/useToast";
-import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
+import { fadeUp } from "@/animations/variants";
 
 export default function TrackerPage() {
   const navigate = useNavigate();
@@ -79,16 +81,29 @@ export default function TrackerPage() {
   // The captions say "of income" everywhere else, which stops being true once
   // the money came from a lump sum months ago.
   const budgetNoun = funding == null ? "income" : "allowance";
-  // Title case, for labels rather than sentences — see design/COPY_CONVENTIONS.md.
-  const titleNoun = budgetPeriod.noun === "period" ? "Period" : "Month";
   const saved = Math.max(income - spent, 0);
   const hasData = income > 0 || spent > 0;
   const periodSavings = current?.savings ?? 0;
   const percentageSaved = income > 0 ? Math.round(((income - spent) / income) * 100) : 0;
-  const percentageSpent = income > 0 ? Math.round((spent / income) * 100) : 0;
+  // What the ring divides by once a target is set.
+  //
+  // Home reserves the target before working out what's left to spend; this ring
+  // used to divide by the whole income, so one September read "4% spent" on Home
+  // and "97% unspent" here — and the 97% sat directly above "Goal: set aside
+  // $300", a goal it had not accounted for. §13 renamed the slice from "Saved"
+  // to "Unspent", which made the label honest but left the arithmetic saying
+  // something Home contradicted. The reserve is a slice of its own now, so the
+  // three parts still sum to income and the fraction matches the one Home shows.
+  const spendable = Math.max(income - periodSavings, 0);
+  const leftToSpend = income - periodSavings - spent;
+  const percentageLeft =
+    spendable > 0 ? Math.round(((spendable - spent) / spendable) * 100) : 0;
 
   // The whole allowance behind the cycles, so the page can say where the term
   // stands as well as where this month does. Null outside term mode.
+  // Named the same way on Home and Plan; term mode calls this an allowance
+  // term rather than a budget period.
+  const noWindow = noWindowCopy(budgetPeriod.mode, budgetPeriod.status);
   const term = budgetPeriod.term;
   const showTerm = Boolean(term && term.left != null && current?.cycles);
 
@@ -114,51 +129,96 @@ export default function TrackerPage() {
 
   return (
     <PageWrapper>
+      {/* This period vs History — two views of one surface. The switch lives
+          above the conditional below, so history stays reachable even before
+          anything is logged this period. It replaces the old "All Months"
+          button that used to sit in the header (and a second one at the foot),
+          and it's what gives history a home now that it's no longer a row in
+          the More menu. */}
+      <motion.div variants={fadeUp} initial="initial" animate="animate">
+        <SpendingTabs />
+      </motion.div>
+
       <motion.div
         variants={fadeUp}
         initial="initial"
         animate="animate"
-        className="flex items-start justify-between gap-3"
+        className="mt-6"
       >
-        <div className="min-w-0">
-          <h1 className="text-title-lg">
-            {/* Term cycles are calendar months, so "Period Tracker" over a
-                heading reading "September 2026" just contradicted itself. */}
-            {budgetPeriod.mode === "days" ? "Period Tracker" : "Monthly Tracker"}
-          </h1>
+        <h1 className="text-title-lg">
+          {/* Term cycles are calendar months, so "Period Tracker" over a
+              heading reading "September 2026" just contradicted itself. */}
+          {budgetPeriod.mode === "days" ? "Period Tracker" : "Monthly Tracker"}
+        </h1>
+        {current && (
+          // "· day by day" names the scope: one window in detail here, every
+          // month compared under History.
           <p className="mt-1 text-[13px] text-ink-3">
-            {current
-              ? formatPeriodLabel(current, { mode: budgetPeriod.mode })
-              : "No Budget Period Running"}
+            {formatPeriodLabel(current, { mode: budgetPeriod.mode })} · day by
+            day
           </p>
-        </div>
-        {/* Same destination as the button at the foot of the page. This page
-            runs long, so reaching your history shouldn't require scrolling
-            past all of it first. */}
-        <button
-          type="button"
-          onClick={() => navigate("/stats")}
-          className="mt-1 flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-hairline-strong bg-surface px-3 text-[12.5px] font-medium text-ink transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <BarChart3 className="h-[13px] w-[13px]" />
-          All Months
-        </button>
+        )}
       </motion.div>
 
       {!budgetPeriod.loading && !current ? (
-        <Card className="mt-5">
-          <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
-            <p className="text-[17px] font-semibold tracking-[-0.015em]">Nothing to Track Yet</p>
-            <p className="text-[13px] leading-relaxed text-ink-3">
-              {budgetPeriod.status === "lapsed"
-                ? "Your last budget period has ended. Start the next one to pick tracking back up."
-                : "Set up a budget period to start tracking what you've saved and spent."}
-            </p>
-            <Button onClick={() => navigate("/more")}>
-              {budgetPeriod.status === "lapsed" ? "Start Next Period" : "Set Up a Period"}
-            </Button>
-          </CardContent>
-        </Card>
+        /* The shared EmptyState, and the same words Home uses for the identical
+           situation — this used to be a hand-rolled card with no icon, saying
+           the same thing differently on the two screens that show it. */
+        <motion.div variants={fadeUp} initial="initial" animate="animate">
+          <EmptyState
+            icon={CalendarRange}
+            title={noWindow.title}
+            /* This page's own sentence rather than the shared one: what a
+               reader wants to know here is what the *tracker* will show them
+               once a window exists. The title and the button stay shared, so
+               the thing being asked for is named the same everywhere. */
+            body={
+              budgetPeriod.status === "lapsed"
+                ? noWindow.body
+                : "Set one up and this page will show what you've spent, day by day, and how much is still yours."
+            }
+            action={
+              <Button
+                className="mt-[22px] w-auto px-5"
+                onClick={() => navigate("/more", { state: { open: "period" } })}
+              >
+                {noWindow.action}
+              </Button>
+            }
+          />
+        </motion.div>
+      ) : !loading && !hasData ? (
+        /* One empty state, not five empty cards.
+           
+           With a window running but nothing in it, this page used to render the
+           lot: an empty donut, a savings-target prompt, a calendar of $0.00
+           days, an empty category card and two "$0.00 · 0% of income" tiles.
+           Every one of them was honest and none of them was useful, and three
+           said "add some on the Transactions page" in three different wordings
+           — while the + button sits on this very screen.
+
+           The savings target goes too, for a reason beyond tidiness: setting
+           aside a share of an income you haven't logged is step two offered
+           before step one. It comes back the moment there's anything to
+           divide. */
+        <motion.div variants={fadeUp} initial="initial" animate="animate">
+          <EmptyState
+            icon={Receipt}
+            title="Nothing to Track Yet"
+            body={`Log an entry and you'll see where the ${budgetPeriod.noun} went, day by day, and how much of it is still yours.`}
+            action={
+              <Button
+                className="mt-[22px] w-auto px-5"
+                onClick={() =>
+                  navigate("/transactions", { state: { openAdd: "income" } })
+                }
+              >
+                <Plus className="h-[17px] w-[17px]" />
+                Add Your First Entry
+              </Button>
+            }
+          />
+        </motion.div>
       ) : loading ? (
         /* Skeletons stand at the true height of what they replace, so nothing
            jumps when the data lands — including the two donut cards, which are
@@ -228,15 +288,17 @@ export default function TrackerPage() {
               saved={saved}
               spent={spent}
               percentageSaved={percentageSaved}
+              reserved={periodSavings}
+              left={leftToSpend}
+              percentLeft={percentageLeft}
               hasData={hasData}
               colors={colors}
               total={income}
               totalLabel={budgetNoun === "allowance" ? "Allowance" : "Income"}
-              footnote={
-                periodSavings > 0
-                  ? `Goal: set aside ${formatMoney(periodSavings)} this ${budgetPeriod.noun}`
-                  : null
-              }
+              // No footnote once the reserve is a slice: "Goal: set aside $300"
+              // under the ring was there to supply what the ring left out, and
+              // the ring no longer leaves it out.
+              footnote={null}
             />
           </motion.div>
 
@@ -278,45 +340,28 @@ export default function TrackerPage() {
             />
           </motion.div>
 
-          {/* Breakdown */}
-          <motion.div
-            variants={staggerContainer(0.1, 0.15)}
-            initial="initial"
-            animate="animate"
-            className="grid grid-cols-2 gap-2.5"
-          >
-            {/* "Unspent", not "Saved", for the same reason as the ring above:
-                this is a live period, so income minus spending is money not
-                spent yet. The "% of…" caption names the denominator.
+          {/* No foot breakdown tiles. The ring above is the single money
+              summary — Left to Spend / Reserved / Spent on the spendable base
+              that matches Home. The old "Unspent This {noun}" tile divided by
+              income, so it counted the reserved target as spendable and put a
+              second, larger green figure than the ring on the same screen for
+              the same month. A running month's "% of income" is provisional
+              regardless (near 100% on day one, falling as you spend); that
+              savings-rate view belongs on Stats, where months are finished —
+              one tap away via "All Months" below. Revises §13, which added the
+              tile back when the ring was itself income-based and they agreed. */}
 
-                Named for the window rather than "Total": these sit at the foot
-                of a long page, well out of sight of the heading that says which
-                month they belong to, and "Total Spent" over one month's figure
-                reads as everything ever spent. */}
-            <BreakdownCard
-              icon={PiggyBank}
-              label={`Unspent This ${titleNoun}`}
-              amount={income - spent}
-              percent={percentageSaved}
-              noun={budgetNoun}
-              accent
-            />
-            <BreakdownCard
-              icon={CreditCard}
-              label={`Spent This ${titleNoun}`}
-              amount={spent}
-              percent={percentageSpent}
-              noun={budgetNoun}
-            />
-          </motion.div>
-
+          {/* History moved up to the toggle at the top; what stays here is the
+              other question — how your rate compares. The leaderboard is scored
+              on this same period, and Friends still has no door outside the
+              More menu, so the current-period page is where it belongs. */}
           <motion.div variants={fadeUp} initial="initial" animate="animate">
             <Button
               variant="outline"
-              onClick={() => navigate("/stats")}
+              onClick={() => navigate("/friends")}
               className="w-full gap-2"
             >
-              <BarChart3 className="h-4 w-4" /> View All Months
+              <Users className="h-4 w-4" /> Compare with Friends
             </Button>
           </motion.div>
         </div>
@@ -347,20 +392,36 @@ export function SavedVsSpentCard({
   footnote,
   total = null,
   totalLabel = "Income",
+  // A savings target turns this into a three-part ring. With no target there is
+  // nothing to reserve, so the card keeps its original two slices and its
+  // "Unspent" wording — which is accurate exactly when nothing is set aside.
+  reserved = 0,
+  left = null,
+  percentLeft = 0,
 }) {
-  // Recharts sweeps a donut in by interpolating each sector's angle from zero,
-  // and it does not consult prefers-reduced-motion the way the rest of the app
-  // does — so ask framer and switch it off ourselves. Without this the chart is
-  // the one piece of the UI that still animates for someone who asked it not to.
-  const reduced = useReducedMotion();
-
   // Drop empty slices: a lone 360° sector renders badly with rounded caps, and
   // a zero-value slice contributes nothing but a seam.
-  const slices = [
-    { name: "Unspent", value: saved, fill: colors.saved },
-    { name: "Spent", value: spent, fill: colors.spent },
-  ].filter((s) => s.value > 0);
+  const hasReserve = reserved > 0;
+  // Order round the ring: what you can still spend, what is committed, what has
+  // gone. Reading clockwise from the top that is best case to worst.
+  const legend = hasReserve
+    ? [
+        ["Left to Spend", Math.max(left ?? 0, 0), colors.saved],
+        ["Reserved", reserved, colors.reserved],
+        ["Spent", spent, colors.spent],
+      ]
+    : [
+        ["Unspent", saved, colors.saved],
+        ["Spent", spent, colors.spent],
+      ];
+  const slices = legend
+    .map(([name, value, fill]) => ({ name, value, fill }))
+    .filter((s) => s.value > 0);
   const split = slices.length > 1;
+  // The headline fraction. Off the spendable budget once a target exists, which
+  // is the base Home divides by — see the note on `spendable` in TrackerPage.
+  const ringPercent = hasReserve ? percentLeft : percentageSaved;
+  const ringLabel = hasReserve ? "Left" : "Unspent";
 
   return (
     <Card>
@@ -385,35 +446,19 @@ export function SavedVsSpentCard({
         {hasData ? (
           <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
             <div className="relative h-32 w-32 shrink-0">
-              <PieChart width={128} height={128} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                <Pie
-                  data={slices}
-                  dataKey="value"
-                  nameKey="name"
-                  cx={64}
-                  cy={64}
-                  innerRadius={50.5}
-                  outerRadius={63.5}
-                  cornerRadius={split ? 6.5 : 0}
-                  paddingAngle={split ? 2 : 0}
-                  startAngle={90}
-                  endAngle={-270}
-                  isAnimationActive={!reduced}
-                  animationBegin={250}
-                  animationDuration={1000}
-                  stroke="none"
-                >
-                  {slices.map((s) => (
-                    <Cell key={s.name} fill={s.fill} />
-                  ))}
-                </Pie>
-              </PieChart>
+              <DonutChart
+                slices={slices}
+                size={128}
+                thickness={13}
+                rounded={split}
+                gap={split ? 14 : 0}
+              />
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <span className="num text-[25px] font-medium leading-none">
-                  <AnimatedNumber value={percentageSaved} suffix="%" />
+                  <AnimatedNumber value={ringPercent} suffix="%" />
                 </span>
                 <span className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.07em] text-ink-3">
-                  Unspent
+                  {ringLabel}
                 </span>
               </div>
             </div>
@@ -429,10 +474,7 @@ export function SavedVsSpentCard({
               {/* One word, not "Unspent so far": at 19px the amount needs the
                   room, and the pair reads as the card's own title now that it
                   has none. The period it covers is in the page header. */}
-              {[
-                ["Unspent", saved, colors.saved],
-                ["Spent", spent, colors.spent],
-              ].map(([label, value, swatch]) => (
+              {legend.map(([label, value, swatch]) => (
                 <Fragment key={label}>
                   <dt className="flex items-center gap-2">
                     <span
@@ -496,8 +538,12 @@ export function SavedVsSpentCard({
           </div>
         ) : (
           <>
+            {/* Reached only from the design harness now: a period with nothing
+                in it never gets this far, since the page short-circuits to one
+                empty state. Kept honest anyway, and pointing at the + on this
+                screen rather than at another page. */}
             <p className="text-[13px] leading-relaxed text-ink-3">
-              No data yet. Add some income &amp; expenses on the Transactions page.
+              Nothing logged yet. Tap + to add an entry.
             </p>
             {footnote && (
               <p className="mt-3 text-[11px] leading-relaxed text-ink-3">{footnote}</p>
@@ -519,10 +565,6 @@ export function SavedVsSpentCard({
  * Exported for the design harness, as above.
  */
 export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
-  // Same reason as the card above: recharts animates regardless of the user's
-  // motion preference unless told otherwise.
-  const reduced = useReducedMotion();
-
   return (
     <Card>
       <CardContent className="px-[18px] py-5">
@@ -536,28 +578,7 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
              ("Entertainment") run longer than the mockup's ("Fun"). */
           <div className="mt-4 ml-3 flex flex-wrap items-center gap-x-4 gap-y-4">
             <div className="relative h-28 w-28 shrink-0">
-              <PieChart width={112} height={112} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                <Pie
-                  data={byCategory}
-                  dataKey="value"
-                  nameKey="name"
-                  cx={56}
-                  cy={56}
-                  innerRadius={43.5}
-                  outerRadius={55.5}
-                  paddingAngle={0}
-                  startAngle={90}
-                  endAngle={-270}
-                  isAnimationActive={!reduced}
-                  animationBegin={250}
-                  animationDuration={1000}
-                  stroke="none"
-                >
-                  {byCategory.map((c) => (
-                    <Cell key={c.name} fill={c.color} />
-                  ))}
-                </Pie>
-              </PieChart>
+              <DonutChart slices={byCategory} size={112} thickness={12} />
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 {/* To the cent, matching the per-category rows immediately to
                     the right. This was whole dollars on the grounds that a
@@ -597,8 +618,11 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
             </dl>
           </div>
         ) : (
+          /* The live case: income logged, nothing spent. The + is on this
+             screen, so sending the reader to the Transactions page to do what a
+             button here already does was a detour. */
           <p className="mt-4 text-[13px] leading-relaxed text-ink-3">
-            No expenses yet this {emptyNoun}. Add some on the Transactions page.
+            No expenses yet this {emptyNoun}. Tap + to add one.
           </p>
         )}
       </CardContent>
@@ -766,36 +790,4 @@ export function TermCard({ term, current, cycles = [] }) {
   );
 }
 
-function BreakdownCard({ icon: Icon, label, amount, percent, noun = "income", accent }) {
-  // A negative "total unspent" is the over-budget case — the one thing red is
-  // reserved for. Green is only for money still unspent.
-  const over = accent && amount < 0;
-  const kept = accent && !over;
-
-  return (
-    <motion.div variants={fadeScaleItem}>
-      <Card className={`h-full ${kept ? "bg-positive/[0.09]" : ""}`}>
-        <CardContent className="p-4">
-          <span
-            className={`flex h-[34px] w-[34px] items-center justify-center rounded-sm ${
-              kept ? "bg-positive/10 text-positive" : "bg-surface-2 text-ink-2"
-            }`}
-          >
-            <Icon className="h-[17px] w-[17px]" />
-          </span>
-          <p
-            className={`num mt-3 text-[22px] font-medium ${
-              over ? "text-negative" : kept ? "text-positive" : "text-ink"
-            }`}
-          >
-            <AnimatedNumber value={amount} prefix="$" decimals={2} />
-          </p>
-          <p className="mt-1 text-meta text-ink-2">{label}</p>
-          <p className="mt-0.5 text-meta text-ink-3">
-            <AnimatedNumber value={percent} suffix="%" /> of {noun}
-          </p>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
-}
+// BreakdownCard removed with the foot tiles — see the note where they rendered.

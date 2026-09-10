@@ -1,20 +1,13 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
-
+import { ChevronDown, Plus, Receipt } from "lucide-react";
 import PageWrapper from "@/components/PageWrapper";
+import SpendingTabs from "@/components/SpendingTabs";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import DailySpendingCard from "@/components/DailySpendingCard";
+import EmptyState from "@/components/EmptyState";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAllSummaries, fetchTransactions } from "@/api/endpoints";
@@ -23,6 +16,11 @@ import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useToast } from "@/hooks/useToast";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
+
+// The monthly bar chart carries recharts (~113KB gzipped), so it's split into
+// its own chunk and lazy-loaded — recharts downloads when the History view
+// mounts rather than sitting in the eager page chunk.
+const StatsBarChart = lazy(() => import("@/components/StatsBarChart"));
 
 /**
  * How far back the day-by-day calendar reaches. The headline figures and the
@@ -92,6 +90,7 @@ function fundingByMonth(history = []) {
 const round = (n) => Math.round(n * 100) / 100;
 
 export default function StatsPage() {
+  const navigate = useNavigate();
   const colors = useChartColors();
   const budgetPeriod = useBudgetPeriod();
   const toast = useToast();
@@ -248,7 +247,19 @@ export default function StatsPage() {
 
   return (
     <PageWrapper>
+      {/* The History half of the spending surface — the same switch the Tracker
+          carries, so this reads as one of two views rather than a separate
+          page you had to dig out of the More menu. */}
       <motion.div variants={fadeUp} initial="initial" animate="animate">
+        <SpendingTabs />
+      </motion.div>
+
+      <motion.div
+        variants={fadeUp}
+        initial="initial"
+        animate="animate"
+        className="mt-6"
+      >
         <h1 className="text-title-lg">All Months</h1>
         <p className="mt-1 text-[13px] text-ink-3">
           Savings vs spending across every month you've tracked.
@@ -279,12 +290,26 @@ export default function StatsPage() {
             </Card>
           </div>
         ) : data.length === 0 ? (
-          <Card>
-            <CardContent className="p-10 text-center text-[13px] leading-relaxed text-ink-3">
-              No monthly data yet. Add some transactions to start building your
-              history.
-            </CardContent>
-          </Card>
+          /* Was a bare card with no icon and, alone among the app's empty
+             states, no action at all — on a page you can only reach by asking
+             for it, which makes arriving at a dead end worse. It also named the
+             absence rather than what the page is for. */
+          <EmptyState
+            icon={Receipt}
+            title="No Months to Compare Yet"
+            body="Log a few entries and this fills in on its own — every month you've tracked, side by side."
+            action={
+              <Button
+                className="mt-[22px] w-auto px-5"
+                onClick={() =>
+                  navigate("/transactions", { state: { openAdd: "income" } })
+                }
+              >
+                <Plus className="h-[17px] w-[17px]" />
+                Add Your First Entry
+              </Button>
+            }
+          />
         ) : (
           <div className="space-y-4">
             {/* Which lens the headline figures use. The chart and breakdown
@@ -360,59 +385,13 @@ export default function StatsPage() {
             <Card>
               <CardContent className="p-4 pl-1">
                 <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data} barGap={4} margin={{ top: 8, right: 12 }}>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        vertical={false}
-                        stroke={colors.grid}
-                      />
-                      <XAxis
-                        dataKey="label"
-                        tickLine={false}
-                        axisLine={false}
-                        fontSize={12}
-                        stroke={colors.axis}
-                      />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        fontSize={12}
-                        width={48}
-                        stroke={colors.axis}
-                        tickFormatter={(v) => `$${v}`}
-                      />
-                      <Tooltip
-                        formatter={(v) => formatMoney(v)}
-                        cursor={{ fill: colors.cursor }}
-                        contentStyle={{
-                          borderRadius: 12,
-                          border: `1px solid ${colors.tooltipBorder}`,
-                          background: colors.tooltipBg,
-                          color: colors.tooltipText,
-                        }}
-                        itemStyle={{ color: colors.tooltipText }}
-                        labelStyle={{ color: colors.tooltipText }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 13 }} />
-                      <Bar
-                        dataKey="Saved"
-                        fill={colors.saved}
-                        radius={[6, 6, 0, 0]}
-                        isAnimationActive
-                        animationBegin={150}
-                        animationDuration={800}
-                      />
-                      <Bar
-                        dataKey="Spent"
-                        fill={colors.spent}
-                        radius={[6, 6, 0, 0]}
-                        isAnimationActive
-                        animationBegin={350}
-                        animationDuration={800}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <Suspense
+                    fallback={
+                      <div className="h-full w-full animate-pulse rounded-md bg-surface-2" />
+                    }
+                  >
+                    <StatsBarChart data={data} colors={colors} />
+                  </Suspense>
                 </div>
               </CardContent>
             </Card>

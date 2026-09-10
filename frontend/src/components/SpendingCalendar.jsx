@@ -77,7 +77,10 @@ export default function SpendingCalendar({
                     // useful thing this calendar can tell you.
                     d.isToday
                     ? d.over
-                      ? "bg-negative text-white"
+                      ? // text-destructive-foreground, not white: on dark mode's
+                        // lighter red the day number needs a near-black to stay
+                        // readable (white is 3.3:1 there). White in light mode.
+                        "bg-negative text-destructive-foreground"
                       : "bg-ink text-surface"
                     : d.over
                       ? // The ring is deliberate: over-budget must not be

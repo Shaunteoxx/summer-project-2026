@@ -86,6 +86,19 @@ beforeEach(() => {
   mockPeriod = { current: null, noun: "month", status: "active", term: null };
 });
 
+describe("drilling into detail", () => {
+  it("opens the period breakdown on Tracker from the money strip", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    await show();
+    // The In / Out / Reserved strip summarises the period; tapping it is the
+    // way into the page that expands it, rather than hunting for the tab.
+    await user.click(
+      await screen.findByRole("button", { name: /See the full breakdown/i })
+    );
+    expect(navigate).toHaveBeenCalledWith("/tracker");
+  });
+});
+
 describe("the pace bar", () => {
   it("renders the page at all", async () => {
     await show();
@@ -144,7 +157,11 @@ describe("the pace bar", () => {
       const user = (await import("@testing-library/user-event")).default.setup();
       await overspend();
       await user.click(await screen.findByRole("button", { name: "Lower Target" }));
-      expect(navigate).toHaveBeenCalledWith("/more");
+      // Not just the screen — the sheet. Naming the row and leaving the reader
+      // to find it is the dead end this asks about.
+      expect(navigate).toHaveBeenCalledWith("/more", {
+        state: { open: "savings" },
+      });
     });
 
     it("shows neither button while the budget still holds", async () => {
@@ -241,7 +258,9 @@ describe("with no budget period running", () => {
     const user = (await import("@testing-library/user-event")).default.setup();
     await showNoPeriod();
     await user.click(screen.getByRole("button", { name: "Set Up a Period" }));
-    expect(navigate).toHaveBeenCalledWith("/more");
+    expect(navigate).toHaveBeenCalledWith("/more", {
+      state: { open: "period" },
+    });
   });
 });
 
@@ -287,6 +306,179 @@ describe("with nothing logged yet", () => {
     expect(navigate).toHaveBeenCalledWith("/transactions", {
       state: { openAdd: "income" },
     });
+  });
+
+  it("counts the steps in month mode, where there is no window to start", async () => {
+    await showEmpty();
+    expect(screen.getByText("Set Up in Two Steps")).toBeInTheDocument();
+    expect(screen.getByText(/Log the money coming in this month/)).toBeInTheDocument();
+  });
+
+  // A new account is always in month mode (User.budgetMode defaults to it), and
+  // the days and term checklists can't be seen until you've already chosen one
+  // — so without this line the other two budget models were undiscoverable to
+  // exactly the reader most likely to need them, a student whose allowance
+  // arrives once a semester rather than once a month.
+  it("says the other budget models exist, which only month mode has to", async () => {
+    await showEmpty();
+    expect(
+      screen.getByText(/Money not monthly\? Budget by a set number of days/)
+    ).toBeInTheDocument();
+  });
+
+  it("takes you there rather than just naming the screen", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    await showEmpty();
+    await user.click(screen.getByRole("button", { name: /Change how you budget/ }));
+    expect(navigate).toHaveBeenCalledWith("/more", {
+      state: { open: "period" },
+    });
+  });
+
+  it("leaves the hint off the modes that already made the choice", async () => {
+    mockPeriod = {
+      current: { id: "p", start: "2026-09-01", end: "2026-09-14", days: 14, daysLeft: 9 },
+      noun: "period",
+      status: "active",
+      mode: "days",
+      term: null,
+    };
+    fetchHomeStats.mockResolvedValue({
+      ...stats,
+      leftToSpend: 0,
+      periodIncome: 0,
+      periodExpenses: 0,
+      periodSavings: 0,
+    });
+    fetchTransactions.mockResolvedValue([]);
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
+    );
+    await screen.findByText("Nothing Logged Yet");
+    expect(screen.queryByText(/Money not monthly/)).not.toBeInTheDocument();
+  });
+});
+
+// Month mode always has a window — the calendar supplies one — so logging
+// money really is the first thing to do. Days and term mode don't: you start a
+// window yourself, and until you have, income has no span to be divided over.
+// This block used to greet every newcomer identically, telling a days-mode
+// first-timer to "log the money coming in this period" over a period that did
+// not exist, and never mentioning the one step they could not skip.
+describe("setting up an account that has no window yet", () => {
+  const showNew = async (mode, noun = "period") => {
+    mockPeriod = { current: null, noun, status: "none", mode, term: null };
+    fetchHomeStats.mockResolvedValue({
+      ...stats,
+      period: null,
+      leftToSpend: 0,
+      periodIncome: 0,
+      periodExpenses: 0,
+      periodSavings: 0,
+    });
+    fetchTransactions.mockResolvedValue([]);
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
+    );
+    await screen.findByText("Set Up in Three Steps");
+  };
+
+  it("asks a days-mode first-timer to start a period, not to log income", async () => {
+    await showNew("days");
+    expect(screen.getByText("No Budget Period Running Yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set Up a Period" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Add Your First Entry/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it("calls it an allowance term in term mode, on every screen's wording", async () => {
+    await showNew("term", "month");
+    expect(screen.getByText("No Allowance Term Set Up Yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set Up a Term" })).toBeInTheDocument();
+  });
+
+  it("puts starting the window first and lights it as the step to do", async () => {
+    await showNew("days");
+    const steps = screen.getAllByText(/^(Start a budget period|Log the money|Set what you want)/);
+    expect(steps).toHaveLength(3);
+    expect(steps[0].textContent).toMatch(/Start a budget period, and say how long it runs/);
+    // Lit means ink; the steps still to come stay quiet. Step one is the live
+    // one while the window is missing — it briefly lit step two, which is the
+    // one you can't do yet.
+    expect(steps[0].className).toMatch(/text-ink-2/);
+    expect(steps[1].className).toMatch(/text-ink-3/);
+  });
+
+  it("opens the thing each step describes, rather than naming a row to find", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    await showNew("days");
+
+    // Step one is the window itself.
+    await user.click(screen.getByRole("button", { name: /Start a budget period/ }));
+    expect(navigate).toHaveBeenCalledWith("/more", {
+      state: { open: "period" },
+    });
+
+    // Step two is the ledger, with the income sheet already up.
+    await user.click(screen.getByRole("button", { name: /Log the money coming in/ }));
+    expect(navigate).toHaveBeenCalledWith("/transactions", {
+      state: { openAdd: "income" },
+    });
+  });
+
+  it("sends the savings step to the window it needs, while there isn't one", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    await showNew("days");
+    // A target has nothing to attach to until a period is running, and MorePage
+    // refuses to open the sheet — so this step routes to the prerequisite
+    // instead of landing the reader on a toast.
+    await user.click(screen.getByRole("button", { name: /Set what you want to keep/ }));
+    expect(navigate).toHaveBeenCalledWith("/more", {
+      state: { open: "period" },
+    });
+  });
+
+  it("tells a term user the lump sum is logged once, not monthly", async () => {
+    await showNew("term", "month");
+    expect(
+      screen.getByText(/Log the lump sum once — it's split across those months/)
+    ).toBeInTheDocument();
+  });
+
+  it("lights step two once a window exists, since step one is behind you", async () => {
+    mockPeriod = {
+      current: { id: "p", start: "2026-09-01", end: "2026-09-14", days: 14, daysLeft: 9 },
+      noun: "period",
+      status: "active",
+      mode: "days",
+      term: null,
+    };
+    fetchHomeStats.mockResolvedValue({
+      ...stats,
+      leftToSpend: 0,
+      periodIncome: 0,
+      periodExpenses: 0,
+      periodSavings: 0,
+    });
+    fetchTransactions.mockResolvedValue([]);
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
+    );
+    await screen.findByText("Nothing Logged Yet");
+    // The window is started, so the offer is to log money — not to start it again.
+    expect(
+      screen.getByRole("button", { name: /Add Your First Entry/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Set Up a Period" })
+    ).not.toBeInTheDocument();
   });
 });
 

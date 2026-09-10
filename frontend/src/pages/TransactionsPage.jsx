@@ -679,7 +679,12 @@ export default function TransactionsPage() {
                           <button
                             onClick={() => handleDelete(t._id)}
                             aria-label={`Delete ${t.description}`}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            // 44px of target in a 36px-looking button. It grows
+                            // to the RIGHT, into the row's own px-4 padding —
+                            // widening it leftward instead would close the 4px
+                            // gap to the edit button beside it, and a mis-tap
+                            // there deletes rather than opens.
+                            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>

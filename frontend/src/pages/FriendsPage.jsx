@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Search, UserPlus } from "lucide-react";
+import { ChevronRight, Search, UserPlus } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
 import Avatar from "@/components/Avatar";
@@ -31,6 +31,10 @@ export default function FriendsPage() {
   const [searching, setSearching] = useState(false);
   const [requests, setRequests] = useState([]);
   const [comparison, setComparison] = useState(null);
+  // The leaderboard's "you're the only one here" note acts on this rather than
+  // naming another screen: the field is already on the page, just scrolled off
+  // the top by the time you've read down to the note.
+  const searchRef = useRef(null);
 
   const loadRequests = () => fetchRequests().then(setRequests).catch(() => {});
   const loadComparison = () =>
@@ -127,6 +131,7 @@ export default function FriendsPage() {
           aria-hidden="true"
         />
         <Input
+          ref={searchRef}
           type="search"
           aria-label="Search users by username"
           placeholder="Find someone by username"
@@ -268,9 +273,29 @@ export default function FriendsPage() {
               ))}
             </motion.ul>
             {comparison.leaderboard.length === 1 && (
-              <p className="mt-3 px-0.5 text-[13px] leading-relaxed text-ink-3">
-                Add friends to compare your savings with theirs.
-              </p>
+              /* Not the shared EmptyState: the row above is real content —
+                 your own rate — so this is "you're the only one here", not an
+                 empty page. What it was missing is an action. It was the last
+                 note in the app that named a next step without offering it,
+                 and the thing it describes is a field already on this screen,
+                 so it focuses that rather than sending anyone anywhere. */
+              <button
+                type="button"
+                onClick={() => {
+                  searchRef.current?.scrollIntoView({
+                    block: "center",
+                    behavior: "smooth",
+                  });
+                  searchRef.current?.focus();
+                }}
+                className="mt-3 flex w-full items-center gap-1.5 rounded-sm px-0.5 text-left text-[13px] leading-relaxed text-ink-3 transition-colors duration-base ease-out hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span>
+                  Add friends to compare your savings with theirs.{" "}
+                  <span className="font-medium text-ink-2">Find someone</span>
+                </span>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 self-end text-ink-3" />
+              </button>
             )}
           </>
         )}

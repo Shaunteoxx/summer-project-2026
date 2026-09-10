@@ -6,7 +6,10 @@ import { EASE, DUR } from "@/animations/variants";
 
 // Where adding an entry is a sensible next action. Plan is a what-if surface
 // and More is settings; a button offering to log an expense on either is noise.
-const SHOW_ON = ["/", "/transactions", "/tracker"];
+//
+// Exported because PageWrapper needs the same list: these are exactly the pages
+// whose content has to clear the button, and two copies would drift.
+export const SHOW_ON = ["/", "/transactions", "/tracker"];
 
 /**
  * The add-transaction button.
@@ -20,6 +23,13 @@ const SHOW_ON = ["/", "/transactions", "/tracker"];
  *
  * Practical upside: 54px against a ~44px tab, and the bottom-right corner is an
  * easier thumb reach on a tall phone than dead centre.
+ *
+ * It stays put while the page scrolls — deliberately. TransactionsPage dropped
+ * its own Income/Expense buttons on the strength of this being "a persistent
+ * 54px target that doesn't scroll away", so hiding it on scroll would take away
+ * the only way into the sheet on the page that needs it most. What the corner
+ * costs instead is paid for in layout: PageWrapper pads FAB pages so content
+ * clears the button, and nothing interactive is placed in the corner it covers.
  */
 export default function AddFab() {
   const navigate = useNavigate();

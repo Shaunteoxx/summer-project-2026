@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/lib/utils", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -70,8 +71,17 @@ const txn = (date, amount, category = "F & B") => ({
 });
 
 /** Render and wait for both fetches to settle. */
+// The page navigates now — its empty state offers to open the entry sheet
+// rather than leaving the reader at a dead end — so it needs a router.
+const renderPage = () =>
+  render(
+    <MemoryRouter>
+      <StatsPage />
+    </MemoryRouter>
+  );
+
 const show = async () => {
-  render(<StatsPage />);
+  renderPage();
   return screen.findByRole("button", { name: /All Time/ });
 };
 
@@ -197,8 +207,8 @@ describe("the daily calendar", () => {
 
   it("is left out entirely when there's no history", async () => {
     fetchAllSummaries.mockResolvedValue([]);
-    render(<StatsPage />);
-    expect(await screen.findByText(/No monthly data yet/)).toBeInTheDocument();
+    renderPage();
+    expect(await screen.findByText("No Months to Compare Yet")).toBeInTheDocument();
     expect(fetchTransactions).not.toHaveBeenCalled();
   });
 });

@@ -1,16 +1,6 @@
-import { useMemo, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { lazy, Suspense, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { BarChart3, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
-import {
-  ComposedChart,
-  Bar,
-  Line,
-  Cell,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 
 import { Card, CardContent } from "@/components/ui/card";
 import BottomSheet from "@/components/BottomSheet";
@@ -54,33 +44,10 @@ function buildCalendarPages(days) {
   }));
 }
 
-/**
- * Custom X tick. Ticks are placed by position within whatever slice of the
- * period is on screen — first, every 5th, and today — and labelled with the
- * day of the month, since a period can span more than one calendar month.
- */
-function DayTick({ x, y, payload, days, today, axis, primary }) {
-  const i = days.findIndex((d) => d.ymd === payload.value);
-  if (i === -1) return null;
-  const todayIndex = days.findIndex((d) => d.ymd === today);
-  const day = days[i].day;
-  if (!(i === 0 || i % 5 === 0 || i === todayIndex)) return null;
-  const isToday = i === todayIndex;
-  // Today's label wins when a regular label would collide with it.
-  if (!isToday && todayIndex >= 0 && Math.abs(i - todayIndex) <= 1) return null;
-  return (
-    <text
-      x={x}
-      y={y + 10}
-      textAnchor="middle"
-      fontSize={10.5}
-      fontWeight={isToday ? 600 : 400}
-      fill={isToday ? primary : axis}
-    >
-      {day}
-    </text>
-  );
-}
+// The bar+line chart carries recharts (~113KB gzipped), so it's split into its
+// own chunk and loaded only when the reader opens the Chart view. The
+// calendar-and-donuts default never downloads it.
+const DailySpendingChart = lazy(() => import("./DailySpendingChart"));
 
 /**
  * Daily spending tracker for a span of days, as a calendar (default) or a bar
@@ -109,10 +76,12 @@ export default function DailySpendingCard({
   periodDays = [],
   todayBudget = 0,
   subtitle,
-  emptyMessage = "No spending logged yet this period. Add an expense on the Transactions page to see your daily pattern.",
+  // Default speaks for the Tracker, which is the only caller that doesn't pass
+  // its own — and which carries the + button this points at. Stats supplies a
+  // message of its own, since nothing can be added from there.
+  emptyMessage = "No spending logged yet this period. Tap + to add an expense and your daily pattern starts here.",
 }) {
   const colors = useChartColors();
-  const reduce = useReducedMotion();
   const { getCategory } = useCategories();
   const [view, setView] = useState(
     () => localStorage.getItem(VIEW_KEY) || "calendar"
@@ -270,95 +239,19 @@ export default function DailySpendingCard({
                 </div>
               ) : (
                 <div className={paginated ? "mt-2.5 h-52" : "mt-4 h-52"}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart
-                      data={shownDays}
-                      margin={{ top: 6, right: 4, left: 0, bottom: 0 }}
-                    >
-                      {/* No gridlines — a single baseline instead, per the
-                          chart rules. The Y labels carry the scale. */}
-                      <XAxis
-                        dataKey="ymd"
-                        interval={0}
-                        tickLine={false}
-                        axisLine={{ stroke: colors.grid }}
-                        tick={
-                          <DayTick
-                            days={shownDays}
-                            today={todayYmd}
-                            axis={colors.axis}
-                            primary={colors.primary}
-                          />
-                        }
-                      />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        fontSize={10.5}
-                        width={44}
-                        stroke={colors.axis}
-                        tickFormatter={(v) => `$${v}`}
-                      />
-                      <Tooltip
-                        cursor={{ fill: colors.cursor }}
-                        formatter={(v, name) => [formatMoney(v), name]}
-                        labelFormatter={(key) => formatDay(key)}
-                        contentStyle={{
-                          borderRadius: 12,
-                          border: `1px solid ${colors.tooltipBorder}`,
-                          background: colors.tooltipBg,
-                          color: colors.tooltipText,
-                        }}
-                        itemStyle={{ color: colors.tooltipText }}
-                        labelStyle={{ color: colors.tooltipText }}
-                      />
-                      <Bar
-                        dataKey="amount"
-                        name="Spent"
-                        radius={[4, 4, 0, 0]}
-                        isAnimationActive={!reduce}
-                        animationDuration={800}
-                        onClick={(_, index) => setSelected(shownDays[index])}
-                        cursor="pointer"
-                      >
-                        {shownDays.map((d) => (
-                          <Cell
-                            key={d.ymd}
-                            fill={
-                              d.amount === 0
-                                ? "transparent"
-                                : d.over
-                                  ? colors.over
-                                  : colors.spent
-                            }
-                            // Today is outlined; red when over its own budget.
-                            stroke={
-                              d.isToday
-                                ? d.over
-                                  ? colors.over
-                                  : colors.primary
-                                : "none"
-                            }
-                            strokeWidth={d.isToday ? 1.5 : 0}
-                          />
-                        ))}
-                      </Bar>
-                      {budgetsAvailable && (
-                        <Line
-                          type="stepAfter"
-                          dataKey="budget"
-                          name="Budget"
-                          stroke={colors.primary}
-                          strokeWidth={1.5}
-                          strokeDasharray="4 4"
-                          dot={false}
-                          activeDot={false}
-                          connectNulls={false}
-                          isAnimationActive={!reduce}
-                        />
-                      )}
-                    </ComposedChart>
-                  </ResponsiveContainer>
+                  <Suspense
+                    fallback={
+                      <div className="h-full w-full animate-pulse rounded-md bg-surface-2" />
+                    }
+                  >
+                    <DailySpendingChart
+                      days={shownDays}
+                      colors={colors}
+                      todayYmd={todayYmd}
+                      budgetsAvailable={budgetsAvailable}
+                      onSelectDay={setSelected}
+                    />
+                  </Suspense>
                 </div>
               )}
 

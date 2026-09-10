@@ -4,7 +4,7 @@ import { AnimatePresence } from "framer-motion";
 
 import Navbar from "@/components/Navbar";
 import BottomNav from "@/components/BottomNav";
-import AddFab from "@/components/AddFab";
+import AddFab, { SHOW_ON as FAB_ROUTES } from "@/components/AddFab";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 // Eager: tiny screens that gate the rest of the app.
@@ -79,13 +79,32 @@ function PageFallback() {
  */
 function AppLayout() {
   const location = useLocation();
+  // PageWrapper's own padding clears the tab bar. On the three routes that also
+  // carry the add button, the page has to clear that too: it floats 4.9rem up
+  // and stands 54px tall, so its top edge is 132.4px above the viewport bottom
+  // — past the 88px the tab bar needed. Without this the last row of a ledger
+  // sits under the button with no scroll left to free it. Measured, not guessed.
+  //
+  // It lives here rather than in PageWrapper because only the shell knows which
+  // route is showing, and PageWrapper is rendered by all seven pages.
+  const clearsFab = FAB_ROUTES.includes(location.pathname);
+  // Tracker and its History view are two faces of one surface (the SpendingTabs
+  // toggle). Sharing an AnimatePresence key across them means switching doesn't
+  // play the full-page exit-then-enter transition — mode="wait" has nothing to
+  // wait for — so the toggle reads like a segmented control rather than a page
+  // load. Every other route change still animates normally.
+  const routeKey = ["/tracker", "/stats"].includes(location.pathname)
+    ? "spending"
+    : location.pathname;
   return (
     <div className="flex min-h-[100dvh] flex-col bg-canvas">
       <Navbar />
-      <main className="mx-auto w-full max-w-app flex-1">
+      <main
+        className={`mx-auto w-full max-w-app flex-1 ${clearsFab ? "pb-14" : ""}`}
+      >
         <AnimatePresence mode="wait">
           <Suspense fallback={<PageFallback />}>
-            <Outlet key={location.pathname} />
+            <Outlet key={routeKey} />
           </Suspense>
         </AnimatePresence>
       </main>

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowLeftRight, Receipt } from "lucide-react";
+import { ArrowLeftRight, CalendarRange, Plus, Receipt } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
 import AnimatedNumber from "@/components/AnimatedNumber";
+import EmptyState from "@/components/EmptyState";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchHomeStats, fetchStreak } from "@/api/endpoints";
 import { cn, formatMoney, localToday } from "@/lib/utils";
-import { addDaysYmd, formatDay, formatPeriodLabel } from "@/lib/period";
+import { addDaysYmd, formatDay, noWindowCopy } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useToast } from "@/hooks/useToast";
 import { staggerContainer, fadeUp } from "@/animations/variants";
@@ -76,15 +77,27 @@ export default function PlanPage() {
   const spentToday = streak?.today?.spent ?? 0;
   const leftToday = todayBudget - spentToday;
   const spentBeforeToday = spentSoFar - spentToday;
+  // In days and term mode there may be no window running at all, in which case
+  // "no income" is a symptom rather than the problem.
+  const noPeriod = !period;
+  const noWindow = noWindowCopy(budgetPeriod.mode, budgetPeriod.status);
+  // Nothing in the ledger for this window either way, so "your first entry" is
+  // a fair thing to call the next one.
+  const nothingLogged = spentSoFar <= 0;
+  // Title case for a label — see design/COPY_CONVENTIONS.md.
+  const titleNoun = noun === "period" ? "Period" : "Month";
 
   return (
     <PageWrapper>
       <motion.div variants={fadeUp} initial="initial" animate="animate">
         <h1 className="text-title-lg">Plan</h1>
+        {/* A forward frame, so the three "how am I doing" pages read as a set:
+            Tracker is now, Stats is finished months, and Plan is what's still
+            ahead. It used to describe its data source ("your real … numbers"),
+            which said what it runs on but not what it's for. */}
         <p className="mt-1 text-[13px] text-ink-3">
-          Live off your real{" "}
-          {period ? formatPeriodLabel(period, { mode: budgetPeriod.mode }) : "budget"}{" "}
-          numbers.
+          Look ahead — what today&apos;s spending leaves for the rest of your{" "}
+          {noun}.
         </p>
       </motion.div>
 
@@ -110,24 +123,65 @@ export default function PlanPage() {
           </div>
         </div>
       ) : income <= 0 ? (
-        <motion.div variants={fadeUp} initial="initial" animate="animate" className="mt-5">
-          <Card>
-            <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
-              <span className="flex h-[52px] w-[52px] items-center justify-center rounded-md bg-surface-2 text-ink-2">
-                <Receipt className="h-6 w-6" />
-              </span>
-              <p className="text-[17px] font-semibold tracking-[-0.015em]">
-                No income logged this {noun}
-              </p>
-              <p className="text-[13px] leading-relaxed text-ink-3">
-                Add your {noun}&apos;s income and these planners will work out what
-                you can spend, live.
-              </p>
-              <Button onClick={() => navigate("/transactions")} className="mt-1">
-                Add Income
-              </Button>
-            </CardContent>
-          </Card>
+        /* Three different situations reach `income <= 0`, and one button can't
+           be honest about all of them.
+           - No window at all (days or term mode, nothing started): income is 0
+             because there is nowhere to put it. Logging money won't help; the
+             fix is upstream, so this points at More rather than the sheet.
+           - Nothing logged, ever: "your first entry" is true.
+           - Expenses but no income yet: they have entries, so calling the next
+             one their first would be wrong. It's income that's missing.
+
+           Whichever it is, the button now *opens the sheet* rather than
+           dropping the reader on the ledger with nothing open — which matters
+           more here than anywhere else, because the + button is deliberately
+           hidden on Plan (see AddFab), so this is the only way in.
+
+           `periodExpenses` is the only evidence this page holds about the
+           ledger. Someone whose entries are all in an earlier period is
+           greeted as a first-timer; that's a mild, rare wrong over fetching a
+           count for the sake of a label. */
+        <motion.div variants={fadeUp} initial="initial" animate="animate">
+          {noPeriod ? (
+            <EmptyState
+              icon={CalendarRange}
+              title={noWindow.title}
+              body={
+                budgetPeriod.status === "lapsed"
+                  ? noWindow.body
+                  : "These planners divide up a budget window. Set one up and they'll have something to work with."
+              }
+              action={
+                <Button
+                  className="mt-[22px] w-auto px-5"
+                  onClick={() => navigate("/more", { state: { open: "period" } })}
+                >
+                  {noWindow.action}
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={Receipt}
+              title={nothingLogged ? "Nothing Logged Yet" : `No Income This ${titleNoun}`}
+              body={
+                nothingLogged
+                  ? `Log what you've got coming in and these planners work out what you can spend today, and what that costs you tomorrow.`
+                  : `You've logged what's going out, but not what's coming in. Add this ${noun}'s income and the planners below start working.`
+              }
+              action={
+                <Button
+                  className="mt-[22px] w-auto px-5"
+                  onClick={() =>
+                    navigate("/transactions", { state: { openAdd: "income" } })
+                  }
+                >
+                  <Plus className="h-[17px] w-[17px]" />
+                  {nothingLogged ? "Add Your First Entry" : "Add Income"}
+                </Button>
+              }
+            />
+          )}
         </motion.div>
       ) : (
         <motion.div

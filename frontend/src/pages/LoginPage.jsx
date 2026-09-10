@@ -105,7 +105,8 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-[22px] text-center text-[11.5px] leading-relaxed text-ink-3">
-          The demo is read-only. Nothing you do in it is saved.
+          The demo is a private sandbox — try anything. It resets when you sign
+          out.
         </p>
       </motion.div>
     </div>

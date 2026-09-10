@@ -1,11 +1,15 @@
 import { NavLink } from "react-router-dom";
-import { Home, Receipt, PieChart, Calculator, MoreHorizontal } from "lucide-react";
+import { Home, Receipt, PieChart, MoreHorizontal } from "lucide-react";
 
+// Four destinations, not five. Plan came off the bar: it's an occasional
+// what-if tool on the same numbers as Home, so it reads better as a link from
+// Home (the pace and streak cards) and a row in More than as a permanent tab.
+// Tracker now carries History too (the old Stats page) via a toggle, so there
+// was never a Stats tab to add in its place — the bar just gets less crowded.
 const tabs = [
   { to: "/", label: "Home", icon: Home, end: true },
   { to: "/transactions", label: "Transactions", icon: Receipt },
   { to: "/tracker", label: "Tracker", icon: PieChart },
-  { to: "/plan", label: "Plan", icon: Calculator },
   { to: "/more", label: "More", icon: MoreHorizontal },
 ];
 
@@ -45,7 +49,7 @@ export default function BottomNav() {
                     strokeWidth={isActive ? 2.15 : 1.9}
                   />
                   <span
-                    className={`text-[9.5px] leading-none transition-colors duration-base ease-out ${
+                    className={`text-[10.5px] leading-none transition-colors duration-base ease-out ${
                       isActive ? "font-semibold text-ink" : "font-medium text-ink-3"
                     }`}
                   >
