@@ -272,12 +272,15 @@ describe("editing a transaction", () => {
     assert.equal(body.description, "Lunch");
   });
 
-  it("blocks the demo account", async () => {
+  it("lets a demo sandbox correct its own entry", async () => {
+    // Editing used to 403 for a demo. Each visitor has a private account now,
+    // so the entry is theirs to fix like anyone else's.
     const token = signToken(await makeUser({ isDemo: true }));
-    const id = new mongoose.Types.ObjectId();
+    const created = await addTxn(token);
 
-    const res = await edit(token, id, { amount: 1 });
+    const res = await edit(token, created._id ?? created.id, { amount: 1 });
 
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.amount, 1);
   });
 });

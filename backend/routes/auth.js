@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import express from "express";
 import passport from "passport";
 import { env } from "../config/env.js";
-import { requireAuth, blockDemoMutations } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import {
   googleCallback,
@@ -72,25 +72,25 @@ router.get(
   googleCallback
 );
 
+// Each call hands back a fresh sandbox, so this is the one write that needs no
+// session of its own.
 router.post("/demo", asyncHandler(demoLogin));
-// No blockDemoMutations: re-issuing a token changes no state, and demo
-// sessions need to survive a reload like any other.
 router.post("/refresh", requireAuth, refreshSession);
 router.post("/logout", requireAuth, asyncHandler(logout));
 router.get("/me", requireAuth, asyncHandler(getMe));
 router.get("/home", requireAuth, asyncHandler(getHomeStats));
-router.post("/categories", requireAuth, blockDemoMutations, asyncHandler(addCategory));
-router.delete("/categories/:id", requireAuth, blockDemoMutations, asyncHandler(removeCategory));
+router.post("/categories", requireAuth, asyncHandler(addCategory));
+router.delete("/categories/:id", requireAuth, asyncHandler(removeCategory));
 
-router.post("/accounts", requireAuth, blockDemoMutations, asyncHandler(addAccount));
-router.patch("/accounts/:id", requireAuth, blockDemoMutations, asyncHandler(updateAccount));
-router.delete("/accounts/:id", requireAuth, blockDemoMutations, asyncHandler(removeAccount));
+router.post("/accounts", requireAuth, asyncHandler(addAccount));
+router.patch("/accounts/:id", requireAuth, asyncHandler(updateAccount));
+router.delete("/accounts/:id", requireAuth, asyncHandler(removeAccount));
 
-router.post("/recurring", requireAuth, blockDemoMutations, asyncHandler(addRecurring));
-router.patch("/recurring/:id", requireAuth, blockDemoMutations, asyncHandler(updateRecurring));
-router.delete("/recurring/:id", requireAuth, blockDemoMutations, asyncHandler(removeRecurring));
-router.patch("/profile", requireAuth, blockDemoMutations, asyncHandler(updateProfile));
-router.put("/savings", requireAuth, blockDemoMutations, asyncHandler(setSavings));
-router.delete("/me", requireAuth, blockDemoMutations, asyncHandler(deleteAccount));
+router.post("/recurring", requireAuth, asyncHandler(addRecurring));
+router.patch("/recurring/:id", requireAuth, asyncHandler(updateRecurring));
+router.delete("/recurring/:id", requireAuth, asyncHandler(removeRecurring));
+router.patch("/profile", requireAuth, asyncHandler(updateProfile));
+router.put("/savings", requireAuth, asyncHandler(setSavings));
+router.delete("/me", requireAuth, asyncHandler(deleteAccount));
 
 export default router;

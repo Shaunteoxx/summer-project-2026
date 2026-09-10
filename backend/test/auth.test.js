@@ -16,6 +16,7 @@ let mongo;
 let server;
 let base;
 let User;
+let Transaction;
 let signToken;
 
 /** Sign a token the way the pre-upgrade build did: no `tv`, no `authAt`. */
@@ -27,10 +28,14 @@ const legacyToken = (user) =>
     expiresIn: "2h",
   });
 
-const call = async (path, token, method = "GET") => {
+const call = async (path, token, method = "GET", body) => {
   const res = await fetch(`${base}${path}`, {
     method,
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
   });
   return { status: res.status, body: await res.json().catch(() => ({})) };
 };
@@ -63,6 +68,7 @@ before(async () => {
 
   const { app } = await import("../index.js");
   ({ default: User } = await import("../models/User.js"));
+  ({ default: Transaction } = await import("../models/Transaction.js"));
   ({ signToken } = await import("../middleware/auth.js"));
 
   await mongoose.connect(process.env.MONGO_URI);
@@ -182,22 +188,121 @@ describe("tokens issued by the pre-upgrade build", () => {
   });
 });
 
-describe("shared demo account", () => {
-  it("does not sign out other visitors when one of them logs out", async () => {
-    // tokenVersion is per-user and the demo user is shared, so bumping it would
-    // eject everyone currently exploring the demo.
-    const demo = await makeUser({ isDemo: true });
-    const visitorA = signToken(demo);
-    const visitorB = signToken(demo);
+describe("the demo sandbox", () => {
+  // Demos used to be one shared, read-only account: writable would have meant
+  // one visitor's edits showing up for everyone, so every action the demo was
+  // advertising got a 403. Now each visitor gets their own disposable account.
 
-    assert.equal((await call("/api/auth/logout", visitorA, "POST")).status, 200);
-    assert.equal((await call("/api/auth/me", visitorB)).status, 200);
-    assert.equal((await User.findById(demo._id)).tokenVersion, 0);
+  it("gives each visitor an account of their own", async () => {
+    const a = await call("/api/auth/demo", null, "POST");
+    const b = await call("/api/auth/demo", null, "POST");
+    assert.equal(a.status, 200);
+    assert.equal(b.status, 200);
+
+    const meA = await call("/api/auth/me", a.body.token);
+    const meB = await call("/api/auth/me", b.body.token);
+    assert.equal(meA.status, 200);
+    assert.equal(meB.status, 200);
+    assert.notEqual(meA.body.id ?? meA.body._id, meB.body.id ?? meB.body._id);
+    assert.equal(meA.body.isDemo, true);
   });
 
-  it("still blocks demo mutations", async () => {
-    const demo = await makeUser({ isDemo: true });
-    const res = await call("/api/auth/categories", signToken(demo), "POST");
-    assert.equal(res.status, 403);
+  it("lets a visitor actually use it", async () => {
+    const { body } = await call("/api/auth/demo", null, "POST");
+    // The exact call that used to 403 — the point of the whole change.
+    const res = await call("/api/auth/categories", body.token, "POST", {
+      name: "Laundry",
+      type: "expense",
+      color: "#7CB37C",
+    });
+    assert.equal(res.status, 201);
+  });
+
+  it("arrives with history already in it, so there is something to look at", async () => {
+    const { body } = await call("/api/auth/demo", null, "POST");
+    const me = await call("/api/auth/me", body.token);
+    const txns = await Transaction.countDocuments({
+      userId: me.body.id ?? me.body._id,
+    });
+    assert.ok(txns > 0, "seeded demo should carry transactions");
+  });
+
+  it("takes the sandbox away when the visitor signs out", async () => {
+    const { body } = await call("/api/auth/demo", null, "POST");
+    const me = await call("/api/auth/me", body.token);
+    const id = me.body.id ?? me.body._id;
+
+    assert.equal((await call("/api/auth/logout", body.token, "POST")).status, 200);
+    assert.equal(await User.countDocuments({ _id: id }), 0);
+    // The rows go with it; a TTL on the user alone would orphan these.
+    assert.equal(await Transaction.countDocuments({ userId: id }), 0);
+  });
+
+  it("sweeps sandboxes that were left open, and their data with them", async () => {
+    const stale = await makeUser({
+      isDemo: true,
+      demoExpiresAt: new Date(Date.now() - 1000),
+    });
+    const when = new Date();
+    await Transaction.create({
+      userId: stale._id,
+      type: "expense",
+      category: "F & B",
+      description: "Old demo lunch",
+      amount: 8,
+      date: when,
+      year: when.getUTCFullYear(),
+      month: when.getUTCMonth(),
+    });
+
+    // The next visitor's arrival is what triggers the sweep.
+    await call("/api/auth/demo", null, "POST");
+
+    assert.equal(await User.countDocuments({ _id: stale._id }), 0);
+    assert.equal(await Transaction.countDocuments({ userId: stale._id }), 0);
+  });
+
+  it("leaves a sandbox that is still in use alone", async () => {
+    const live = await makeUser({
+      isDemo: true,
+      demoExpiresAt: new Date(Date.now() + 60_000),
+    });
+    await call("/api/auth/demo", null, "POST");
+    assert.equal(await User.countDocuments({ _id: live._id }), 1);
+  });
+
+  it("caps live sandboxes, evicting the oldest with its data to make room", async () => {
+    const { evictDemosToCap } = await import("../lib/demoSeed.js");
+    // No per-test cleanup in this file, so isolate from sandboxes other tests
+    // left behind before asserting on exact counts.
+    await User.deleteMany({ isDemo: true });
+
+    // Three live sandboxes; a smaller expiry means created earlier, so `oldest`
+    // is first in line for eviction.
+    const mk = (ms) =>
+      makeUser({ isDemo: true, demoExpiresAt: new Date(Date.now() + ms) });
+    const oldest = await mk(1000);
+    const mid = await mk(2000);
+    const newest = await mk(3000);
+    const when = new Date();
+    await Transaction.create({
+      userId: oldest._id,
+      type: "expense",
+      category: "F & B",
+      description: "Old demo lunch",
+      amount: 8,
+      date: when,
+      year: when.getUTCFullYear(),
+      month: when.getUTCMonth(),
+    });
+
+    // A cap of 3 leaves room for one more, so exactly the oldest is evicted —
+    // and its transactions go with it (the same cascade the sweep uses).
+    const removed = await evictDemosToCap(3);
+    assert.equal(removed, 1);
+    assert.equal(await User.countDocuments({ _id: oldest._id }), 0);
+    assert.equal(await Transaction.countDocuments({ userId: oldest._id }), 0);
+    assert.equal(await User.countDocuments({ _id: mid._id }), 1);
+    assert.equal(await User.countDocuments({ _id: newest._id }), 1);
   });
 });

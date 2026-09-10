@@ -24,7 +24,11 @@ import {
 } from "../lib/entryFields.js";
 import { signToken, sessionExhausted } from "../middleware/auth.js";
 import { getLifetimeSavings } from "./summaryController.js";
-import { ensureDemoUser } from "../lib/demoSeed.js";
+import {
+  createDemoUser,
+  retireDemoUser,
+  sweepExpiredDemoUsers,
+} from "../lib/demoSeed.js";
 import BudgetPeriod from "../models/BudgetPeriod.js";
 import MonthlySummary from "../models/MonthlySummary.js";
 import Transaction from "../models/Transaction.js";
@@ -51,9 +55,23 @@ export function googleCallback(req, res) {
   res.redirect(`${env.clientUrl}/auth/callback#token=${token}`);
 }
 
-/** POST /api/auth/demo -> log in as the shared read-only demo account. */
+/**
+ * POST /api/auth/demo -> start a private, writable sandbox and sign into it.
+ *
+ * Each visitor gets their own seeded account, so the demo can be used rather
+ * than only looked at. It is disposable: signing out deletes it, and any left
+ * behind are swept here on the way in — this app runs no scheduler, and the
+ * moment someone asks for a new sandbox is the one time a sweep is certainly
+ * worth doing. A failed sweep must never cost a visitor their demo, so it is
+ * deliberately not awaited into the failure path.
+ */
 export async function demoLogin(req, res) {
-  const user = await ensureDemoUser();
+  try {
+    await sweepExpiredDemoUsers();
+  } catch (err) {
+    console.error("Demo sweep failed", { message: err.message });
+  }
+  const user = await createDemoUser();
   const token = signToken(user);
   res.json({ token });
 }
@@ -77,11 +95,14 @@ export function refreshSession(req, res) {
  * client's copy left the token usable by anyone who had captured it.
  */
 export async function logout(req, res) {
-  // The demo account is shared, so bumping its version would sign out everyone
-  // else exploring the demo. Clearing the client's token is enough there.
-  if (!req.user.isDemo) {
-    await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
+  // A demo account belongs to one visitor and one session. Signing out is the
+  // end of both, so it goes now rather than waiting for the sweep — which is
+  // also the promise the sign-in screen makes about the demo resetting.
+  if (req.user.isDemo) {
+    await retireDemoUser(req.user._id);
+    return res.json({ message: "Signed out" });
   }
+  await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
   res.json({ message: "Signed out" });
 }
 

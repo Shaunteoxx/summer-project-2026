@@ -334,16 +334,14 @@ describe("deleting a period", () => {
     assert.equal(retry.status, 201);
   });
 
-  it("404s on someone else's period and blocks the demo account", async () => {
+  it("404s on someone else's period", async () => {
     const owner = signToken(await makeUser());
     const stranger = signToken(await makeUser());
-    const demo = signToken(await makeUser({ isDemo: true }));
     const { body: created } = await call("/api/period", owner, "POST", {
       start: todayYmd(),
       length: 10,
     });
     assert.equal((await call(`/api/period/${created.id}`, stranger, "DELETE")).status, 404);
-    assert.equal((await call(`/api/period/${created.id}`, demo, "DELETE")).status, 403);
   });
 });
 
@@ -423,12 +421,14 @@ describe("switching modes", () => {
     assert.equal(res.status, 400);
   });
 
-  it("blocks the demo account from mutating anything", async () => {
+  it("lets a demo sandbox set its own mode and start its own period", async () => {
+    // These used to 403. A demo is one visitor's private account now, so the
+    // budget model is theirs to change like anyone else's.
     const token = signToken(await makeUser({ isDemo: true }));
-    assert.equal((await call("/api/period/mode", token, "PUT", { mode: "days" })).status, 403);
+    assert.equal((await call("/api/period/mode", token, "PUT", { mode: "days" })).status, 200);
     assert.equal(
       (await call("/api/period", token, "POST", { start: todayYmd(), length: 15 })).status,
-      403
+      201
     );
   });
 });

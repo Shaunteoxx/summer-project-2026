@@ -539,12 +539,12 @@ describe("managing rules", () => {
     assert.equal(remove.status, 404);
   });
 
-  it("blocks the demo account", async () => {
+  it("is open to a demo sandbox, like any other account", async () => {
     const token = signToken(await makeUser({ isDemo: true }));
     const res = await call("/api/auth/recurring", token, "POST", {
       ...RENT,
       startKey: todayYmd(),
     });
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 201);
   });
 });

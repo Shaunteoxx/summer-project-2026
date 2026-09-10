@@ -1,5 +1,5 @@
 import express from "express";
-import { requireAuth, blockDemoMutations } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import {
   createTransfer,
@@ -10,7 +10,6 @@ import {
 const router = express.Router();
 
 router.use(requireAuth);
-router.use(blockDemoMutations);
 
 router.get("/", asyncHandler(getTransfers));
 router.post("/", asyncHandler(createTransfer));

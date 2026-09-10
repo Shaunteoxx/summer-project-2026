@@ -1,8 +1,13 @@
+import crypto from "node:crypto";
 import User from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import Transfer from "../models/Transfer.js";
+import BudgetPeriod from "../models/BudgetPeriod.js";
+import BudgetTerm from "../models/BudgetTerm.js";
+import MonthlySummary from "../models/MonthlySummary.js";
 
-// Identity of the single shared, read-only demo account.
+// Identity of the legacy single shared demo account, kept so the sweep can
+// recognise and retire one left over from before demos became per-visitor.
 const DEMO_GOOGLE_ID = "demo-account";
 const DEMO_EMAIL = "demo@brokenomore.app";
 const DEMO_USERNAME = "demo_explorer";
@@ -174,11 +179,13 @@ export async function seedHistoryFor(
 }
 
 /**
- * Create (or rebuild) the demo account and its data, then return the user.
- * Idempotent: wipes any existing demo transactions before reseeding.
+ * Create (or rebuild) THE shared demo account — the pre-sandbox arrangement.
+ *
+ * Kept for `scripts/seedDemo.js`, which exists to give a deployment something
+ * to look at. Visitors no longer land here; see `createDemoUser`.
  */
 export async function reseedDemoUser() {
-  let user = await User.findOne({ isDemo: true });
+  let user = await User.findOne({ googleId: DEMO_GOOGLE_ID });
   if (!user) {
     try {
       user = await User.create({
@@ -190,7 +197,7 @@ export async function reseedDemoUser() {
       });
     } catch {
       // Lost a create race with a concurrent request — just reuse it.
-      user = await User.findOne({ isDemo: true });
+      user = await User.findOne({ googleId: DEMO_GOOGLE_ID });
     }
   }
 
@@ -199,9 +206,126 @@ export async function reseedDemoUser() {
   return user;
 }
 
-/** Return the demo user, seeding it on first use if it doesn't exist yet. */
+/** How long a visitor's sandbox lives before the next demo login sweeps it. */
+export const DEMO_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Every collection that stores rows against a userId. */
+const OWNED_BY_USER = [Transaction, Transfer, BudgetPeriod, BudgetTerm, MonthlySummary];
+
+/**
+ * Delete expired sandboxes and everything they own.
+ *
+ * Called on the way into a new demo rather than from a scheduler: there is no
+ * job runner in this app, and the one moment a sweep is certainly worth doing
+ * is when someone is about to create another one. Failure here must never block
+ * a login, so the caller swallows it.
+ */
+export async function sweepExpiredDemoUsers(now = new Date()) {
+  const expired = await User.find({
+    isDemo: true,
+    demoExpiresAt: { $ne: null, $lte: now },
+  })
+    .select("_id")
+    .lean();
+  if (expired.length === 0) return 0;
+
+  await purgeUsers(expired.map((u) => u._id));
+  return expired.length;
+}
+
+/**
+ * Delete these users and every row they own.
+ *
+ * Rows first, user last: if this dies halfway the account is still reachable
+ * and the next sweep finishes the job. The other order orphans the rows.
+ */
+async function purgeUsers(ids) {
+  if (ids.length === 0) return;
+  await Promise.all(
+    OWNED_BY_USER.map((Model) => Model.deleteMany({ userId: { $in: ids } }))
+  );
+  await User.deleteMany({ _id: { $in: ids } });
+}
+
+/**
+ * Throw away one visitor's sandbox on sign-out, rather than leaving it for the
+ * sweep. Refuses anything that isn't a demo account, so a stray call can never
+ * delete a real one.
+ */
+export async function retireDemoUser(userId) {
+  const user = await User.findOne({ _id: userId, isDemo: true }).select("_id").lean();
+  if (!user) return false;
+  await purgeUsers([user._id]);
+  return true;
+}
+
+/**
+ * Ceiling on how many per-session demo sandboxes may exist at once.
+ *
+ * The per-IP rate limit on /api/auth/demo caps how FAST accounts are created;
+ * this caps how MANY accumulate — across many IPs, or within the 24h TTL
+ * before the sweep collects them. Each sandbox carries three months of seeded
+ * transactions, so an unbounded count is unbounded storage. Tunable via env for
+ * a busier deployment; the default is generous for a demo.
+ */
+export const MAX_LIVE_DEMOS = Number(process.env.DEMO_MAX_LIVE) || 200;
+
+/**
+ * Keep live per-session demos under `cap`, evicting the oldest (and their data)
+ * to make room rather than turning a new visitor away. Only per-session
+ * accounts count — the shared demo seeded by scripts/seedDemo.js has a null
+ * `demoExpiresAt` and is never touched. Oldest = smallest expiry, which tracks
+ * creation order since every sandbox gets the same fixed TTL.
+ */
+export async function evictDemosToCap(cap = MAX_LIVE_DEMOS) {
+  const q = { isDemo: true, demoExpiresAt: { $ne: null } };
+  const count = await User.countDocuments(q);
+  const over = count - (cap - 1); // leave room for the one about to be created
+  if (over <= 0) return 0;
+  const oldest = await User.find(q)
+    .sort({ demoExpiresAt: 1 })
+    .limit(over)
+    .select("_id")
+    .lean();
+  await purgeUsers(oldest.map((u) => u._id));
+  return oldest.length;
+}
+
+/**
+ * Build one visitor their own sandbox, seeded with three months of history.
+ *
+ * Per-visitor because the shared account had to be read-only to stay coherent,
+ * which made the demo refuse the very actions it was there to show. These are
+ * disposable: `demoExpiresAt` marks them, and the sweep above collects them.
+ *
+ * `googleId`, `username` and `email` are all unique in the schema, so each one
+ * gets a random suffix. Friend search and the leaderboard already exclude
+ * `isDemo` users, so a crowd of them never shows up in either.
+ */
+export async function createDemoUser() {
+  // Bound the total before adding one more, so a burst can't grow the table
+  // without limit between sweeps.
+  await evictDemosToCap();
+  const tag = crypto.randomBytes(5).toString("hex");
+  const user = await User.create({
+    googleId: `demo-${tag}`,
+    username: `demo_${tag}`,
+    email: `demo+${tag}@brokenomore.app`,
+    avatar: DEMO_AVATAR,
+    isDemo: true,
+    demoExpiresAt: new Date(Date.now() + DEMO_TTL_MS),
+  });
+
+  await seedHistoryFor(user, { months: 3 });
+  return user;
+}
+
+/**
+ * Return the shared demo user, seeding it on first use.
+ * Only `scripts/seedDemo.js` needs this now.
+ */
 export async function ensureDemoUser() {
-  const existing = await User.findOne({ isDemo: true });
+  const existing = await User.findOne({ googleId: DEMO_GOOGLE_ID });
   if (existing) return existing;
   return reseedDemoUser();
 }

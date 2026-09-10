@@ -7,8 +7,16 @@ const userSchema = new mongoose.Schema(
     // Case-normalized key closes the race left by case-insensitive pre-checks.
     usernameKey: { type: String, unique: true, sparse: true, select: false },
     email: { type: String, required: true, unique: true, lowercase: true },
-    // Read-only demo account used by the public "Try the demo" button.
+    // A throwaway sandbox account created by the public "Try the demo" button.
+    // One per visitor, not one shared account: a shared one had to be read-only
+    // (one visitor's edits would show up for everybody), which meant the demo
+    // refused every action it was advertising.
     isDemo: { type: Boolean, default: false },
+    // When this demo account and everything it owns may be swept. Null on real
+    // accounts. Not a Mongo TTL index: TTL would drop the user document and
+    // leave its transactions, transfers, periods, terms and summaries behind,
+    // so the sweep in lib/demoSeed.js cascades instead.
+    demoExpiresAt: { type: Date, default: null },
     // Bumped on sign-out to invalidate every token already issued to this user.
     // Tokens carry the version they were signed with; a mismatch fails auth.
     tokenVersion: { type: Number, default: 0 },

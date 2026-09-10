@@ -180,13 +180,13 @@ describe("setting up a term", () => {
     assert.match(body.message, /overlaps/);
   });
 
-  it("is closed to the demo account", async () => {
+  it("is open to a demo sandbox, like any other account", async () => {
     const token = signToken(await makeUser({ isDemo: true }));
     const { status } = await call("/api/period/term", token, "POST", {
       start: monthStart(1),
       months: 6,
     });
-    assert.equal(status, 403);
+    assert.equal(status, 201);
   });
 });
 

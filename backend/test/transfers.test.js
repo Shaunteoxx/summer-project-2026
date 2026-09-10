@@ -210,15 +210,20 @@ describe("creating a transfer", () => {
     assert.equal(res.status, 400);
   });
 
-  it("blocks the demo account", async () => {
+  it("lets a demo sandbox move money between its own accounts", async () => {
+    // This used to 403 before the demo's own accounts were even considered.
     const demo = signToken(await makeUser({ isDemo: true }));
+    const dbs = await makeAccount(demo, "DBS");
+    const trust = await makeAccount(demo, "Trust");
+    await addTxn(demo, dbs, "income", 800);
+
     const res = await call("/api/transfers", demo, "POST", {
-      from: new mongoose.Types.ObjectId(),
-      to: new mongoose.Types.ObjectId(),
+      from: dbs,
+      to: trust,
       amount: 10,
       date: todayYmd(),
     });
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 201);
   });
 
   it("deletes one, putting the money back", async () => {

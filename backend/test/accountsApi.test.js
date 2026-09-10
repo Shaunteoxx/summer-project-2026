@@ -168,13 +168,14 @@ describe("creating accounts", () => {
     assert.equal(back.status, 400);
   });
 
-  it("blocks the demo account", async () => {
+  it("lets a demo sandbox add its own account", async () => {
+    // A demo is one visitor's private account now, so this is theirs to do.
     const token = signToken(await makeUser({ isDemo: true }));
     const res = await call("/api/auth/accounts", token, "POST", {
       name: "Trust",
       color: "#3b82f6",
     });
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 201);
   });
 });
 
