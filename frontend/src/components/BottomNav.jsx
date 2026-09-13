@@ -38,7 +38,11 @@ export default function BottomNav() {
             <NavLink
               to={to}
               end={end}
-              className="group flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-sm px-0.5 pb-1.5 pt-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              // px spacing (was gap-1/pt-2/pb-1.5) so the bar is a fixed ~54px
+              // regardless of browser font — the add button is positioned to
+              // clear exactly this height, and a bar that grew with the font
+              // would let the button ride up into content.
+              className="group flex min-h-[54px] flex-col items-center justify-center gap-[4px] rounded-sm px-0.5 pb-[6px] pt-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               {({ isActive }) => (
                 <>

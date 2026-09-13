@@ -40,7 +40,12 @@ export default function AddFab() {
     // The wrapper tracks the phone-width column so the button hugs the content's
     // right edge rather than the viewport's on a desktop window. It's
     // pointer-events-none so it never swallows taps on the page behind it.
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.9rem+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-app justify-end px-5">
+    // Offset in px, not rem: the bottom nav it sits above is a fixed-height
+    // px element, so a rem offset here drifts away from it when the browser
+    // font is enlarged — the button rides up off the nav into the content.
+    // 78px matches the old 4.9rem at the default font, but now holds at any
+    // font size. (Nav ~54px + a ~24px gap.)
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(78px+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-app justify-end px-5">
       <AnimatePresence>
         {visible && (
           <motion.button

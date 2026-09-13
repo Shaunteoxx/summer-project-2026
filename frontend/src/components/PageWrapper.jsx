@@ -16,7 +16,10 @@ export default function PageWrapper({ children, className = "" }) {
       initial="initial"
       animate="animate"
       exit="exit"
-      className={`w-full px-4 pt-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] ${className}`}
+      // px, not rem: this clears the fixed px-height tab bar, so a rem value
+      // would over-pad at large fonts and (worse) under-clear at small ones.
+      // 88px == the old 5.5rem at the default font, but font-independent.
+      className={`w-full px-4 pt-6 pb-[calc(88px+env(safe-area-inset-bottom))] ${className}`}
     >
       {children}
     </motion.div>

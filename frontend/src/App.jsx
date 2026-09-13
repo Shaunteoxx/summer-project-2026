@@ -80,9 +80,10 @@ function PageFallback() {
 function AppLayout() {
   const location = useLocation();
   // PageWrapper's own padding clears the tab bar. On the three routes that also
-  // carry the add button, the page has to clear that too: it floats 4.9rem up
-  // and stands 54px tall, so its top edge is 132.4px above the viewport bottom
-  // — past the 88px the tab bar needed. Without this the last row of a ledger
+  // carry the add button, the page has to clear that too: it floats 78px up
+  // and stands 54px tall, so its top edge is 132px above the viewport bottom
+  // — past the 88px the tab bar needed. All px, so this holds at any font
+  // size. Without this the last row of a ledger
   // sits under the button with no scroll left to free it. Measured, not guessed.
   //
   // It lives here rather than in PageWrapper because only the shell knows which
