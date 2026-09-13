@@ -18,6 +18,11 @@
       const p = new URLSearchParams(location.search);
       if (p.get("theme") !== "light") document.documentElement.classList.add("dark");
       document.documentElement.style.colorScheme = p.get("theme") || "dark";
+      // ?rootpx=24 enlarges the root font the way a browser's "default font
+      // size" setting does — the exact thing that pushed the Tracker ring's
+      // figures off the card. A px-sized card should not budge; a rem-sized one
+      // will, and the shot will show it.
+      if (p.get("rootpx")) document.documentElement.style.fontSize = p.get("rootpx") + "px";
     </script>
   </head>
   <body>

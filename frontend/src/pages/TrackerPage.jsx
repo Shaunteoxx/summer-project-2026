@@ -225,14 +225,16 @@ export default function TrackerPage() {
            now a fixed-size ring beside a value list rather than a tall chart. */
         <div className="mt-5 space-y-3">
           <Card>
-            <CardContent className="px-6 py-[22px]">
-              <div className="flex items-center gap-[20px]">
-                <Skeleton className="h-32 w-32 shrink-0 rounded-full" />
-                <div className="mx-auto grid grid-cols-[max-content_max-content] items-center gap-x-5 gap-y-4">
-                  <Skeleton className="h-3 w-11" />
-                  <Skeleton className="h-[19px] w-[74px]" />
-                  <Skeleton className="h-3 w-10" />
-                  <Skeleton className="h-[19px] w-[74px]" />
+            <CardContent className="px-[20px] py-[22px]">
+              <div className="flex items-center gap-[14px]">
+                <Skeleton className="h-[104px] w-[104px] shrink-0 rounded-full" />
+                <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[12px] gap-y-[6px]">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-4 w-[72px] justify-self-end" />
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-4 w-[72px] justify-self-end" />
+                  <Skeleton className="h-3 w-14" />
+                  <Skeleton className="h-4 w-[72px] justify-self-end" />
                 </div>
               </div>
             </CardContent>
@@ -248,15 +250,15 @@ export default function TrackerPage() {
             </CardContent>
           </Card>
           <Card>
-            <CardContent>
+            <CardContent className="px-[18px] py-5">
               <Skeleton className="h-[15px] w-36" />
-              <div className="mt-4 flex items-center gap-4">
-                <Skeleton className="h-32 w-32 shrink-0 rounded-full" />
-                <div className="mx-auto grid grid-cols-[max-content_max-content] items-center gap-x-5 gap-y-[9px]">
+              <div className="mt-4 flex items-center gap-[14px]">
+                <Skeleton className="h-28 w-28 shrink-0 rounded-full" />
+                <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[12px] gap-y-[9px]">
                   {[0, 1, 2, 3, 4].map((i) => (
                     <Fragment key={i}>
                       <Skeleton className="h-3 w-[88px]" />
-                      <Skeleton className="h-3 w-11" />
+                      <Skeleton className="h-3 w-11 justify-self-end" />
                     </Fragment>
                   ))}
                 </div>
@@ -371,8 +373,8 @@ export default function TrackerPage() {
 }
 
 /**
- * Saved vs spent — a 128px ring on the left, the two figures written out on the
- * right.
+ * Saved vs spent — a 104px ring on the left, the figures written out in a
+ * flexible column on the right that stays beside the ring at any width.
  *
  * The previous version stacked a 260px-tall chart above a floating legend and
  * put *income* in the middle, so the two numbers the card is actually about
@@ -434,57 +436,62 @@ export function SavedVsSpentCard({
           saved put an apparent 3x win directly above a "Goal: set aside $300"
           footnote. The SavingsGoalCard below is the one place that answers
           "am I actually saving?", and it says "covers" for the same reason. */}
-      {/* Padding and gap are the give here. The ring is a fixed 128px and the
-          amounts are tabular, so on a narrow phone the pair had nowhere to go
-          and "$1,162.75" ran outside the card — 16px past it at 399px wide,
-          95px at 320px. Trimming both reclaims ~50px, and flex-wrap catches
-          whatever is left by dropping the amounts under the ring rather than
-          letting them escape. No breakpoint: Tailwind's sm: is 640px, above
-          every phone, so a responsive variant here would only ever apply the
-          narrow case. */}
-      <CardContent className="px-5 py-[22px]">
+      {/* Everything inside this card is sized in px, not rem. The point of the
+          card is that it survives any browser font size, and rem figures grow
+          with that font until "$1,162.75" runs outside the card — it did, by
+          16px at 399px wide and 95px at 320px. Fixed px sizes plus a truncating
+          label column (below) mean the pair can neither overflow nor wrap at
+          any width or zoom. No breakpoint: Tailwind's sm: is 640px, above every
+          phone, so a responsive variant here would only ever hit one case. */}
+      <CardContent className="px-[20px] py-[22px]">
+        {/* Ring and figures stay side by side at any width or browser-font
+            size. No flex-wrap, so the figures can never drop under the ring; a
+            fixed px ring that doesn't grow with the font; and a flexible figure
+            column whose labels truncate before anything can overflow. Sized
+            down from the old 128px/25px/19px so the pair fits a 320px screen
+            with a large font and still has room. */}
         {hasData ? (
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
-            <div className="relative h-32 w-32 shrink-0">
+          <div className="flex items-center gap-[14px]">
+            <div className="relative h-[104px] w-[104px] shrink-0">
               <DonutChart
                 slices={slices}
-                size={128}
-                thickness={13}
+                size={104}
+                thickness={12}
                 rounded={split}
-                gap={split ? 14 : 0}
+                gap={split ? 12 : 0}
               />
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <span className="num text-[25px] font-medium leading-none">
+                <span className="num text-[22px] font-medium leading-none">
                   <AnimatedNumber value={ringPercent} suffix="%" />
                 </span>
-                <span className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.07em] text-ink-3">
+                <span className="mt-1 text-[9px] font-medium uppercase tracking-[0.07em] text-ink-3">
                   {ringLabel}
                 </span>
               </div>
             </div>
 
-            {/* A two-column grid sized to its content, pushed right with
-                ml-auto. Amounts still align in a column — the whole point of
-                tabular figures — but the label sits 12px from its number
-                instead of being flung to the opposite edge of the card. Any
-                slack ends up in the gap after the ring, where it reads as
-                breathing room rather than as a hole in the middle of a row. */}
-            <div className="mx-auto min-w-0">
-            <dl className="grid grid-cols-[auto_auto] items-baseline gap-x-5 gap-y-1">
-              {/* One word, not "Unspent so far": at 19px the amount needs the
-                  room, and the pair reads as the card's own title now that it
-                  has none. The period it covers is in the page header. */}
+            {/* The figure column fills whatever width is left after the ring
+                (flex-1) and is allowed to shrink to nothing (min-w-0) so its
+                labels can truncate. Two grid tracks — a flexible label that
+                ellipsises and an auto-width amount that never does — keep the
+                amounts aligned in a column while the labels give way first, so
+                a long label or a large font can't push a figure off the card. */}
+            <div className="min-w-0 flex-1">
+            <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-[12px] gap-y-[4px]">
+              {/* Labels truncate rather than wrap — the column can get very
+                  narrow at a large font — so the amount beside them is never
+                  pushed down or off. The period they cover is in the header. */}
               {legend.map(([label, value, swatch]) => (
                 <Fragment key={label}>
-                  <dt className="flex items-center gap-2">
+                  <dt className="flex min-w-0 items-center gap-[6px]">
                     <span
                       className="h-[9px] w-[9px] shrink-0 rounded-[3px]"
                       style={{ background: swatch }}
                       aria-hidden="true"
                     />
-                    <span className="truncate text-meta text-ink-2">{label}</span>
+                    <span className="truncate text-[12px] text-ink-2">{label}</span>
                   </dt>
-                  <dd className="num text-right text-[19px] font-medium text-ink">
+                  <dd className="num shrink-0 text-right text-[16px] font-medium text-ink">
                     <AnimatedNumber value={value} prefix="$" decimals={2} />
                   </dd>
                 </Fragment>
@@ -506,21 +513,21 @@ export function SavedVsSpentCard({
               {total != null && (
                 <>
                   <div
-                    className="col-span-2 mt-2 border-t border-hairline"
+                    className="col-span-2 mt-[8px] border-t border-hairline"
                     aria-hidden="true"
                   />
-                  <dt className="flex items-center gap-2">
+                  <dt className="flex min-w-0 items-center gap-[6px]">
                     {/* Holds the swatch column open so all three labels line
                         up; the total isn't a slice, so it has no colour. */}
                     <span className="h-[9px] w-[9px] shrink-0" aria-hidden="true" />
                     <span
                       data-measure="donut-total-label"
-                      className="truncate text-meta text-ink-3"
+                      className="truncate text-[12px] text-ink-3"
                     >
                       {totalLabel}
                     </span>
                   </dt>
-                  <dd className="num text-right text-[15px] font-medium text-ink-2">
+                  <dd className="num shrink-0 text-right text-[13px] font-medium text-ink-2">
                     <AnimatedNumber value={total} prefix="$" decimals={2} />
                   </dd>
                 </>
@@ -530,7 +537,7 @@ export function SavedVsSpentCard({
                   full-width beneath the ring, where it read as a footnote to
                   the whole card. */}
               {footnote && (
-                <p className="mt-6 text-[11px] leading-relaxed text-ink-3">
+                <p className="mt-[22px] text-[11px] leading-relaxed text-ink-3">
                   {footnote}
                 </p>
               )}
@@ -576,7 +583,7 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
           /* The gap is tight: every pixel the ring doesn't take is a pixel of
              gutter between a category and its amount, and the app's real labels
              ("Entertainment") run longer than the mockup's ("Fun"). */
-          <div className="mt-4 ml-3 flex flex-wrap items-center gap-x-4 gap-y-4">
+          <div className="mt-4 flex items-center gap-[14px]">
             <div className="relative h-28 w-28 shrink-0">
               <DonutChart slices={byCategory} size={112} thickness={12} />
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
@@ -595,22 +602,22 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
               </div>
             </div>
 
-            {/* Same content-sized grid as the card above: the amounts line up
-                as a column, but sit next to their labels rather than at the far
-                edge. Long custom category names shrink and truncate rather than
-                pushing the amounts out of alignment. */}
-            <dl className="mx-auto grid grid-cols-[auto_auto] items-center gap-x-8 gap-y-[9px]">
+            {/* Same flexible column as the card above: it fills the width left
+                after the ring and may shrink to nothing, so long custom
+                category names truncate rather than pushing the amounts out of
+                alignment or wrapping the whole list under the ring. */}
+            <dl className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[12px] gap-y-[9px]">
               {byCategory.map((c) => (
                 <Fragment key={c.name}>
-                  <dt className="flex items-center gap-2">
+                  <dt className="flex min-w-0 items-center gap-[6px]">
                     <span
                       className="h-[7px] w-[7px] shrink-0 rounded-[20px]"
                       style={{ background: c.color }}
                       aria-hidden="true"
                     />
-                    <span className="max-w-[104px] truncate text-meta text-[12px] text-ink-2">{c.name}</span>
+                    <span className="truncate text-[12px] text-ink-2">{c.name}</span>
                   </dt>
-                  <dd className="num text-right text-meta text-[12px] font-medium text-ink">
+                  <dd className="num shrink-0 text-right text-[12px] font-medium text-ink">
                     {formatMoney(c.value)}
                   </dd>
                 </Fragment>

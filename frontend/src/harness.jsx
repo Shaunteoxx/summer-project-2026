@@ -528,6 +528,31 @@ function TrackerView() {
   const colors = useChartColors();
   const empty = params.get("empty") === "1";
 
+  // ?reserved=1 is the three-slice case from the user's screenshot: a savings
+  // target splits the ring into Left to Spend / Reserved / Spent. "Left to
+  // Spend" is the widest label the card ever shows, and the figures here run to
+  // four digits ($1,240.00) — together the width worst case the card must hold
+  // side-by-side at 320px, at any browser font.
+  if (params.get("reserved") === "1") {
+    return (
+      <div className="mx-auto w-full max-w-app space-y-3 p-4">
+        <SavedVsSpentCard
+          saved={0}
+          spent={409.5}
+          percentageSaved={0}
+          hasData={!empty}
+          colors={colors}
+          reserved={300}
+          left={530.5}
+          percentLeft={56}
+          total={1240}
+          totalLabel="Income"
+          footnote="Goal: set aside $300.00 this month"
+        />
+      </div>
+    );
+  }
+
   const saved = 952.6;
   const spent = 287.4;
   const cats = [
