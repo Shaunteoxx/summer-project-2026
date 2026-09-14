@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, useAnimationControls } from "framer-motion";
-import { Plus, Wallet, ChevronDown, Check, Tag } from "lucide-react";
+import { Plus, Wallet, ChevronDown, Check, Tag, Repeat } from "lucide-react";
 
 import AmountCalculator from "@/components/AmountCalculator";
 import BottomSheet from "@/components/BottomSheet";
@@ -920,6 +920,19 @@ export default function AddTransactionSheet({
                 : undefined
             }
           />
+        )}
+        {/* The same slot, while editing a row a rule wrote: say that changing
+            or deleting it is this one time only. Otherwise a one-off month —
+            a cheaper bill, a skipped subscription — looks like it might break
+            the rule, and people leave a wrong entry rather than risk that. */}
+        {isEdit && editing.recurringId && (
+          <p className="flex gap-2 rounded-md bg-surface-2 px-3 py-2.5 text-[13px] leading-snug text-ink-2">
+            <Repeat className="mt-px h-3.5 w-3.5 shrink-0 text-ink-3" aria-hidden="true" />
+            <span>
+              Added by a repeating entry. Changing or deleting it only affects
+              this one, not the entries still to come.
+            </span>
+          </p>
         )}
 
         {formError && (

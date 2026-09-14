@@ -41,6 +41,8 @@ vi.mock("@/hooks/useBudgetPeriod", () => ({
 vi.mock("@/components/StreakCard", () => ({
   default: () => <div>No budget period running</div>,
 }));
+let mockRules = [];
+vi.mock("@/hooks/useRecurring", () => ({ useRecurring: () => ({ rules: mockRules }) }));
 vi.mock("@/hooks/useCountUp", () => ({ useCountUp: (value) => value }));
 
 import HomePage from "@/pages/HomePage";
@@ -84,6 +86,7 @@ const show = async (overrides = {}, transactions = [entry]) => {
 beforeEach(() => {
   vi.clearAllMocks();
   mockPeriod = { current: null, noun: "month", status: "active", term: null };
+  mockRules = [];
 });
 
 describe("drilling into detail", () => {
@@ -96,6 +99,18 @@ describe("drilling into detail", () => {
       await screen.findByRole("button", { name: /See the full breakdown/i })
     );
     expect(navigate).toHaveBeenCalledWith("/tracker");
+  });
+});
+
+describe("recent entries", () => {
+  it("marks one a repeating rule wrote, the same way the ledger does", async () => {
+    mockRules = [{ id: "r1", description: "Rent", frequency: "monthly", paused: false }];
+    await show({}, [
+      { ...entry, _id: "t2", description: "Rent", amount: 800, recurringId: "r1" },
+      entry,
+    ]);
+    expect(await screen.findByText("Monthly")).toBeInTheDocument();
+    expect(screen.getAllByText("Monthly")).toHaveLength(1);
   });
 });
 

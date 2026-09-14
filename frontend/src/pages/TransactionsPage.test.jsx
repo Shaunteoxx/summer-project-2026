@@ -26,7 +26,7 @@ vi.mock("@/api/endpoints", () => ({
   fetchTransactions: () => Promise.resolve(mockTransactions),
   addTransaction: (...args) => addTransaction(...args),
   updateTransaction: (...args) => updateTransaction(...args),
-  removeTransaction: vi.fn(),
+  removeTransaction: () => Promise.resolve({}),
   fetchTransfers: () => Promise.resolve(mockTransfers),
   removeTransfer: (...args) => removeTransfer(...args),
   // Account activity sits above the list on this page. It has its own suite;
@@ -37,8 +37,14 @@ vi.mock("@/api/endpoints", () => ({
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { savingsByMonth: {} } }),
 }));
+const showToast = vi.fn();
 vi.mock("@/hooks/useToast", () => ({
-  useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(), show: vi.fn() }),
+  useToast: () => ({
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    show: (...args) => showToast(...args),
+  }),
 }));
 vi.mock("@/hooks/useDemoGuard", () => ({ useDemoGuard: () => () => false }));
 // Accounts are opt-in: with none created, every piece of account UI hides and
@@ -60,9 +66,10 @@ vi.mock("@/hooks/useAccounts", () => ({
 }));
 
 const addRule = vi.fn();
+let mockRules = [];
 vi.mock("@/hooks/useRecurring", () => ({
   useRecurring: () => ({
-    rules: [],
+    rules: mockRules,
     addRule: (...args) => addRule(...args),
     updateRule: vi.fn(),
     removeRule: vi.fn(),
@@ -111,7 +118,7 @@ vi.mock("@/hooks/useCategories", async () => {
 
 import { MemoryRouter, useLocation } from "react-router-dom";
 
-import TransactionsPage from "@/pages/TransactionsPage";
+import TransactionsPage, { deletedMessage } from "@/pages/TransactionsPage";
 
 // The page reads router state so the app-shell add button can ask it to open
 // the sheet. Rendering it bare would throw, so give it the Router it has in
@@ -197,6 +204,8 @@ beforeEach(() => {
   );
   addCategory.mockReset();
   addRule.mockReset().mockResolvedValue({});
+  mockRules = [];
+  showToast.mockReset();
 });
 
 describe("optional description", () => {
@@ -1052,5 +1061,79 @@ describe("repeating an entry as you add it", () => {
 
     const sheet = within(screen.getByRole("dialog"));
     expect(sheet.queryByRole("switch", { name: /Repeat Monthly/ })).not.toBeInTheDocument();
+  });
+});
+
+// Rows a repeating rule wrote. Nobody typed them, so they have to be marked;
+// and deleting one is how a single odd month is skipped, so the page has to say
+// that the rule itself carries on.
+describe("entries a repeating rule wrote", () => {
+  const rent = {
+    _id: "t9",
+    date: "2026-08-01T00:00:00.000Z",
+    type: "expense",
+    amount: 800,
+    category: "F & B",
+    description: "Rent",
+    accountId: null,
+    recurringId: "r1",
+    dueKey: "2026-08-01",
+  };
+  const monthly = { id: "r1", description: "Rent", frequency: "monthly", paused: false };
+
+  it("names how often the entry repeats", async () => {
+    mockRules = [monthly];
+    mockTransactions = [rent];
+    renderPage();
+    expect(await screen.findByText("Monthly")).toBeInTheDocument();
+  });
+
+  it("still marks the entry once its rule has been deleted", async () => {
+    mockTransactions = [rent];
+    renderPage();
+    expect(await screen.findByText("Repeats")).toBeInTheDocument();
+  });
+
+  it("marks nothing a person typed", async () => {
+    mockRules = [monthly];
+    mockTransactions = [{ ...rent, recurringId: null, dueKey: null }];
+    renderPage();
+    await screen.findByRole("button", { name: "Edit Rent" });
+    expect(screen.queryByText("Monthly")).not.toBeInTheDocument();
+  });
+
+  it("says in the editor that a change is this one only", async () => {
+    mockTransactions = [rent];
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Edit Rent" }));
+    expect(
+      within(screen.getByRole("dialog")).getByText(/only affects this one/)
+    ).toBeInTheDocument();
+  });
+
+  it("says the rule carries on when one is deleted", async () => {
+    mockRules = [monthly];
+    mockTransactions = [rent];
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Delete Rent" }));
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Deleted this one. Rent still repeats next month.",
+      })
+    );
+  });
+
+  it("only promises a next one when a next one is coming", () => {
+    expect(deletedMessage(rent, [{ ...monthly, frequency: "weekly" }])).toBe(
+      "Deleted this one. Rent still repeats next week."
+    );
+    // Paused, or the rule is gone: nothing is still repeating to mention.
+    expect(deletedMessage(rent, [{ ...monthly, paused: true }])).toBe("Transaction deleted");
+    expect(deletedMessage(rent, [])).toBe("Transaction deleted");
+    expect(deletedMessage({ ...rent, recurringId: null }, [monthly])).toBe(
+      "Transaction deleted"
+    );
   });
 });

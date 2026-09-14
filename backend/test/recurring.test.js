@@ -317,6 +317,29 @@ describe("materialising", () => {
     assert.equal((await rowsFor(user._id)).length, 1);
   });
 
+  it("skips one month when its entry is deleted, and carries on after", async () => {
+    const user = await makeUser();
+    const token = signToken(user);
+    await makeRule(token, { startKey: todayYmd() });
+    await runAt(user._id, dayInMonth(1, 5));
+    const [row] = await rowsFor(user._id);
+
+    // The ledger's trash button, on this month's rent only.
+    const res = await call(`/api/transactions/${row._id}`, token, "DELETE");
+    assert.equal(res.status, 200);
+
+    // Later the same month, and into the next. The unique index can't be what
+    // keeps the deleted month away — there's no row left for it to collide
+    // with — so this pins the watermark doing it. The app tells people a
+    // delete here is "this one only"; a rent that came back would make that a
+    // lie.
+    await runAt(user._id, dayInMonth(1, 20));
+    await runAt(user._id, dayInMonth(2, 5));
+
+    const rows = await rowsFor(user._id);
+    assert.deepEqual(rows.map((r) => r.dueKey), [dayInMonth(2, 1)]);
+  });
+
   it("does nothing at all for a user with no rules", async () => {
     const user = await makeUser();
     assert.equal(await runAt(user._id, dayInMonth(1, 5)), 0);

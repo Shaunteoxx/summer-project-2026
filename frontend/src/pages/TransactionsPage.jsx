@@ -12,7 +12,6 @@ import {
   Wallet,
   ChevronDown,
   Check,
-  Repeat,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -23,6 +22,7 @@ import EmptyState from "@/components/EmptyState";
 import TransferSheet from "@/components/TransferSheet";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import CategoryIcon from "@/components/CategoryIcon";
+import RepeatBadge, { ruleFor } from "@/components/RepeatBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,9 +41,25 @@ import { addDaysYmd, formatDay, formatPeriodLabel } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useRecurring } from "@/hooks/useRecurring";
 import { fadeUp } from "@/animations/variants";
 
 const DELETE_GRACE_MS = 10000;
+
+/**
+ * What the undo toast says after a delete.
+ *
+ * Deleting one row a repeating entry wrote leaves the rule alone — it has
+ * already moved past that date and won't write it again. The trash button looks
+ * the same on every row, though, so without saying so a skipped month reads as
+ * possibly cancelling the rent for good.
+ */
+export function deletedMessage(transaction, rules) {
+  const rule = ruleFor(transaction, rules);
+  if (!rule || rule.paused) return "Transaction deleted";
+  const next = rule.frequency === "weekly" ? "next week" : "next month";
+  return `Deleted this one. ${rule.description} still repeats ${next}.`;
+}
 
 const FILTERS = [
   { value: "all", label: "All" },
@@ -57,6 +73,7 @@ export default function TransactionsPage() {
   const { user } = useAuth();
   const { getCategory } = useCategories();
   const { active: accounts, hasAccounts, getAccount } = useAccounts();
+  const { rules } = useRecurring();
   const [transactions, setTransactions] = useState([]);
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -322,7 +339,7 @@ export default function TransactionsPage() {
     pendingDeletes.current.set(id, timer);
 
     toast.show({
-      message: "Transaction deleted",
+      message: deletedMessage(removed, rules),
       variant: "info",
       duration: DELETE_GRACE_MS,
       action: {
@@ -652,12 +669,7 @@ export default function TransactionsPage() {
                                 {/* Rows written by a repeating entry say so.
                                     Nobody typed them, so without this they read
                                     as entries you don't remember making. */}
-                                {t.recurringId && (
-                                  <Repeat
-                                    className="h-3 w-3 shrink-0 text-ink-3"
-                                    aria-label="Repeating entry"
-                                  />
-                                )}
+                                <RepeatBadge transaction={t} />
                               </span>
                               {/* The date has moved to the day header, so the
                                   meta line is category and account only. */}

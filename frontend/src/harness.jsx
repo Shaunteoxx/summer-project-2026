@@ -975,7 +975,14 @@ function LedgerGroupedView() {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5 text-[15px] font-medium tracking-[-0.01em]">
                     <span className="truncate">{t}</span>
-                    {rep && <_repeat className="h-3 w-3 shrink-0 text-ink-3" />}
+                    {/* RepeatBadge's markup; the component itself reads rules
+                        from a provider the harness doesn't mount. */}
+                    {rep && (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-1.5 py-[3px] text-[11px] font-medium leading-none text-ink-2">
+                        <_repeat className="h-3 w-3" />
+                        Monthly
+                      </span>
+                    )}
                   </span>
                   <span className="mt-0.5 block truncate text-meta text-ink-3">{m}</span>
                 </span>

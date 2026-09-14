@@ -14,6 +14,7 @@ import AnimatedNumber from "@/components/AnimatedNumber";
 import EmptyState from "@/components/EmptyState";
 import StreakCard from "@/components/StreakCard";
 import CategoryIcon from "@/components/CategoryIcon";
+import RepeatBadge from "@/components/RepeatBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -717,8 +718,9 @@ export default function HomePage() {
                   >
                     <CategoryIcon category={category} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[15px] font-medium tracking-tight">
-                        {t.description || t.category}
+                      <span className="flex items-center gap-1.5 text-[15px] font-medium tracking-tight">
+                        <span className="truncate">{t.description || t.category}</span>
+                        <RepeatBadge transaction={t} />
                       </span>
                       <span className="mt-0.5 block truncate text-[12.5px] text-ink-3">
                         {formatDay(t.date)} · {t.category}
