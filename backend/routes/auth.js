@@ -7,6 +7,7 @@ import { asyncHandler } from "../middleware/asyncHandler.js";
 import {
   googleCallback,
   demoLogin,
+  demoSample,
   refreshSession,
   logout,
   getMe,
@@ -75,6 +76,9 @@ router.get(
 // Each call hands back a fresh sandbox, so this is the one write that needs no
 // session of its own.
 router.post("/demo", asyncHandler(demoLogin));
+// Under /demo on purpose: it shares that path's stricter login limiter in
+// index.js, which suits a request that rewrites a few hundred rows.
+router.post("/demo/sample", requireAuth, asyncHandler(demoSample));
 router.post("/refresh", requireAuth, refreshSession);
 router.post("/logout", requireAuth, asyncHandler(logout));
 router.get("/me", requireAuth, asyncHandler(getMe));

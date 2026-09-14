@@ -292,11 +292,15 @@ export async function evictDemosToCap(cap = MAX_LIVE_DEMOS) {
 }
 
 /**
- * Build one visitor their own sandbox, seeded with three months of history.
+ * Build one visitor their own sandbox, empty.
  *
  * Per-visitor because the shared account had to be read-only to stay coherent,
  * which made the demo refuse the very actions it was there to show. These are
  * disposable: `demoExpiresAt` marks them, and the sweep above collects them.
+ *
+ * Empty rather than pre-seeded, so the demo starts where a real account does —
+ * the first-run screens are part of what's being shown. The history arrives
+ * only when the visitor asks for it; see `loadDemoSample`.
  *
  * `googleId`, `username` and `email` are all unique in the schema, so each one
  * gets a random suffix. Friend search and the leaderboard already exclude
@@ -315,9 +319,20 @@ export async function createDemoUser() {
     isDemo: true,
     demoExpiresAt: new Date(Date.now() + DEMO_TTL_MS),
   });
-
-  await seedHistoryFor(user, { months: 3 });
   return user;
+}
+
+/**
+ * Fill a sandbox with three months of sample history, on the visitor's request.
+ *
+ * `seedHistoryFor` deletes every transaction and transfer first, so this
+ * refuses anything that isn't a demo account — the route checks too, but a
+ * stray call from anywhere else must never be able to wipe a real one.
+ */
+export async function loadDemoSample(user) {
+  if (!user?.isDemo) throw new Error("Refusing to load sample data into a real account");
+  user.demoSampleLoaded = true;
+  return seedHistoryFor(user, { months: 3 });
 }
 
 /**

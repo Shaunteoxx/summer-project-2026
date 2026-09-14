@@ -26,6 +26,7 @@ import { signToken, sessionExhausted } from "../middleware/auth.js";
 import { getLifetimeSavings } from "./summaryController.js";
 import {
   createDemoUser,
+  loadDemoSample,
   retireDemoUser,
   sweepExpiredDemoUsers,
 } from "../lib/demoSeed.js";
@@ -58,8 +59,8 @@ export function googleCallback(req, res) {
 /**
  * POST /api/auth/demo -> start a private, writable sandbox and sign into it.
  *
- * Each visitor gets their own seeded account, so the demo can be used rather
- * than only looked at. It is disposable: signing out deletes it, and any left
+ * Each visitor gets their own account, so the demo can be used rather than only
+ * looked at. It starts empty; sample history is one request away, below. It is disposable: signing out deletes it, and any left
  * behind are swept here on the way in — this app runs no scheduler, and the
  * moment someone asks for a new sandbox is the one time a sweep is certainly
  * worth doing. A failed sweep must never cost a visitor their demo, so it is
@@ -74,6 +75,37 @@ export async function demoLogin(req, res) {
   const user = await createDemoUser();
   const token = signToken(user);
   res.json({ token });
+}
+
+/**
+ * POST /api/auth/demo/sample { replace? } -> fill the sandbox with sample history.
+ *
+ * Loading replaces every transaction and transfer, so if the visitor has
+ * already logged any, it answers 409 with how many and waits to be asked again
+ * with `replace: true`. The count comes from here rather than the client, which
+ * only ever holds one period's worth of the ledger.
+ */
+export async function demoSample(req, res) {
+  const user = req.user;
+  if (!user.isDemo) {
+    return res.status(403).json({ message: "Sample data is only available in the demo" });
+  }
+
+  if (req.body?.replace !== true) {
+    const [transactions, transfers] = await Promise.all([
+      Transaction.countDocuments({ userId: user._id }),
+      Transfer.countDocuments({ userId: user._id }),
+    ]);
+    const existing = transactions + transfers;
+    if (existing > 0) {
+      return res
+        .status(409)
+        .json({ message: "Loading sample data replaces your entries", existing });
+    }
+  }
+
+  const { transactions } = await loadDemoSample(user);
+  res.json({ message: "Sample data loaded", transactions });
 }
 
 /**
@@ -128,6 +160,7 @@ export async function getMe(req, res) {
     username: user.username,
     email: user.email,
     isDemo: !!user.isDemo,
+    demoSampleLoaded: !!user.demoSampleLoaded,
     profilePicture: user.profilePicture,
     avatar: user.avatar,
     budgetMode: user.budgetMode || "month",

@@ -17,6 +17,9 @@ const userSchema = new mongoose.Schema(
     // leave its transactions, transfers, periods, terms and summaries behind,
     // so the sweep in lib/demoSeed.js cascades instead.
     demoExpiresAt: { type: Date, default: null },
+    // A sandbox starts empty; this is set once the visitor asks for the sample
+    // history, so the client can stop offering it.
+    demoSampleLoaded: { type: Boolean, default: false },
     // Bumped on sign-out to invalidate every token already issued to this user.
     // Tokens carry the version they were signed with; a mismatch fails auth.
     tokenVersion: { type: Number, default: 0 },

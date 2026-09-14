@@ -218,13 +218,85 @@ describe("the demo sandbox", () => {
     assert.equal(res.status, 201);
   });
 
-  it("arrives with history already in it, so there is something to look at", async () => {
+  it("arrives empty, the way a real account does", async () => {
     const { body } = await call("/api/auth/demo", null, "POST");
     const me = await call("/api/auth/me", body.token);
-    const txns = await Transaction.countDocuments({
-      userId: me.body.id ?? me.body._id,
+    assert.equal(me.body.demoSampleLoaded, false);
+    assert.equal(await Transaction.countDocuments({ userId: me.body.id }), 0);
+  });
+
+  it("fills with sample history when the visitor asks", async () => {
+    const { body } = await call("/api/auth/demo", null, "POST");
+    const res = await call("/api/auth/demo/sample", body.token, "POST", {});
+    assert.equal(res.status, 200);
+
+    const me = await call("/api/auth/me", body.token);
+    assert.equal(me.body.demoSampleLoaded, true);
+    assert.ok((await Transaction.countDocuments({ userId: me.body.id })) > 0);
+  });
+
+  it("asks before replacing entries the visitor already logged", async () => {
+    const { body } = await call("/api/auth/demo", null, "POST");
+    const today = new Date().toISOString().slice(0, 10);
+    const added = await call("/api/transactions", body.token, "POST", {
+      type: "expense",
+      category: "F & B",
+      description: "My own lunch",
+      amount: 6,
+      date: today,
     });
-    assert.ok(txns > 0, "seeded demo should carry transactions");
+    assert.equal(added.status, 201, JSON.stringify(added.body));
+    const me = await call("/api/auth/me", body.token);
+
+    // Without `replace`, nothing is touched and the client learns what's at stake.
+    const asked = await call("/api/auth/demo/sample", body.token, "POST", {});
+    assert.equal(asked.status, 409);
+    assert.equal(asked.body.existing, 1);
+    assert.equal(await Transaction.countDocuments({ userId: me.body.id }), 1);
+
+    const replaced = await call("/api/auth/demo/sample", body.token, "POST", {
+      replace: true,
+    });
+    assert.equal(replaced.status, 200);
+    const rows = await Transaction.find({ userId: me.body.id }).lean();
+    assert.ok(rows.length > 1);
+    assert.ok(!rows.some((r) => r.description === "My own lunch"));
+  });
+
+  it("doesn't pile up when loaded twice", async () => {
+    const { body } = await call("/api/auth/demo", null, "POST");
+    const first = await call("/api/auth/demo/sample", body.token, "POST", {});
+    const again = await call("/api/auth/demo/sample", body.token, "POST", {
+      replace: true,
+    });
+    assert.equal(again.body.transactions, first.body.transactions);
+    const me = await call("/api/auth/me", body.token);
+    assert.equal(
+      await Transaction.countDocuments({ userId: me.body.id }),
+      first.body.transactions
+    );
+  });
+
+  it("never loads sample data into a real account", async () => {
+    // Loading deletes every transaction first, so this is the one that matters.
+    const user = await makeUser();
+    const when = new Date();
+    await Transaction.create({
+      userId: user._id,
+      type: "expense",
+      category: "F & B",
+      description: "Real lunch",
+      amount: 8,
+      date: when,
+      year: when.getUTCFullYear(),
+      month: when.getUTCMonth(),
+    });
+
+    for (const replace of [false, true]) {
+      const res = await call("/api/auth/demo/sample", signToken(user), "POST", { replace });
+      assert.equal(res.status, 403);
+    }
+    assert.equal(await Transaction.countDocuments({ userId: user._id }), 1);
   });
 
   it("takes the sandbox away when the visitor signs out", async () => {
