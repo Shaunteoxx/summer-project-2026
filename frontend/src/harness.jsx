@@ -801,7 +801,7 @@ function RecurringView() {
   useEffect(() => {
     if (params.get("form") !== "1") return;
     const btn = [...document.querySelectorAll("button")].find((b) =>
-      b.textContent.includes("New repeating entry")
+      b.textContent.includes("New Repeating Entry")
     );
     btn?.click();
   }, []);

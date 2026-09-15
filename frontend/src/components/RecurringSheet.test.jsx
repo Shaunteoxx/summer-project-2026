@@ -30,6 +30,8 @@ vi.mock("@/hooks/useCategories", async () => {
         expense: [cat("Shopping", "expense"), cat("Transport", "expense")],
         income: [cat("Allowance", "income")],
       },
+      getCategory: (name) => cat(name, "expense"),
+      addCategory: vi.fn(),
     }),
   };
 });
@@ -74,6 +76,21 @@ const startNew = async (user, rules = []) => {
   return within(screen.getByRole("dialog"));
 };
 
+/** Type an amount on the keypad the amount opens, as the transaction form does. */
+const enterAmount = async (user, sheet, keys) => {
+  await user.click(sheet.getByRole("button", { name: /^Amount,/ }));
+  for (const key of String(keys)) {
+    await user.click(screen.getByRole("button", { name: key === "." ? "Decimal point" : key }));
+  }
+  await user.click(screen.getByRole("button", { name: /^Use/ }));
+};
+
+/** Open the day field and pick one, by its spoken name ("1st", "Tuesday"). */
+const chooseDay = async (user, sheet, name) => {
+  await user.click(sheet.getByRole("button", { name: /Choose day$/ }));
+  await user.click(sheet.getByRole("button", { name }));
+};
+
 beforeEach(() => {
   mockAccounts = [];
   onAdd.mockReset().mockResolvedValue({});
@@ -95,16 +112,31 @@ describe("describing a schedule", () => {
 });
 
 describe("adding a rule", () => {
+  it("is laid out like the transaction form", async () => {
+    const user = userEvent.setup();
+    const sheet = await startNew(user);
+
+    // Amount as the hero, opening the keypad; categories as the icon grid;
+    // description by its placeholder, not a label above it.
+    expect(sheet.getByRole("button", { name: "Amount, not set. Opens calculator." })).toBeInTheDocument();
+    expect(sheet.getByRole("group", { name: "Entry type" })).toBeInTheDocument();
+    expect(sheet.getByRole("button", { name: "Shopping" })).toBeInTheDocument();
+    expect(sheet.getByRole("button", { name: "New" })).toBeInTheDocument();
+    expect(sheet.getByLabelText("Description")).toHaveAttribute("placeholder", "e.g. Rent");
+    // One submit button, as there; the sheet's close button is the way back.
+    expect(sheet.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+  });
+
   it("sends the schedule the form describes", async () => {
     const user = userEvent.setup();
     const sheet = await startNew(user);
 
     await user.click(sheet.getByRole("button", { name: "Shopping" }));
-    await user.clear(sheet.getByLabelText("Amount"));
-    await user.type(sheet.getByLabelText("Amount"), "800");
-    await user.clear(sheet.getByLabelText("Day of the Month"));
-    await user.type(sheet.getByLabelText("Day of the Month"), "1");
-    await user.click(sheet.getByRole("button", { name: "Add Repeating Entry" }));
+    await enterAmount(user, within(screen.getByRole("dialog")), "800");
+    const form = within(screen.getByRole("dialog"));
+    await chooseDay(user, form, "1st");
+    expect(form.getByRole("button", { name: /On the 1st of each month/ })).toBeInTheDocument();
+    await user.click(form.getByRole("button", { name: "Add Repeating Entry" }));
 
     expect(onAdd).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -124,18 +156,21 @@ describe("adding a rule", () => {
     const user = userEvent.setup();
     const sheet = await startNew(user);
 
-    await user.click(sheet.getByRole("button", { name: "weekly" }));
-    expect(sheet.queryByLabelText("Day of the Month")).not.toBeInTheDocument();
+    await user.click(sheet.getByRole("button", { name: "Weekly" }));
+    await user.click(sheet.getByRole("button", { name: /Choose day$/ }));
+    expect(sheet.queryByRole("group", { name: "Day of the month" })).not.toBeInTheDocument();
+    await user.click(
+      within(sheet.getByRole("group", { name: "Day of the week" })).getByRole("button", {
+        name: "Tuesday",
+      })
+    );
+    expect(sheet.getByRole("button", { name: /Every Tuesday/ })).toBeInTheDocument();
 
     await user.click(sheet.getByRole("button", { name: "Shopping" }));
-    await user.type(sheet.getByLabelText("Amount"), "15");
+    await enterAmount(user, sheet, "15");
     await user.click(
-      within(sheet.getByRole("group", { name: "Day of the week" })).getByRole(
-        "button",
-        { name: "Tue" }
-      )
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Add Repeating Entry" })
     );
-    await user.click(sheet.getByRole("button", { name: "Add Repeating Entry" }));
 
     expect(onAdd).toHaveBeenCalledWith(
       expect.objectContaining({ frequency: "weekly", weekday: 2 })
@@ -147,9 +182,9 @@ describe("adding a rule", () => {
     const user = userEvent.setup();
     const sheet = await startNew(user);
 
+    await chooseDay(user, sheet, "28th");
     expect(sheet.queryByText(/Shorter months/)).not.toBeInTheDocument();
-    await user.clear(sheet.getByLabelText("Day of the Month"));
-    await user.type(sheet.getByLabelText("Day of the Month"), "31");
+    await chooseDay(user, sheet, "31st");
 
     expect(sheet.getByText("Shorter months use their last day.")).toBeInTheDocument();
   });
@@ -162,7 +197,7 @@ describe("adding a rule", () => {
     // picked in the first place.
     const today = new Date();
     const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    expect(sheet.getByLabelText("Starting From")).toHaveAttribute("min", ymd);
+    expect(sheet.getByLabelText("Starting from")).toHaveAttribute("min", ymd);
   });
 
   it("refuses to save without a category or an amount", async () => {
@@ -180,10 +215,30 @@ describe("adding a rule", () => {
     const user = userEvent.setup();
     const sheet = await startNew(user);
 
-    await user.click(sheet.getByRole("button", { name: "income" }));
+    await user.click(sheet.getByRole("button", { name: "Income" }));
 
     expect(sheet.getByRole("button", { name: "Allowance" })).toBeInTheDocument();
     expect(sheet.queryByRole("button", { name: "Shopping" })).not.toBeInTheDocument();
+  });
+
+  it("tags an account through the same field the transaction form uses", async () => {
+    mockAccounts = [
+      { id: "a1", name: "DBS", color: "#7cb37c", archived: false },
+      { id: "a2", name: "Trust", color: "#c26b6b", archived: false },
+    ];
+    const user = userEvent.setup();
+    const sheet = await startNew(user);
+
+    await user.click(sheet.getByRole("button", { name: /^Paid from: no account/ }));
+    await user.click(sheet.getByRole("button", { name: "Trust" }));
+    expect(sheet.getByRole("button", { name: /^Paid from: Trust/ })).toBeInTheDocument();
+
+    await user.click(sheet.getByRole("button", { name: "Shopping" }));
+    await enterAmount(user, sheet, "20");
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Add Repeating Entry" })
+    );
+    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ accountId: "a2" }));
   });
 });
 
@@ -204,12 +259,16 @@ describe("managing rules", () => {
 
     // Moving a running rule's start backwards would be a back-fill by another
     // name, so it simply isn't offered.
-    expect(sheet.queryByLabelText("Starting From")).not.toBeInTheDocument();
-    expect(sheet.getByLabelText("Amount")).toHaveValue(800);
+    expect(sheet.queryByLabelText("Starting from")).not.toBeInTheDocument();
+    expect(
+      sheet.getByRole("button", { name: "Amount, 800.00 dollars. Opens calculator." })
+    ).toBeInTheDocument();
+    expect(sheet.getByRole("button", { name: /On the 1st of each month/ })).toBeInTheDocument();
 
-    await user.clear(sheet.getByLabelText("Amount"));
-    await user.type(sheet.getByLabelText("Amount"), "950");
-    await user.click(sheet.getByRole("button", { name: "Save Changes" }));
+    await enterAmount(user, sheet, "950");
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Save Changes" })
+    );
 
     expect(onUpdate).toHaveBeenCalledWith("r1", expect.objectContaining({ amount: 950 }));
     expect(onUpdate.mock.calls[0][1]).not.toHaveProperty("startKey");
