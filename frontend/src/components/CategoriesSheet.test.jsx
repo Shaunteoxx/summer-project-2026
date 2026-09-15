@@ -65,7 +65,7 @@ describe("managing your own categories", () => {
     await user.click(sheet.getByRole("button", { name: "Remove Gym" }));
     expect(removeCategory).not.toHaveBeenCalled();
 
-    await user.click(sheet.getByRole("button", { name: "Confirm removing Gym" }));
+    await user.click(sheet.getByRole("button", { name: "Yes, remove Gym" }));
     expect(removeCategory).toHaveBeenCalledWith("c1");
   });
 

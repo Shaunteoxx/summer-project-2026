@@ -4,15 +4,14 @@ import {
   Plus,
   Pause,
   Play,
-  Trash2,
   Repeat,
-  Check,
   CalendarDays,
   ChevronDown,
 } from "lucide-react";
 
 import AmountCalculator from "@/components/AmountCalculator";
 import BottomSheet from "@/components/BottomSheet";
+import ConfirmRemove from "@/components/ConfirmRemove";
 import {
   AccountOptions,
   AccountSelect,
@@ -256,7 +255,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
             ? "New Repeating Entry"
             : editing
               ? "Edit Repeating Entry"
-              : "Repeating entries"
+              : "Repeating Entries"
       }
     >
       {editing && calcOpen ? (
@@ -510,44 +509,29 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                         </span>
                       </button>
                       <div className="flex shrink-0 items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handlePause(rule)}
-                          aria-label={`${rule.paused ? "Resume" : "Pause"} ${rule.description}`}
-                          className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          {rule.paused ? (
-                            <Play className="h-4 w-4" />
-                          ) : (
-                            <Pause className="h-4 w-4" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            confirmId === rule.id
-                              ? handleRemove(rule)
-                              : setConfirmId(rule.id)
-                          }
-                          aria-label={
-                            confirmId === rule.id
-                              ? `Confirm removing ${rule.description}`
-                              : `Remove ${rule.description}`
-                          }
-                          className={`flex h-9 items-center justify-center gap-1 rounded-sm px-2 text-[12px] font-semibold transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                            confirmId === rule.id
-                              ? "bg-negative/[0.08] text-negative"
-                              : "w-9 text-ink-3 hover:bg-negative/[0.08] hover:text-negative"
-                          }`}
-                        >
-                          {confirmId === rule.id ? (
-                            <>
-                              <Check className="h-4 w-4" /> Sure?
-                            </>
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </button>
+                        {/* Pausing steps aside while a removal is being
+                            confirmed, as archiving does on bank accounts. */}
+                        {confirmId !== rule.id && (
+                          <button
+                            type="button"
+                            onClick={() => handlePause(rule)}
+                            aria-label={`${rule.paused ? "Resume" : "Pause"} ${rule.description}`}
+                            className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {rule.paused ? (
+                              <Play className="h-4 w-4" />
+                            ) : (
+                              <Pause className="h-4 w-4" />
+                            )}
+                          </button>
+                        )}
+                        <ConfirmRemove
+                          name={rule.description}
+                          armed={confirmId === rule.id}
+                          onArm={() => setConfirmId(rule.id)}
+                          onConfirm={() => handleRemove(rule)}
+                          onCancel={() => setConfirmId(null)}
+                        />
                       </div>
                     </div>
                   </li>

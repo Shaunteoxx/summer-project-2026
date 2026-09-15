@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Plus, Archive, ArchiveRestore, Trash2, Check, X } from "lucide-react";
+import { Plus, Archive, ArchiveRestore } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
+import ConfirmRemove from "@/components/ConfirmRemove";
 import FieldError from "@/components/FieldError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,34 +114,17 @@ export default function AccountsSheet({ open, onClose }) {
                   )}
                 </span>
 
-                {confirmId === a.id ? (
-                  <span className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(a)}
-                      aria-label={`Confirm removing ${a.name}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-sm text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08]"
-                    >
-                      <Check className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmId(null)}
-                      aria-label="Cancel"
-                      className="flex h-8 w-8 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </span>
-                ) : (
-                  <span className="flex shrink-0 items-center gap-1">
+                <span className="flex shrink-0 items-center gap-1">
+                  {/* Archiving steps aside while a delete is being confirmed,
+                      so the row holds one decision at a time. */}
+                  {confirmId !== a.id && (
                     <button
                       type="button"
                       onClick={() => handleArchive(a)}
                       aria-label={
                         a.archived ? `Restore ${a.name}` : `Archive ${a.name}`
                       }
-                      className="flex h-8 w-8 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink"
+                      className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {a.archived ? (
                         <ArchiveRestore className="h-4 w-4" />
@@ -148,16 +132,15 @@ export default function AccountsSheet({ open, onClose }) {
                         <Archive className="h-4 w-4" />
                       )}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmId(a.id)}
-                      aria-label={`Remove ${a.name}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </span>
-                )}
+                  )}
+                  <ConfirmRemove
+                    name={a.name}
+                    armed={confirmId === a.id}
+                    onArm={() => setConfirmId(a.id)}
+                    onConfirm={() => handleDelete(a)}
+                    onCancel={() => setConfirmId(null)}
+                  />
+                </span>
               </li>
             ))}
           </ul>

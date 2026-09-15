@@ -733,7 +733,7 @@ function MoreView() {
         />
         <Row
           icon={I.repeat}
-          title="Repeating entries"
+          title="Repeating Entries"
           meta="Added automatically"
           value={<RowValue>4</RowValue>}
           onClick={() => {}}

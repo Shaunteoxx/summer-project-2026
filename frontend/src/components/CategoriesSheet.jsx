@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Check, X } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
+import ConfirmRemove from "@/components/ConfirmRemove";
 import FieldError from "@/components/FieldError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,8 +29,8 @@ const TYPES = [
  * something, and sending you to a settings screen would lose the entry you were
  * part-way through writing.
  *
- * Deletes are confirmed in place, the same two-step the accounts sheet uses:
- * one tap arms, the tick commits. Nothing here is undoable once it goes.
+ * Deletes are confirmed in place with ConfirmRemove, the same two-step the
+ * accounts and repeating-entry lists use. Nothing here is undoable once it goes.
  */
 export default function CategoriesSheet({ open, onClose }) {
   const { custom, addCategory, removeCategory } = useCategories();
@@ -130,35 +130,13 @@ export default function CategoriesSheet({ open, onClose }) {
                   <span className="truncate text-sm font-medium">{c.name}</span>
                 </span>
 
-                {confirmId === c.id ? (
-                  <span className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(c)}
-                      aria-label={`Confirm removing ${c.name}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-sm text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
-                    >
-                      <Check className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmId(null)}
-                      aria-label={`Keep ${c.name}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmId(c.id)}
-                    aria-label={`Remove ${c.name}`}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
+                <ConfirmRemove
+                  name={c.name}
+                  armed={confirmId === c.id}
+                  onArm={() => setConfirmId(c.id)}
+                  onConfirm={() => handleDelete(c)}
+                  onCancel={() => setConfirmId(null)}
+                />
               </li>
             ))}
           </ul>

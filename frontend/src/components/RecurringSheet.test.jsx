@@ -293,8 +293,21 @@ describe("managing rules", () => {
     await user.click(screen.getByRole("button", { name: "Remove Rent" }));
     expect(onRemove).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Confirm removing Rent" }));
+    await user.click(screen.getByRole("button", { name: "Yes, remove Rent" }));
     expect(onRemove).toHaveBeenCalledWith("r1");
+  });
+
+  it("lets you back out of a removal, and puts pause back", async () => {
+    const user = userEvent.setup();
+    show([rent]);
+
+    await user.click(screen.getByRole("button", { name: "Remove Rent" }));
+    // One decision at a time: pause steps aside while removal is armed.
+    expect(screen.queryByRole("button", { name: "Pause Rent" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Keep Rent" }));
+    expect(onRemove).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Pause Rent" })).toBeInTheDocument();
   });
 
   it("says the history survives, since the accounts list refuses for the opposite reason", async () => {
