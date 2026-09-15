@@ -492,6 +492,27 @@ describe("what each cycle was given", () => {
     assert.equal(body.current.funding, 1125);
   });
 
+  it("charges a past month only your share of a bill friends paid back", async () => {
+    const { user, token } = await midTerm({ lump: 6000, months: 6, back: 1 });
+    const date = new Date(`${monthStart(1)}T00:00:00.000Z`);
+    await Transaction.create({
+      userId: user._id,
+      description: "Group dinner",
+      amount: 900,
+      paidBack: 300,
+      type: "expense",
+      category: "F & B",
+      date,
+      month: date.getUTCMonth(),
+      year: date.getUTCFullYear(),
+    });
+
+    const { body } = await call(`/api/period?today=${todayYmd()}`, token);
+    // $6,000 − $600 over the 5 months left -> $1,080. Charging the whole $900
+    // would have left $1,020, as if the repayment never came.
+    assert.equal(body.current.funding, 1080);
+  });
+
   it("leaves a month still to come unpriced", async () => {
     const { token } = await midTerm({ lump: 6000, months: 6, back: 2 });
     const { body } = await call(`/api/period?today=${todayYmd()}`, token);

@@ -1137,3 +1137,135 @@ describe("entries a repeating rule wrote", () => {
     );
   });
 });
+
+// A shared bill: the whole meal went out of one account, and friends paid part
+// of it back into another. The ledger and the budget count only your share.
+describe("money paid back on a shared bill", () => {
+  const twoAccounts = [
+    { id: "a1", name: "Trust", color: "#c26b6b", archived: false },
+    { id: "a2", name: "DBS", color: "#7cb37c", archived: false },
+  ];
+  const dinner = {
+    _id: "t7",
+    date: "2026-08-05T00:00:00.000Z",
+    type: "expense",
+    amount: 12.8,
+    category: "F & B",
+    description: "Group dinner",
+    accountId: "a1",
+    paidBack: 5.9,
+    paidBackAccountId: "a2",
+  };
+
+  /** Type a figure on the keypad the paid-back field opens. */
+  const enterPaidBack = async (user, sheet, keys) => {
+    await user.click(sheet.getByRole("button", { name: /^Paid back by friends/ }));
+    for (const key of String(keys)) {
+      await user.click(
+        screen.getByRole("button", { name: key === "." ? "Decimal point" : key })
+      );
+    }
+    await user.click(screen.getByRole("button", { name: /^Use/ }));
+  };
+
+  it("lists your share, and says what it was a share of", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [dinner];
+    renderPage();
+
+    const row = await screen.findByRole("button", { name: "Edit Group dinner" });
+    expect(row).toHaveTextContent("−$6.90");
+    expect(row).toHaveTextContent("$5.90 of $12.80 paid back");
+  });
+
+  it("sends the repayment and where it went with a new expense", async () => {
+    mockAccounts = twoAccounts;
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet();
+
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
+    await enterAmount(user, sheet, "12.8");
+    await enterPaidBack(user, within(screen.getByRole("dialog")), "5.9");
+    const form = within(screen.getByRole("dialog"));
+    expect(form.getByText(/Your share is/)).toHaveTextContent("Your share is $6.90");
+
+    await user.click(form.getByRole("button", { name: /^Paid into: no account/ }));
+    await user.click(
+      within(form.getByRole("group", { name: "Paid into" })).getByRole("button", { name: /DBS/ })
+    );
+    await user.click(form.getByRole("button", { name: "Add Expense" }));
+
+    expect(submitted()).toMatchObject({
+      amount: 12.8,
+      paidBack: 5.9,
+      paidBackAccountId: "a2",
+    });
+  });
+
+  it("leaves it out entirely when nothing was paid back", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet();
+
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
+    await enterAmount(user, sheet, "8");
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Add Expense" })
+    );
+    expect(submitted()).not.toHaveProperty("paidBack");
+  });
+
+  it("won't take a repayment as big as the bill", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet();
+
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
+    await enterAmount(user, sheet, "10");
+    await enterPaidBack(user, within(screen.getByRole("dialog")), "10");
+    const form = within(screen.getByRole("dialog"));
+    await user.click(form.getByRole("button", { name: "Add Expense" }));
+
+    expect(form.getByText("Paid back has to be less than the amount.")).toBeInTheDocument();
+    expect(addTransaction).not.toHaveBeenCalled();
+  });
+
+  it("isn't offered on income", async () => {
+    renderPage({ openAdd: "income" });
+    const sheet = within(await screen.findByRole("dialog"));
+    expect(sheet.queryByRole("button", { name: /^Paid back by friends/ })).not.toBeInTheDocument();
+  });
+
+  it("adds a repayment to a meal logged days ago, sending only that", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [{ ...dinner, paidBack: 0, paidBackAccountId: null }];
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Edit Group dinner" }));
+
+    await enterPaidBack(user, within(screen.getByRole("dialog")), "5.9");
+    const form = within(screen.getByRole("dialog"));
+    await user.click(form.getByRole("button", { name: /^Paid into: no account/ }));
+    await user.click(
+      within(form.getByRole("group", { name: "Paid into" })).getByRole("button", { name: /DBS/ })
+    );
+    await user.click(form.getByRole("button", { name: "Save Changes" }));
+
+    expect(updateTransaction).toHaveBeenCalledWith("t7", {
+      paidBack: 5.9,
+      paidBackAccountId: "a2",
+    });
+  });
+
+  it("clears it with Remove", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [dinner];
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Edit Group dinner" }));
+
+    const sheet = within(screen.getByRole("dialog"));
+    await user.click(sheet.getByRole("button", { name: "Remove" }));
+    await user.click(sheet.getByRole("button", { name: "Save Changes" }));
+
+    expect(updateTransaction).toHaveBeenCalledWith("t7", { paidBack: 0 });
+  });
+});

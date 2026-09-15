@@ -10,6 +10,7 @@ import {
   priceCycles,
   periodStatus,
 } from "./period.js";
+import { SPENT_AMOUNT } from "./entryFields.js";
 
 /**
  * Everything a term needs costed, in one pass: the pot its active cycle draws
@@ -40,7 +41,10 @@ async function costTerm(userId, term, cycle, cycles) {
           y: { $year: "$date" },
           m: { $month: "$date" },
         },
-        total: { $sum: "$amount" },
+        // Expenses net of what friends paid back, as everywhere else.
+        total: {
+          $sum: { $cond: [{ $eq: ["$type", "expense"] }, SPENT_AMOUNT, "$amount"] },
+        },
       },
     },
   ]);

@@ -65,9 +65,13 @@ export default function AccountsCard({ onTransfer = null }) {
   // two transfer directions separately. Transfers belong in the columns —
   // money genuinely moved through the account — and they cancel across
   // accounts, so the totals still reconcile to leftToSpend.
+  //
+  // Money friends paid back for a shared bill is In for the account it landed
+  // in, while the whole bill stays Out of the one that paid it. That is what
+  // the bank statements show, and Out − In still comes to the budget's figure.
   const toRow = (a) => ({
     ...a,
-    in: round(a.income + (a.transfersIn ?? 0)),
+    in: round(a.income + (a.transfersIn ?? 0) + (a.paidBackIn ?? 0)),
     out: round(a.spent + (a.transfersOut ?? 0)),
   });
 

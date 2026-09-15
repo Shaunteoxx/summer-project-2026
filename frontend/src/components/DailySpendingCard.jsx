@@ -8,7 +8,7 @@ import SpendingCalendar from "@/components/SpendingCalendar";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useCategories } from "@/hooks/useCategories";
 import CategoryIcon from "@/components/CategoryIcon";
-import { cn, formatMoney, localToday } from "@/lib/utils";
+import { cn, countedAmount, formatMoney, localToday } from "@/lib/utils";
 import {
   formatDay,
   formatMonthLabel,
@@ -115,7 +115,7 @@ export default function DailySpendingCard({
     const txns = txnsByDay.get(key) ?? [];
     const amount = entry
       ? entry.spent
-      : txns.reduce((sum, t) => sum + t.amount, 0);
+      : txns.reduce((sum, t) => sum + countedAmount(t), 0);
     totalSpent += amount;
     const isFuture = key > todayYmd;
     if (!isFuture) elapsed += 1;
@@ -353,7 +353,7 @@ export default function DailySpendingCard({
                         </div>
                       </div>
                       <span className="num shrink-0 text-[15px] font-medium text-ink">
-                        −{formatMoney(t.amount)}
+                        −{formatMoney(countedAmount(t))}
                       </span>
                     </div>
                   );

@@ -35,6 +35,13 @@ const transactionSchema = new mongoose.Schema(
     // makes materialising idempotent, and it has to survive the user correcting
     // the date afterwards — otherwise the rule would produce the day again.
     dueKey: { type: String, default: null },
+    // Money friends returned for a shared bill, and the account it came back
+    // into. Expenses only, and always less than `amount`. The budget counts
+    // `amount − paidBack` on this row's date; the account columns count
+    // `amount` out of accountId and `paidBack` into paidBackAccountId. See
+    // lib/entryFields.js.
+    paidBack: { type: Number, default: 0, min: 0, max: 1e9 },
+    paidBackAccountId: { type: mongoose.Schema.Types.ObjectId, default: null },
   },
   { timestamps: true }
 );

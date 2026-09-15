@@ -22,7 +22,7 @@ import { fetchHomeStats, fetchTransactions } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
-import { formatMoney, localToday } from "@/lib/utils";
+import { countedAmount, formatMoney, localToday } from "@/lib/utils";
 import { formatDay, formatDayRange, noWindowCopy } from "@/lib/period";
 import { fadeUp } from "@/animations/variants";
 
@@ -734,7 +734,7 @@ export default function HomePage() {
                       }`}
                     >
                       {income ? "+" : "−"}
-                      {formatMoney(t.amount)}
+                      {formatMoney(countedAmount(t))}
                     </span>
                   </button>
                 </li>

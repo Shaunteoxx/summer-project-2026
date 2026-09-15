@@ -45,6 +45,16 @@ export function monthName(month) {
   return MONTH_NAMES[month] ?? "";
 }
 
+/**
+ * What an entry counts for: the amount, less anything friends paid back on a
+ * shared bill. The server budgets from the same figure (lib/entryFields.js
+ * `spentAmount`), so every total on screen has to use this rather than
+ * `amount`, or the list and the budget stop agreeing.
+ */
+export function countedAmount(t) {
+  return t.amount - (t.paidBack || 0);
+}
+
 /** 1 -> "1st", 22 -> "22nd". Used wherever a repeating entry names its day. */
 export function ordinal(n) {
   const suffix =

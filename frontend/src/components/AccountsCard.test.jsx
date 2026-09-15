@@ -102,6 +102,26 @@ describe("account activity", () => {
     expect(cellsFor("Total")).toEqual(["$1,200.00", "$848.00"]);
   });
 
+  it("puts money paid back on a shared bill In where it landed", async () => {
+    // A $12.80 dinner on Trust PayWave, $5.90 PayNowed back into DBS. The
+    // columns show what the banks show; the budget counts $6.90.
+    fetchAccountTotals.mockResolvedValue(
+      payload({
+        accounts: [
+          account({ id: "a1", name: "Trust", spent: 12.8 }),
+          account({ id: "a2", name: "DBS", income: 800, paidBackIn: 5.9 }),
+        ],
+        totals: { income: 800, spent: 6.9, net: 793.1, reserved: 200, leftToSpend: 593.1 },
+      })
+    );
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+
+    expect(cellsFor("Trust")).toEqual(["—", "$12.80"]);
+    expect(cellsFor("DBS")).toEqual(["$805.90", "—"]);
+    expect(cellsFor("Total")).toEqual(["$805.90", "$12.80"]);
+  });
+
   it("totals what is on screen", async () => {
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Total")).toBeInTheDocument());

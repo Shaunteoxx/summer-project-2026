@@ -1,5 +1,6 @@
 import Transaction from "../models/Transaction.js";
 import { parseMonthYear, roundMoney } from "../lib/validation.js";
+import { SPENT_AMOUNT } from "../lib/entryFields.js";
 
 function toSummary(row, userId, month, year) {
   const totalIncome = roundMoney(row?.totalIncome || 0);
@@ -27,7 +28,7 @@ export async function aggregateSummaries(userId, match = {}) {
           $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] },
         },
         totalExpenses: {
-          $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] },
+          $sum: { $cond: [{ $eq: ["$type", "expense"] }, SPENT_AMOUNT, 0] },
         },
       },
     },

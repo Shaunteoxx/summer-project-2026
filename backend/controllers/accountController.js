@@ -5,6 +5,7 @@ import { dayFromYmd } from "../lib/period.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
 import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
 import { ensureRecurringDue } from "../lib/recurring.js";
+import { SPENT_AMOUNT } from "../lib/entryFields.js";
 
 /**
  * GET /api/accounts?today=YYYY-MM-DD
@@ -18,6 +19,11 @@ import { ensureRecurringDue } from "../lib/recurring.js";
  * daily budget is built from, before the savings reserve. That identity is what
  * lets the client show the two views reconciling, and it is asserted in the
  * tests.
+ *
+ * Money friends paid back for a shared bill keeps that identity too. The bill's
+ * full `amount` goes out of the account that paid it and the `paidBack` comes
+ * into the account it was returned to, so `totals.spent` — what the budget
+ * counts — is the bill less the repayment.
  */
 export async function getAccountTotals(req, res) {
   const today = resolveClientToday(req.query.today);
@@ -38,6 +44,7 @@ export async function getAccountTotals(req, res) {
     spent: 0,
     transfersIn: 0,
     transfersOut: 0,
+    paidBackIn: 0,
     net: 0,
   }));
 
@@ -48,14 +55,17 @@ export async function getAccountTotals(req, res) {
   }
 
   const range = { $gte: dayFromYmd(period.start), $lte: dayFromYmd(period.end) };
-  const [txnRows, transferRows] = await Promise.all([
+  const [txnRows, transferRows, paidBackRows] = await Promise.all([
     Transaction.aggregate([
       { $match: { userId: req.user._id, date: range } },
       {
         $group: {
           _id: "$accountId",
           income: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] } },
+          // What left the account, in full.
           spent: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
+          // What the budget counts: the same bills, less what came back.
+          counted: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, SPENT_AMOUNT, 0] } },
         },
       },
     ]),
@@ -69,13 +79,20 @@ export async function getAccountTotals(req, res) {
         },
       },
     ]),
+    // Grouped by the account the money came back into, which is often not the
+    // one the bill was paid from.
+    Transaction.aggregate([
+      { $match: { userId: req.user._id, date: range, paidBack: { $gt: 0 } } },
+      { $group: { _id: "$paidBackAccountId", amount: { $sum: "$paidBack" } } },
+    ]),
   ]);
 
   const byId = new Map(accounts.map((a) => [a.id, a]));
   // Rows logged before the user made any accounts, or left untagged. Kept as
   // its own bucket so the arithmetic still ties out during the transition
   // rather than the difference silently going missing.
-  const unassigned = { income: 0, spent: 0, net: 0 };
+  const unassigned = { income: 0, spent: 0, paidBackIn: 0, net: 0 };
+  let counted = 0;
 
   for (const row of txnRows) {
     const target = row._id ? byId.get(String(row._id)) : unassigned;
@@ -84,6 +101,12 @@ export async function getAccountTotals(req, res) {
     if (!target) continue;
     target.income += row.income;
     target.spent += row.spent;
+    counted += row.counted;
+  }
+
+  for (const row of paidBackRows) {
+    const target = row._id ? byId.get(String(row._id)) : unassigned;
+    if (target) target.paidBackIn += row.amount;
   }
 
   const facet = transferRows[0] ?? { out: [], in: [] };
@@ -101,18 +124,18 @@ export async function getAccountTotals(req, res) {
     a.spent = roundMoney(a.spent);
     a.transfersIn = roundMoney(a.transfersIn);
     a.transfersOut = roundMoney(a.transfersOut);
-    a.net = roundMoney(a.income - a.spent + a.transfersIn - a.transfersOut);
+    a.paidBackIn = roundMoney(a.paidBackIn);
+    a.net = roundMoney(a.income - a.spent + a.paidBackIn + a.transfersIn - a.transfersOut);
   }
   unassigned.income = roundMoney(unassigned.income);
   unassigned.spent = roundMoney(unassigned.spent);
-  unassigned.net = roundMoney(unassigned.income - unassigned.spent);
+  unassigned.paidBackIn = roundMoney(unassigned.paidBackIn);
+  unassigned.net = roundMoney(unassigned.income - unassigned.spent + unassigned.paidBackIn);
 
   const income = roundMoney(
     accounts.reduce((sum, a) => sum + a.income, 0) + unassigned.income
   );
-  const spent = roundMoney(
-    accounts.reduce((sum, a) => sum + a.spent, 0) + unassigned.spent
-  );
+  const spent = roundMoney(counted);
   const reserved = roundMoney(period.savings || 0);
   // A term cycle's money came from the lump sum, which arrived in an earlier
   // cycle and belongs to no account any more. Null outside term mode.
@@ -123,7 +146,7 @@ export async function getAccountTotals(req, res) {
     accounts,
     // Omitted entirely once everything is tagged, so the client doesn't have to
     // decide whether a row of zeroes is worth showing.
-    ...(unassigned.income || unassigned.spent ? { unassigned } : {}),
+    ...(unassigned.income || unassigned.spent || unassigned.paidBackIn ? { unassigned } : {}),
     totals: {
       income,
       spent,

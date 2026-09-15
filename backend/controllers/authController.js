@@ -21,6 +21,7 @@ import {
   checkCategory,
   checkDescription,
   checkType,
+  spentAmount,
 } from "../lib/entryFields.js";
 import { signToken, sessionExhausted } from "../middleware/auth.js";
 import { getLifetimeSavings } from "./summaryController.js";
@@ -60,8 +61,9 @@ export function googleCallback(req, res) {
  * POST /api/auth/demo -> start a private, writable sandbox and sign into it.
  *
  * Each visitor gets their own account, so the demo can be used rather than only
- * looked at. It starts empty; sample history is one request away, below. It is disposable: signing out deletes it, and any left
- * behind are swept here on the way in — this app runs no scheduler, and the
+ * looked at. It starts empty; sample history is one request away, below. It is
+ * disposable: signing out deletes it, and any left behind are swept here on the
+ * way in — this app runs no scheduler, and the
  * moment someone asks for a new sandbox is the one time a sweep is certainly
  * worth doing. A failed sweep must never cost a visitor their demo, so it is
  * deliberately not awaited into the failure path.
@@ -665,7 +667,7 @@ export async function getHomeStats(req, res) {
   let expenses = 0;
   for (const t of periodTransactions) {
     if (t.type === "income") income += t.amount;
-    else expenses += t.amount;
+    else expenses += spentAmount(t);
   }
 
   income = roundMoney(income);

@@ -15,6 +15,7 @@ import {
   checkAmount,
   checkCategory,
   checkDescription,
+  checkPaidBack,
   checkType,
 } from "../lib/entryFields.js";
 
@@ -65,7 +66,8 @@ export async function getTransactions(req, res) {
 
 /** POST /api/transactions */
 export async function createTransaction(req, res) {
-  const { description, amount, type, category, date, accountId } = req.body;
+  const { description, amount, type, category, date, accountId, paidBack, paidBackAccountId } =
+    req.body;
   if (!description || amount === undefined || !type || !category) {
     return res.status(400).json({
       message: "description, amount, type and category are required",
@@ -89,6 +91,14 @@ export async function createTransaction(req, res) {
   const account = checkAccountId(req.user, accountId);
   if (!account.ok) return res.status(400).json({ message: "Choose a valid account" });
 
+  const back = checkPaidBack(req.user, {
+    type,
+    amount: value.value,
+    rawPaidBack: paidBack,
+    rawAccountId: paidBackAccountId ?? null,
+  });
+  if (back.message) return res.status(400).json({ message: back.message });
+
   const transaction = await Transaction.create({
     userId: req.user._id,
     description: desc.value,
@@ -99,6 +109,7 @@ export async function createTransaction(req, res) {
     month: when.getUTCMonth(),
     year: when.getUTCFullYear(),
     accountId: account.value,
+    ...back.value,
   });
   res.status(201).json(transaction);
 }
@@ -169,6 +180,22 @@ export async function updateTransaction(req, res) {
     const account = checkAccountId(req.user, accountId);
     if (!account.ok) return res.status(400).json({ message: "Choose a valid account" });
     transaction.accountId = account.value;
+  }
+
+  // Re-checked whenever either side of it moves: lowering the amount below
+  // what was already paid back has to be refused just as much as paying back
+  // too much. Friends usually pay a few days after the meal, so this is mostly
+  // how paid back gets set in the first place.
+  if (amount !== undefined || "paidBack" in body || "paidBackAccountId" in body) {
+    const back = checkPaidBack(req.user, {
+      type: transaction.type,
+      amount: transaction.amount,
+      rawPaidBack: "paidBack" in body ? body.paidBack : transaction.paidBack,
+      rawAccountId: "paidBackAccountId" in body ? body.paidBackAccountId : undefined,
+      keepAccountId: transaction.paidBackAccountId,
+    });
+    if (back.message) return res.status(400).json({ message: back.message });
+    Object.assign(transaction, back.value);
   }
 
   await transaction.save();

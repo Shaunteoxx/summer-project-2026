@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, useAnimationControls } from "framer-motion";
-import { Repeat } from "lucide-react";
+import { HandCoins, Repeat, X } from "lucide-react";
 
 import AmountCalculator from "@/components/AmountCalculator";
 import BottomSheet from "@/components/BottomSheet";
@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useRecurring } from "@/hooks/useRecurring";
-import { cn, formatMoney, localToday, ordinal } from "@/lib/utils";
+import { cn, countedAmount, formatMoney, localToday, ordinal } from "@/lib/utils";
 import { SHAKE } from "@/animations/variants";
 
 const emptyForm = (accountId = "") => ({
@@ -31,6 +31,8 @@ const emptyForm = (accountId = "") => ({
   category: "",
   date: localToday(),
   accountId,
+  paidBack: "",
+  paidBackAccountId: "",
 });
 
 /**
@@ -76,6 +78,8 @@ const formFrom = (transaction) => ({
   // the day the user chose, which building a local Date from it would not.
   date: String(transaction.date).slice(0, 10),
   accountId: transaction.accountId ? String(transaction.accountId) : "",
+  paidBack: transaction.paidBack ? String(transaction.paidBack) : "",
+  paidBackAccountId: transaction.paidBackAccountId ? String(transaction.paidBackAccountId) : "",
 });
 
 /**
@@ -136,9 +140,9 @@ export default function AddTransactionSheet({
   // Server-side / general failure not tied to one field.
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  // When true the sheet shows the amount keypad instead of the form. The sheet
-  // has no scroll container, so the keypad replaces the form rather than
-  // stacking below it and pushing the submit button off screen.
+  // Which figure the keypad is entering — "amount" or "paidBack" — or false
+  // while the form shows. The keypad replaces the form rather than stacking
+  // below it and pushing the submit button off screen.
   const [calcOpen, setCalcOpen] = useState(false);
 
   // Imperative shake controls so an invalid field re-shakes on every submit
@@ -148,6 +152,7 @@ export default function AddTransactionSheet({
     category: useAnimationControls(),
     amount: useAnimationControls(),
     date: useAnimationControls(),
+    paidBack: useAnimationControls(),
   };
 
   // The account row reads as a field showing what's tagged, because that's how
@@ -155,19 +160,24 @@ export default function AddTransactionSheet({
   // case is confirming it rather than choosing. The chips are one tap away,
   // expanded inline the same way the new-category panel is.
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
+  const [paidBackPickerOpen, setPaidBackPickerOpen] = useState(false);
   const categoryPicker = useCategoryPicker();
 
   // Closing the keypad unmounts it, which would drop focus to <body>. Put it
   // back on the amount control so keyboard and screen-reader users keep their
   // place in the form.
   const closeCalculator = () => {
+    const field = calcOpen === "paidBack" ? "paid-back" : "amount";
     setCalcOpen(false);
     requestAnimationFrame(() => {
-      document.getElementById("amount")?.focus({ preventScroll: true });
+      document.getElementById(field)?.focus({ preventScroll: true });
     });
   };
 
   const accountChoice = useAccountChoice(form.accountId);
+  const paidBackChoice = useAccountChoice(form.paidBackAccountId);
+  // Paid back is only ever part of an expense: nobody pays back income.
+  const paidBackNumber = type === "expense" ? Number(form.paidBack) || 0 : 0;
 
   // Reseed every time the sheet opens, so a cancelled entry never leaks into
   // the next one and an edit always starts from the row as it stands.
@@ -180,6 +190,7 @@ export default function AddTransactionSheet({
     categoryPicker.reset();
     setCalcOpen(false);
     setAccountPickerOpen(false);
+    setPaidBackPickerOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, editing]);
 
@@ -190,6 +201,8 @@ export default function AddTransactionSheet({
     setErrors((prev) => {
       const next = { ...prev };
       for (const key of Object.keys(changes)) delete next[key];
+      // Paid back is judged against the amount, so changing either settles it.
+      if ("amount" in changes) delete next.paidBack;
       return next;
     });
     setFormError("");
@@ -234,6 +247,9 @@ export default function AddTransactionSheet({
     if (!form.date || Number.isNaN(new Date(`${form.date}T00:00:00`).getTime())) {
       nextErrors.date = "Choose a valid date.";
     }
+    if (paidBackNumber > 0 && !nextErrors.amount && paidBackNumber >= amount) {
+      nextErrors.paidBack = "Paid back has to be less than the amount.";
+    }
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
@@ -260,12 +276,17 @@ export default function AddTransactionSheet({
           category: form.category,
           date: form.date,
           accountId: form.accountId || undefined,
+          ...(paidBackNumber > 0
+            ? { paidBack: paidBackNumber, paidBackAccountId: form.paidBackAccountId || null }
+            : {}),
         });
         rememberAccount(form.accountId);
         onAdded(created);
         onClose();
         const sign = type === "income" ? "+" : "−";
-        toast.success(`Added ${sign}${formatMoney(amount)} · ${form.category}`);
+        toast.success(
+          `Added ${sign}${formatMoney(amount - paidBackNumber)} · ${form.category}`
+        );
         // After the entry, and never in place of it: the entry is what was
         // asked for, so a rule that fails to save must not lose it.
         if (repeat) await createRepeat({ description, amount });
@@ -330,6 +351,13 @@ export default function AddTransactionSheet({
     // Null, not undefined: clearing the tag has to be said out loud.
     if (form.accountId !== wasAccount) patch.accountId = form.accountId || null;
 
+    // Zero clears it, and the server clears the account along with it.
+    if (paidBackNumber !== (editing.paidBack || 0)) patch.paidBack = paidBackNumber;
+    const wasPaidBackAccount = editing.paidBackAccountId ? String(editing.paidBackAccountId) : "";
+    if (paidBackNumber > 0 && form.paidBackAccountId !== wasPaidBackAccount) {
+      patch.paidBackAccountId = form.paidBackAccountId || null;
+    }
+
     if (Object.keys(patch).length === 0) {
       onClose();
       return;
@@ -357,11 +385,12 @@ export default function AddTransactionSheet({
   >
     {calcOpen ? (
       <AmountCalculator
-        initialValue={form.amount}
-        tone={type === "income" ? "success" : "destructive"}
+        initialValue={form[calcOpen]}
+        // Money coming back reads as money coming in.
+        tone={type === "income" || calcOpen === "paidBack" ? "success" : "destructive"}
         onCancel={closeCalculator}
-        onApply={(amount) => {
-          updateForm({ amount: String(amount) });
+        onApply={(value) => {
+          updateForm({ [calcOpen]: String(value) });
           closeCalculator();
         }}
       />
@@ -379,7 +408,7 @@ export default function AddTransactionSheet({
           type={type}
           error={errors.amount}
           shake={shakeControls.amount}
-          onOpen={() => setCalcOpen(true)}
+          onOpen={() => setCalcOpen("amount")}
         />
 
         <CategoryPicker
@@ -469,6 +498,97 @@ export default function AddTransactionSheet({
             />
           )}
         </div>
+        {/* Paid back: what friends returned for a shared bill. Expenses only.
+            The amount above stays the whole bill — it's what left the account —
+            and the budget counts the bill less this, on the bill's own date.
+            The money usually comes back into a different account (PayWave out,
+            PayNow back), so it asks where. Friends tend to pay a few days
+            later, so this is as much for editing an entry as for adding one. */}
+        {type === "expense" && (
+          <div className="space-y-2.5">
+            <motion.div
+              animate={shakeControls.paidBack}
+              className="flex flex-wrap items-start gap-2.5"
+            >
+              <button
+                type="button"
+                id="paid-back"
+                onClick={() => setCalcOpen("paidBack")}
+                aria-label={
+                  paidBackNumber > 0
+                    ? `Paid back by friends, ${paidBackNumber.toFixed(2)} dollars. Opens calculator.`
+                    : "Paid back by friends, none. Opens calculator."
+                }
+                aria-invalid={Boolean(errors.paidBack)}
+                aria-describedby={errors.paidBack ? "tx-paid-back-error" : undefined}
+                className={cn(
+                  "flex h-[46px] w-full min-w-0 flex-1 basis-[9rem] items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  errors.paidBack && "ring-2 ring-negative"
+                )}
+              >
+                <HandCoins className="h-[15px] w-[15px] shrink-0 text-ink-3" />
+                {paidBackNumber > 0 ? (
+                  <span className="num min-w-0 flex-1 truncate text-left font-medium text-positive">
+                    +{formatMoney(paidBackNumber)} paid back
+                  </span>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-left text-ink-3">
+                    Paid back by friends
+                  </span>
+                )}
+              </button>
+
+              {paidBackNumber > 0 && paidBackChoice.available && (
+                <AccountSelect
+                  type="income"
+                  choice={paidBackChoice}
+                  open={paidBackPickerOpen}
+                  onToggle={() => setPaidBackPickerOpen((v) => !v)}
+                  className="flex-1 basis-[9rem]"
+                />
+              )}
+            </motion.div>
+
+            {paidBackPickerOpen && paidBackNumber > 0 && paidBackChoice.available && (
+              <AccountOptions
+                type="income"
+                choice={paidBackChoice}
+                value={form.paidBackAccountId}
+                onChange={(id) => updateForm({ paidBackAccountId: id })}
+                onClose={() => setPaidBackPickerOpen(false)}
+              />
+            )}
+
+            {errors.paidBack ? (
+              <FieldError id="tx-paid-back-error">{errors.paidBack}</FieldError>
+            ) : (
+              paidBackNumber > 0 &&
+              Number(form.amount) > paidBackNumber && (
+                <p className="flex items-center justify-between gap-3 text-[12px] leading-relaxed text-ink-3">
+                  <span>
+                    Your share is{" "}
+                    <b className="num font-medium text-ink-2">
+                      {formatMoney(countedAmount({ amount: Number(form.amount), paidBack: paidBackNumber }))}
+                    </b>
+                    , and that&apos;s what your budget counts.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateForm({ paidBack: "", paidBackAccountId: "" });
+                      setPaidBackPickerOpen(false);
+                    }}
+                    className="-my-1 flex shrink-0 items-center gap-1 rounded-sm px-1 py-1 font-medium text-ink-3 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Remove
+                  </button>
+                </p>
+              )
+            )}
+          </div>
+        )}
+
         {/* Rent and subscriptions are realised at the moment you log them, not
             later in a settings screen — so the offer to repeat sits here,
             after the date it derives its schedule from. Editing an existing

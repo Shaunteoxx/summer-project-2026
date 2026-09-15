@@ -91,3 +91,59 @@ export function checkAccountId(user, raw) {
   );
   return match ? { ok: true, value: match._id } : { ok: false };
 }
+
+/*
+ * Paid back — money friends returned for a shared bill.
+ *
+ * It lives on the expense rather than as an income row of its own. As income
+ * it was new money, spread over every day left in the period, while the meal's
+ * day kept looking like the whole table's bill. On the expense it comes off
+ * that day instead: a $12.80 dinner with $5.90 back costs the budget $6.90.
+ *
+ * `amount` stays what actually left the account the bill was paid from, so the
+ * account columns still match the bank. The repayment is counted into
+ * `paidBackAccountId` — often a different account (PayWave out, PayNow back) —
+ * and on the expense's own date, even if it arrived days later. That trades a
+ * timing difference in monthly bank checks for one number to edit.
+ */
+
+/** What an entry costs the budget: the bill, less what came back. */
+export const spentAmount = (t) => t.amount - (t.paidBack || 0);
+
+/** The same thing as a Mongo expression, for the aggregations. */
+export const SPENT_AMOUNT = { $subtract: ["$amount", { $ifNull: ["$paidBack", 0] }] };
+
+/**
+ * Check a paid-back amount and the account it went into, against the
+ * expense's own type and amount.
+ *
+ * Returns { value: { paidBack, paidBackAccountId } } or { message }. Nothing
+ * back, in any form, clears both, so a stale account can't outlive its amount.
+ * `rawAccountId === undefined` keeps `keepAccountId` — an edit that doesn't
+ * mention the account mustn't have to resend one the user may since have
+ * archived.
+ */
+export function checkPaidBack(user, { type, amount, rawPaidBack, rawAccountId, keepAccountId = null }) {
+  const paidBack = rawPaidBack === undefined || rawPaidBack === null || rawPaidBack === ""
+    ? 0
+    : Number(rawPaidBack);
+  if (!Number.isFinite(paidBack) || paidBack < 0) {
+    return { message: "Paid back must be zero or more" };
+  }
+  if (paidBack === 0) return { value: { paidBack: 0, paidBackAccountId: null } };
+  if (type !== "expense") return { message: "Only an expense can be paid back" };
+
+  const rounded = roundMoney(paidBack);
+  // Less than, not up to: an entry that was paid back in full wasn't your
+  // spending, and a zero-cost expense would sit in the ledger as noise.
+  if (rounded >= amount) {
+    return { message: "Paid back must be less than the amount" };
+  }
+
+  if (rawAccountId === undefined) {
+    return { value: { paidBack: rounded, paidBackAccountId: keepAccountId } };
+  }
+  const account = checkAccountId(user, rawAccountId);
+  if (!account.ok) return { message: "Choose a valid account for the money paid back" };
+  return { value: { paidBack: rounded, paidBackAccountId: account.value } };
+}

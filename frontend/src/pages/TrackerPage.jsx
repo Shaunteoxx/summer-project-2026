@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchTransactions, fetchStreak } from "@/api/endpoints";
-import { cn, formatMoney, localToday, monthName } from "@/lib/utils";
+import { cn, countedAmount, formatMoney, localToday, monthName } from "@/lib/utils";
 import { formatDay, formatPeriodLabel, noWindowCopy } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
@@ -66,7 +66,7 @@ export default function TrackerPage() {
   const totals = transactions.reduce(
     (acc, t) => {
       if (t.type === "income") acc.income += t.amount;
-      else acc.spent += t.amount;
+      else acc.spent += countedAmount(t);
       return acc;
     },
     { income: 0, spent: 0 }
@@ -115,7 +115,7 @@ export default function TrackerPage() {
     const map = new Map();
     for (const t of transactions) {
       if (t.type !== "expense") continue;
-      map.set(t.category, (map.get(t.category) ?? 0) + t.amount);
+      map.set(t.category, (map.get(t.category) ?? 0) + countedAmount(t));
     }
     let arr = [...map.entries()]
       .map(([name, value]) => ({ name, value, color: getCategory(name).color }))

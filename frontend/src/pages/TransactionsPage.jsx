@@ -36,7 +36,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { cn, formatMoney, localToday } from "@/lib/utils";
+import { cn, countedAmount, formatMoney, localToday } from "@/lib/utils";
 import { addDaysYmd, formatDay, formatPeriodLabel } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
@@ -182,7 +182,7 @@ export default function TransactionsPage() {
   const totals = transactions.reduce(
     (acc, t) => {
       if (t.type === "income") acc.income += t.amount;
-      else acc.expenses += t.amount;
+      else acc.expenses += countedAmount(t);
       return acc;
     },
     { income: 0, expenses: 0 }
@@ -267,7 +267,7 @@ export default function TransactionsPage() {
     return [...map.entries()].map(([key, entries]) => {
       const counted = entries.filter((e) => e.kind === "txn");
       const net = counted.reduce(
-        (sum, e) => sum + (e.row.type === "income" ? e.row.amount : -e.row.amount),
+        (sum, e) => sum + (e.row.type === "income" ? e.row.amount : -countedAmount(e.row)),
         0
       );
       const date = formatDay(key);
@@ -672,9 +672,18 @@ export default function TransactionsPage() {
                                 <RepeatBadge transaction={t} />
                               </span>
                               {/* The date has moved to the day header, so the
-                                  meta line is category and account only. */}
+                                  meta line is category and account — plus, on a
+                                  shared bill, what came back. The figure on the
+                                  right is then your share, so the line says what
+                                  it was a share of. */}
                               <span className="mt-0.5 block truncate text-meta text-ink-3">
                                 {t.category}
+                                {t.paidBack > 0 && (
+                                  <>
+                                    {" "}· {formatMoney(t.paidBack)} of {formatMoney(t.amount)} paid
+                                    back
+                                  </>
+                                )}
                                 {account && <> · {account.name}</>}
                               </span>
                             </span>
@@ -685,7 +694,7 @@ export default function TransactionsPage() {
                               )}
                             >
                               {isIncome ? "+" : "−"}
-                              {formatMoney(t.amount)}
+                              {formatMoney(countedAmount(t))}
                             </span>
                           </button>
                           <button

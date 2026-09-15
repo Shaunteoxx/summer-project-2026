@@ -3,6 +3,7 @@ import Transaction from "../models/Transaction.js";
 import { resolveClientToday, roundMoney, ymd } from "../lib/validation.js";
 import { dayFromYmd } from "../lib/period.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
+import { spentAmount } from "../lib/entryFields.js";
 
 // Escape regex metacharacters so user input can't inject a pattern
 // (prevents ReDoS / catastrophic backtracking on the username search).
@@ -178,7 +179,7 @@ export async function getComparison(req, res) {
       userId: { $in: active.map((e) => e.user._id) },
       date: { $gte: dayFromYmd(from), $lte: dayFromYmd(to) },
     })
-      .select("userId type amount date")
+      .select("userId type amount paidBack date")
       .lean();
 
     // Bucket per user against that user's own period bounds.
@@ -190,7 +191,7 @@ export async function getComparison(req, res) {
       if (!period || day < period.start || day > period.end) continue;
       const totalsFor = totals.get(key) ?? { income: 0, expenses: 0 };
       if (row.type === "income") totalsFor.income += row.amount;
-      else totalsFor.expenses += row.amount;
+      else totalsFor.expenses += spentAmount(row);
       totals.set(key, totalsFor);
     }
   }

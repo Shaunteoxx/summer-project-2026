@@ -12,6 +12,7 @@ import {
   savesForPeriod,
   ymdOf as ymd,
 } from "../lib/period.js";
+import { spentAmount } from "../lib/entryFields.js";
 
 const MAX_STREAK_DAYS = 3660;
 
@@ -79,9 +80,11 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
     const key = ymd(new Date(t.date));
     const period = resolve(key);
     if (t.type === "expense") {
-      expenseByDay.set(key, (expenseByDay.get(key) || 0) + t.amount);
+      // Net of anything friends paid back, on the day of the bill itself.
+      const spent = spentAmount(t);
+      expenseByDay.set(key, (expenseByDay.get(key) || 0) + spent);
       if (period) {
-        expenseByPeriod.set(period.key, (expenseByPeriod.get(period.key) || 0) + t.amount);
+        expenseByPeriod.set(period.key, (expenseByPeriod.get(period.key) || 0) + spent);
       }
     } else if (period) {
       incomeByPeriod.set(period.key, (incomeByPeriod.get(period.key) || 0) + t.amount);
