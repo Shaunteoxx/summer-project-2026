@@ -20,6 +20,9 @@ import streakRoutes from "./routes/streak.js";
 import periodRoutes from "./routes/period.js";
 import accountRoutes from "./routes/accounts.js";
 import transferRoutes from "./routes/transfers.js";
+import pushRoutes from "./routes/push.js";
+import jobRoutes from "./routes/jobs.js";
+import { startJobs, stopJobs } from "./jobs/index.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -82,6 +85,8 @@ app.use("/api/streak", streakRoutes);
 app.use("/api/period", periodRoutes);
 app.use("/api/accounts", accountRoutes);
 app.use("/api/transfers", transferRoutes);
+app.use("/api/push", pushRoutes);
+app.use("/api/jobs", jobRoutes);
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 
 app.use((err, req, res, next) => {
@@ -113,10 +118,13 @@ let server;
 async function start() {
   await connectDB();
   server = app.listen(env.port, () => console.log(`Server listening on port ${env.port}`));
+  // Here rather than at module scope, so tests that import `app` never schedule.
+  startJobs();
 }
 
 async function shutdown(signal) {
   console.log(`Received ${signal}; shutting down`);
+  stopJobs();
   if (server) await new Promise((resolve) => server.close(resolve));
   await mongoose.disconnect();
 }

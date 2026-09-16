@@ -5,6 +5,7 @@ import Transfer from "../models/Transfer.js";
 import BudgetPeriod from "../models/BudgetPeriod.js";
 import BudgetTerm from "../models/BudgetTerm.js";
 import MonthlySummary from "../models/MonthlySummary.js";
+import PushSubscription from "../models/PushSubscription.js";
 
 // Identity of the legacy single shared demo account, kept so the sweep can
 // recognise and retire one left over from before demos became per-visitor.
@@ -210,13 +211,20 @@ export async function reseedDemoUser() {
 export const DEMO_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Every collection that stores rows against a userId. */
-const OWNED_BY_USER = [Transaction, Transfer, BudgetPeriod, BudgetTerm, MonthlySummary];
+const OWNED_BY_USER = [
+  Transaction,
+  Transfer,
+  BudgetPeriod,
+  BudgetTerm,
+  MonthlySummary,
+  PushSubscription,
+];
 
 /**
  * Delete expired sandboxes and everything they own.
  *
- * Called on the way into a new demo rather than from a scheduler: there is no
- * job runner in this app, and the one moment a sweep is certainly worth doing
+ * Called on the way into a new demo rather than from the reminder scheduler,
+ * which only runs when push is configured, and the one moment a sweep is certainly worth doing
  * is when someone is about to create another one. Failure here must never block
  * a login, so the caller swallows it.
  */

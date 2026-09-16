@@ -27,6 +27,12 @@ vi.mock("@/api/endpoints", () => ({
   startTerm: vi.fn(() => Promise.resolve()),
   updateTerm: vi.fn(() => Promise.resolve()),
   deleteTerm: vi.fn(() => Promise.resolve()),
+  // No server keys, so the notifications row stays out of these tests.
+  fetchPushKey: vi.fn(() => Promise.resolve({ publicKey: null })),
+  fetchPushSubscription: vi.fn(() => Promise.resolve(null)),
+  savePushSubscription: vi.fn(() => Promise.resolve()),
+  removePushSubscription: vi.fn(() => Promise.resolve()),
+  sendTestPush: vi.fn(() => Promise.resolve()),
 }));
 
 const refresh = vi.fn(() => Promise.resolve());

@@ -10,6 +10,7 @@ import { RecurringProvider } from "./hooks/useRecurring.jsx";
 import { CategoriesProvider } from "./hooks/useCategories.jsx";
 import { ThemeProvider } from "./hooks/useTheme.jsx";
 import { ToastProvider } from "./hooks/useToast.jsx";
+import { registerServiceWorker } from "./lib/push";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -35,3 +36,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </MotionConfig>
   </React.StrictMode>
 );
+
+// Outside React, so StrictMode's double render can't register twice.
+registerServiceWorker();

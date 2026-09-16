@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { fetchMe, refreshSession, endSession } from "@/api/endpoints";
 import { getToken, setToken, clearToken, tokenIsStale } from "@/api/client";
+import { currentSubscription } from "@/lib/push";
 
 const AuthContext = createContext(null);
 
@@ -59,6 +60,13 @@ export function AuthProvider({ children }) {
 
   /** Sign out for real: revoke the token server-side, then drop it locally. */
   const logout = useCallback(async () => {
+    // The server drops this user's devices on sign-out; dropping the browser's
+    // side too means whoever signs in next here starts with reminders off.
+    try {
+      await (await currentSubscription())?.unsubscribe();
+    } catch {
+      // Best effort.
+    }
     try {
       await endSession();
     } catch {

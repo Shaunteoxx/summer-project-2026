@@ -31,8 +31,10 @@ import {
   retireDemoUser,
   sweepExpiredDemoUsers,
 } from "../lib/demoSeed.js";
+import { isValidTimeZone } from "../lib/localTime.js";
 import BudgetPeriod from "../models/BudgetPeriod.js";
 import MonthlySummary from "../models/MonthlySummary.js";
+import PushSubscription from "../models/PushSubscription.js";
 import Transaction from "../models/Transaction.js";
 import Transfer from "../models/Transfer.js";
 import User from "../models/User.js";
@@ -63,9 +65,9 @@ export function googleCallback(req, res) {
  * Each visitor gets their own account, so the demo can be used rather than only
  * looked at. It starts empty; sample history is one request away, below. It is
  * disposable: signing out deletes it, and any left behind are swept here on the
- * way in — this app runs no scheduler, and the
- * moment someone asks for a new sandbox is the one time a sweep is certainly
- * worth doing. A failed sweep must never cost a visitor their demo, so it is
+ * way in rather than on the reminder scheduler, which only runs when push is
+ * configured, and the moment someone asks for a new sandbox is the one time a
+ * sweep is certainly worth doing. A failed sweep must never cost a visitor their demo, so it is
  * deliberately not awaited into the failure path.
  */
 export async function demoLogin(req, res) {
@@ -136,6 +138,10 @@ export async function logout(req, res) {
     await retireDemoUser(req.user._id);
     return res.json({ message: "Signed out" });
   }
+  // Signing out ends every session, so every device stops getting
+  // notifications too; otherwise whoever signs in next on a shared browser
+  // inherits them.
+  await PushSubscription.deleteMany({ userId: req.user._id });
   await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
   res.json({ message: "Signed out" });
 }
@@ -170,6 +176,13 @@ export async function getMe(req, res) {
     recurring: (user.recurring || []).map(presentRule),
     savingsByMonth: Object.fromEntries(user.savingsByMonth || []),
     repeatSavings: !!user.repeatSavings,
+    timezone: user.timezone || "",
+    // Local hours only. Whether a notification is on is per device; the
+    // client asks /api/push/subscription for its own.
+    notificationHours: {
+      dailyReminder: user.notifications?.dailyReminder?.hour ?? env.dailyReminderHour,
+      morningBudget: user.notifications?.morningBudget?.hour ?? env.morningBudgetHour,
+    },
     friends: user.friends,
     friendRequests: user.friendRequests,
     customCategories: (user.customCategories || []).map((c) => ({
@@ -545,7 +558,7 @@ const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 /** PATCH /api/auth/profile -> update display name and/or avatar. */
 export async function updateProfile(req, res) {
   const user = req.user;
-  const { username, avatar } = req.body;
+  const { username, avatar, timezone } = req.body;
 
   if (username !== undefined) {
     const name = String(username).trim();
@@ -574,8 +587,20 @@ export async function updateProfile(req, res) {
     user.avatar = avatar;
   }
 
+  if (timezone !== undefined) {
+    if (!isValidTimeZone(timezone)) {
+      return res.status(400).json({ message: "Invalid time zone" });
+    }
+    user.timezone = timezone;
+  }
+
   await user.save();
-  res.json({ id: user._id, username: user.username, avatar: user.avatar });
+  res.json({
+    id: user._id,
+    username: user.username,
+    avatar: user.avatar,
+    timezone: user.timezone,
+  });
 }
 
 const SAVINGS_KEY_RE = /^\d{4}-(0|1[01]|[0-9])$/;
@@ -629,6 +654,7 @@ export async function deleteAccount(req, res) {
     Transfer.deleteMany({ userId }),
     MonthlySummary.deleteMany({ userId }),
     BudgetPeriod.deleteMany({ userId }),
+    PushSubscription.deleteMany({ userId }),
     // Scrub references to this user from everyone else's friends / requests.
     User.updateMany(
       { $or: [{ friends: userId }, { friendRequests: userId }] },

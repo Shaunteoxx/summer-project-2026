@@ -332,31 +332,36 @@ function startOfUtcToday() {
   return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
 }
 
-/** GET /api/streak?today=YYYY-MM-DD */
-export async function getStreak(req, res) {
-  const today = resolveClientToday(req.query.today);
-  if (!today) return res.status(400).json({ message: "Invalid today date" });
-
-  const todayKey = ymd(today);
+/**
+ * The streak exactly as GET /api/streak serves it, for a full user document.
+ * Shared with the morning budget notification so it can't show a different
+ * number from the home screen.
+ */
+export async function loadStreak(user, todayKey) {
   // Before the context is built, not alongside it — the loader reads the very
   // map this may write to. Recurring entries likewise have to be written before
   // the transactions are read, or a rent due today wouldn't reach the streak
   // until the next request.
-  await ensureCurrentMonthSavings(req.user, todayKey);
-  await ensureRecurringDue(req.user, todayKey);
+  await ensureCurrentMonthSavings(user, todayKey);
+  await ensureRecurringDue(user, todayKey);
   const [transactions, context] = await Promise.all([
-    Transaction.find({ userId: req.user._id }).sort({ date: 1 }),
-    loadPeriodContext(req.user, todayKey),
+    Transaction.find({ userId: user._id }).sort({ date: 1 }),
+    loadPeriodContext(user, todayKey),
   ]);
 
-  res.json(
-    computeStreak(transactions, req.user.restoredDays, todayKey, {
-      mode: context.mode,
-      savingsByMonth: context.savingsByMonth,
-      periods: context.periods,
-      terms: context.terms,
-    })
-  );
+  return computeStreak(transactions, user.restoredDays, todayKey, {
+    mode: context.mode,
+    savingsByMonth: context.savingsByMonth,
+    periods: context.periods,
+    terms: context.terms,
+  });
+}
+
+/** GET /api/streak?today=YYYY-MM-DD */
+export async function getStreak(req, res) {
+  const today = resolveClientToday(req.query.today);
+  if (!today) return res.status(400).json({ message: "Invalid today date" });
+  res.json(await loadStreak(req.user, ymd(today)));
 }
 
 /** POST /api/streak/restore { date } -> spend a save to repair the breaking day. */

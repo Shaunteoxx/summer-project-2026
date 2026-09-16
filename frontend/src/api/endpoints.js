@@ -10,6 +10,24 @@ export const fetchMe = () => api.get("/auth/me").then((r) => r.data);
 export const fetchHomeStats = (today) =>
   api.get("/auth/home", { params: { today } }).then((r) => r.data);
 
+// --- Push notifications ---
+export const fetchPushKey = () => api.get("/push/key").then((r) => r.data);
+// This device's choices, or null when the server doesn't know the device.
+export const fetchPushSubscription = (endpoint) =>
+  api
+    .get("/push/subscription", { params: { endpoint } })
+    .then((r) => r.data)
+    .catch((err) => {
+      if (err.response?.status === 404) return null;
+      throw err;
+    });
+export const savePushSubscription = (payload) =>
+  api.post("/push/subscription", payload).then((r) => r.data);
+// POST rather than DELETE: the endpoint URL is too long for a path segment.
+export const removePushSubscription = (payload) =>
+  api.post("/push/unsubscribe", payload).then((r) => r.data);
+export const sendTestPush = () => api.post("/push/test").then((r) => r.data);
+
 // --- Custom categories ---
 export const addCustomCategory = (payload) =>
   api.post("/auth/categories", payload).then((r) => r.data);

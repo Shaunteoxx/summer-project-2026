@@ -108,6 +108,26 @@ const userSchema = new mongoose.Schema(
         paused: { type: Boolean, default: false },
       },
     ],
+    // IANA zone from the browser, e.g. "Asia/Singapore". Empty means never
+    // captured, and the reminder job skips those rather than guessing UTC and
+    // nudging someone at 5am.
+    timezone: { type: String, default: "", maxlength: 64 },
+    // Per notification type. Whether a device wants it lives on its
+    // PushSubscription; this holds what is per person.
+    //   hour         local hour; null falls back to the env default. Not in the UI.
+    //   lastSentKey  the local day (YYYY-MM-DD) it was last sent for. A calendar
+    //                day rather than a timestamp, so the repeated hour of a DST
+    //                fall-back still only sends once.
+    notifications: {
+      dailyReminder: {
+        hour: { type: Number, min: 0, max: 23, default: null },
+        lastSentKey: { type: String, default: null },
+      },
+      morningBudget: {
+        hour: { type: Number, min: 0, max: 23, default: null },
+        lastSentKey: { type: String, default: null },
+      },
+    },
     // User-defined categories on top of the fixed built-in set.
     customCategories: [
       {
