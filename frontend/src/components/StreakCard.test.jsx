@@ -201,37 +201,99 @@ describe("restore confirmation", () => {
 
   it("quotes the same count as the card when the day is in this period", async () => {
     await openSheet(
-      {
-        date: "2026-09-12",
-        savesLeft: 3,
-        savesTotal: 15,
-        period: { start: "2026-08-01", end: "2026-12-29" },
-        inActivePeriod: true,
-        streakAfter: 9,
-      },
+      { date: "2026-09-12", savesLeft: 3, savesTotal: 15, fromPeriod: null, streakAfter: 9 },
       { savesLeftThisPeriod: 3 }
     );
     expect(await screen.findByText("1 of your 3 restores left")).toBeInTheDocument();
     expect(screen.getByText(/this period and brings your streak back to 9 days/)).toBeInTheDocument();
   });
 
-  it("names the earlier period instead of calling its saves this period's", async () => {
-    // The card says 0 left this period, yet a restore is offered: the save
-    // comes from the period the broken day belongs to.
+  it("says when it's the last restore", async () => {
     await openSheet(
-      {
-        date: "2026-07-31",
-        savesLeft: 1,
-        savesTotal: 1,
-        period: { start: "2026-07-25", end: "2026-07-31" },
-        inActivePeriod: false,
-        streakAfter: 12,
-      },
-      { savesLeftThisPeriod: 0 }
+      { date: "2026-09-12", savesLeft: 1, savesTotal: 15, fromPeriod: null, streakAfter: 2 },
+      { savesLeftThisPeriod: 1 }
     );
     expect(await screen.findByText("your last restore")).toBeInTheDocument();
-    expect(screen.getByText(/from 25 – 31 Jul/)).toBeInTheDocument();
-    expect(screen.queryByText(/restores? left this period and/)).not.toBeInTheDocument();
-    expect(screen.getByText(/This period's restores aren't touched/)).toBeInTheDocument();
+    expect(screen.getByText(/this period and brings your streak back to 2 days/)).toBeInTheDocument();
+  });
+});
+
+describe("explaining where the streak stops", () => {
+  it("says a past period's days can't be restored, with this period's shields full", async () => {
+    fetchStreak.mockResolvedValue(
+      streak({
+        savesLeftThisPeriod: 4,
+        restore: null,
+        breakDay: {
+          date: "2026-08-31",
+          period: { start: "2026-08-02", end: "2026-09-05" },
+          inActivePeriod: false,
+        },
+      })
+    );
+    render(<StreakCard />);
+    expect(
+      await screen.findByText(
+        "Your streak stops at 31 Aug, in 2 Aug – 5 Sep. Restores only repair days in the current period, so it can't be restored."
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Restore/ })).not.toBeInTheDocument();
+  });
+
+  it("explains the grace day, and the popup names the ended period", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    const ended = { start: "2026-08-02", end: "2026-09-05" };
+    fetchStreak.mockResolvedValue(
+      streak({
+        savesLeftThisPeriod: 4,
+        restore: { date: "2026-09-05", savesLeft: 2, savesTotal: 4, fromPeriod: ended, streakAfter: 12 },
+        breakDay: { date: "2026-09-05", period: ended, inActivePeriod: false },
+      })
+    );
+    render(<StreakCard />);
+    expect(
+      await screen.findByText(
+        "5 Sep was the last day of 2 Aug – 5 Sep. You can restore it today only, with that period's restores."
+      )
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Restore/ }));
+    expect(await screen.findByText("1 of the 2 restores left")).toBeInTheDocument();
+    expect(
+      screen.getByText(/from 2 Aug – 5 Sep, not this period's, and brings your streak back to 12 days/)
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing extra when the break can be restored", async () => {
+    fetchStreak.mockResolvedValue(
+      streak({
+        restore: { date: "2026-09-12", savesLeft: 3, savesTotal: 15, fromPeriod: null, streakAfter: 9 },
+        breakDay: {
+          date: "2026-09-12",
+          period: { start: "2026-08-01", end: "2026-12-29" },
+          inActivePeriod: true,
+        },
+      })
+    );
+    render(<StreakCard />);
+    await screen.findByRole("button", { name: /Restore/ });
+    expect(screen.queryByText(/Your streak stops at/)).not.toBeInTheDocument();
+  });
+
+  it("says this period's restores are used up", async () => {
+    fetchStreak.mockResolvedValue(
+      streak({
+        savesLeftThisPeriod: 0,
+        breakDay: {
+          date: "2026-09-12",
+          period: { start: "2026-08-01", end: "2026-12-29" },
+          inActivePeriod: true,
+        },
+      })
+    );
+    render(<StreakCard />);
+    expect(
+      await screen.findByText("Your streak stops at 12 Sep. This period's restores are used up.")
+    ).toBeInTheDocument();
   });
 });

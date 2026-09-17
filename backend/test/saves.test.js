@@ -80,9 +80,7 @@ function spendAllRestores({ start, today, income, config }) {
   let result = first;
   while (result.restore) {
     // What the card and the popup promise must agree before each spend.
-    if (result.restore.inActivePeriod) {
-      assert.equal(result.restore.savesLeft, result.savesLeftThisPeriod);
-    }
+    assert.equal(result.restore.savesLeft, result.savesLeftThisPeriod);
     restored.push(result.restore.date);
     result = computeStreak(transactions, restored, today, config);
     assert.ok(restored.length <= MAX_PERIOD_DAYS, "restore offer never ran out");

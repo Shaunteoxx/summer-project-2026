@@ -39,6 +39,7 @@ const comparable = (current) => {
     periodStatus: _s,
     overspentBy: _o,
     leftToSpend: _l,
+    breakDay: _b,
     ...rest
   } = current;
   // The offer grew fields describing whose saves it spends; the day and the
@@ -160,7 +161,23 @@ describe("month mode matches the pre-periods implementation exactly", () => {
         mode: "month",
         savingsByMonth: s.savings,
       });
-      assert.deepEqual(comparable(current), rename(legacy));
+      const expected = rename(legacy);
+      // The one deliberate difference: restores lapse with their period, so a
+      // break in an earlier month is no longer offered — except its last day,
+      // on the first of the next month.
+      const graceDay = (d) => {
+        const next = new Date(`${d}T00:00:00Z`);
+        next.setUTCDate(next.getUTCDate() + 1);
+        return next.getUTCDate() === 1 && next.toISOString().slice(0, 10) === s.today;
+      };
+      if (
+        expected.restore &&
+        expected.restore.date.slice(0, 7) !== s.today.slice(0, 7) &&
+        !graceDay(expected.restore.date)
+      ) {
+        expected.restore = null;
+      }
+      assert.deepEqual(comparable(current), expected);
     });
   }
 
@@ -376,29 +393,103 @@ describe("restore allowance scales with period length", () => {
 });
 
 describe("restore offer", () => {
-  it("names the period whose saves it spends when that isn't the active one", () => {
-    // Two 7-day periods, one save each. The current period already spent its
-    // save; the streak is broken on the last day of the previous one.
+  it("doesn't offer a break from an earlier period, even with its saves unspent", () => {
+    // Two 7-day periods, one save each, neither spent. The streak is broken on
+    // the last day of the previous period — which lapsed with that period.
     const periods = [period("2026-08-01", 7), period("2026-08-08", 7)];
     const result = computeStreak(
       [
         txn("2026-08-01", "income", 70),
         txn("2026-08-07", "expense", 80),
         txn("2026-08-08", "income", 70),
-        txn("2026-08-09", "expense", 60),
       ],
-      ["2026-08-09"],
+      [],
       "2026-08-10",
       daysMode(periods)
     );
-    assert.equal(result.savesLeftThisPeriod, 0);
-    assert.deepEqual(result.restore, {
+    assert.equal(result.savesLeftThisPeriod, 1);
+    assert.equal(result.restore, null);
+    assert.deepEqual(result.breakDay, {
       date: "2026-08-07",
-      savesLeft: 1,
-      savesTotal: 1,
       period: { start: "2026-08-01", end: "2026-08-07" },
       inActivePeriod: false,
-      streakAfter: 10,
+    });
+  });
+
+  it("keeps days restored before their period ended", () => {
+    const periods = [period("2026-08-01", 7), period("2026-08-08", 7)];
+    const transactions = [
+      txn("2026-08-01", "income", 70),
+      txn("2026-08-05", "expense", 80),
+      txn("2026-08-08", "income", 70),
+    ];
+    // Offered, and taken, on 6 Aug while that period was still running.
+    const whileRunning = computeStreak(transactions, [], "2026-08-06", daysMode(periods));
+    assert.equal(whileRunning.restore?.date, "2026-08-05");
+
+    const later = computeStreak(transactions, ["2026-08-05"], "2026-08-10", daysMode(periods));
+    assert.equal(later.breakDay, null);
+    assert.equal(later.currentStreak, 10);
+  });
+
+  describe("one day of grace for a period's last day", () => {
+    // Over budget on 7 Aug, the last day of a 7-day period (1 save). It isn't
+    // broken until it's over, and by then the next period has started.
+    const periods = [period("2026-08-01", 7), period("2026-08-08", 7)];
+    const transactions = [
+      txn("2026-08-01", "income", 70),
+      txn("2026-08-07", "expense", 80),
+      txn("2026-08-08", "income", 70),
+    ];
+
+    it("isn't offered on the day itself", () => {
+      assert.equal(computeStreak(transactions, [], "2026-08-07", daysMode(periods)).restore, null);
+    });
+
+    it("is offered the next day, from the ended period's saves", () => {
+      const result = computeStreak(transactions, [], "2026-08-08", daysMode(periods));
+      assert.deepEqual(result.restore, {
+        date: "2026-08-07",
+        savesLeft: 1,
+        savesTotal: 1,
+        fromPeriod: { start: "2026-08-01", end: "2026-08-07" },
+        streakAfter: 8,
+      });
+      const after = computeStreak(transactions, ["2026-08-07"], "2026-08-08", daysMode(periods));
+      assert.equal(after.currentStreak, 8);
+      assert.equal(after.savesLeftThisPeriod, 1, "the new period's saves are untouched");
+    });
+
+    it("lapses the day after that", () => {
+      const result = computeStreak(transactions, [], "2026-08-09", daysMode(periods));
+      assert.equal(result.restore, null);
+      assert.equal(result.breakDay.date, "2026-08-07");
+    });
+
+    it("needs the ended period to have a save left", () => {
+      const spent = [...transactions, txn("2026-08-03", "expense", 60)];
+      const result = computeStreak(spent, ["2026-08-03"], "2026-08-08", daysMode(periods));
+      assert.equal(result.restore, null);
+    });
+
+    it("doesn't extend to earlier days of the ended period", () => {
+      const earlier = [
+        txn("2026-08-01", "income", 70),
+        txn("2026-08-06", "expense", 80),
+        txn("2026-08-08", "income", 70),
+      ];
+      assert.equal(computeStreak(earlier, [], "2026-08-08", daysMode(periods)).restore, null);
+    });
+
+    it("covers the last day of a calendar month", () => {
+      const result = computeStreak(
+        [txn("2026-08-01", "income", 310), txn("2026-08-31", "expense", 500)],
+        [],
+        "2026-09-01",
+        { mode: "month", savingsByMonth: {} }
+      );
+      assert.equal(result.restore?.date, "2026-08-31");
+      assert.equal(result.restore.savesTotal, 3);
     });
   });
 
@@ -409,7 +500,6 @@ describe("restore offer", () => {
       txn("2026-08-04", "expense", 100),
     ];
     const offered = computeStreak(transactions, [], "2026-08-06", daysMode(p));
-    assert.equal(offered.restore.inActivePeriod, true);
     assert.equal(offered.restore.savesLeft, offered.savesLeftThisPeriod);
 
     const after = computeStreak(transactions, ["2026-08-04"], "2026-08-06", daysMode(p));

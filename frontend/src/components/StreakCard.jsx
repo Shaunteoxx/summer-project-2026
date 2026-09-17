@@ -131,6 +131,7 @@ export default function StreakCard() {
     savesLeftThisPeriod,
     last7,
     restore,
+    breakDay,
     periodSavings,
     overspentBy = 0,
     leftToSpend = 0,
@@ -317,6 +318,12 @@ export default function StreakCard() {
               </Button>
             )}
           </div>
+          <BreakNote
+            breakDay={breakDay}
+            restore={restore}
+            noun={noun}
+            mode={mode}
+          />
         </CardContent>
       </Card>
 
@@ -333,27 +340,34 @@ export default function StreakCard() {
               <p>
                 {offer?.date ? formatDay(offer.date) : "That day"} went over its
                 budget. Restoring it uses{" "}
-                <strong>
-                  {offer?.savesLeft === 1
-                    ? "your last restore"
-                    : `1 of your ${offer?.savesLeft} restores left`}
-                </strong>{" "}
-                {/* The broken day can sit in an earlier period, whose saves it
-                    spends — name that period rather than calling it this one. */}
-                {offer?.inActivePeriod === false
-                  ? `from ${formatPeriodLabel(offer.period, { mode })}`
-                  : `this ${noun}`}
+                {offer?.fromPeriod ? (
+                  // The grace day: the save comes from the period that just
+                  // ended, not the one the card's shields count.
+                  <>
+                    <strong>
+                      {offer.savesLeft === 1
+                        ? "the last restore"
+                        : `1 of the ${offer.savesLeft} restores left`}
+                    </strong>{" "}
+                    from {formatPeriodLabel(offer.fromPeriod, { mode })}, not this{" "}
+                    {noun}&apos;s,
+                  </>
+                ) : (
+                  <>
+                    <strong>
+                      {offer?.savesLeft === 1
+                        ? "your last restore"
+                        : `1 of your ${offer?.savesLeft} restores left`}
+                    </strong>{" "}
+                    this {noun}
+                  </>
+                )}
                 {offer?.streakAfter
                   ? ` and brings your streak back to ${offer.streakAfter} ${
                       offer.streakAfter === 1 ? "day" : "days"
                     }.`
                   : " and brings your streak back."}
               </p>
-              {offer?.inActivePeriod === false && (
-                <p className="text-ink-3">
-                  This {noun}&apos;s restores aren&apos;t touched.
-                </p>
-              )}
             </div>
           </div>
           <div className="flex gap-3">
@@ -373,6 +387,32 @@ export default function StreakCard() {
       </BottomSheet>
     </motion.div>
   );
+}
+
+/**
+ * Where the streak stops, when the shields can't say it.
+ *
+ * Restores only repair days in the current period, but the streak runs across
+ * periods. When it stops at a day in one that has ended, the shields can still
+ * show restores left and the button is simply gone — which, unexplained, reads
+ * as restores being broken. The one exception is the grace day, when the ended
+ * period's last day can still be restored with that period's own restores.
+ */
+function BreakNote({ breakDay, restore, noun, mode }) {
+  if (!breakDay) return null;
+  const day = formatDay(breakDay.date);
+  const label = formatPeriodLabel(breakDay.period, { mode });
+  let text = null;
+  if (restore?.fromPeriod) {
+    text = `${day} was the last day of ${label}. You can restore it today only, with that ${noun}'s restores.`;
+  } else if (restore) {
+    return null;
+  } else if (breakDay.inActivePeriod) {
+    text = `Your streak stops at ${day}. This ${noun}'s restores are used up.`;
+  } else {
+    text = `Your streak stops at ${day}, in ${label}. Restores only repair days in the current ${noun}, so it can't be restored.`;
+  }
+  return <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">{text}</p>;
 }
 
 const CELL = {

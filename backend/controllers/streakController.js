@@ -143,6 +143,7 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
     today: { spent: 0, budget: 0, remaining: 0, within: true },
     savesLeftThisPeriod: savesLeftIn(activePeriod),
     restore: null,
+    breakDay: null,
     last7: [],
     periodDays: [],
   };
@@ -242,22 +243,41 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
     }
   }
 
-  // Restore offer: the day currently breaking the streak, if its period has
-  // saves left. That period isn't always the active one — a break on the last
-  // day of the previous period spends *that* period's saves — so the offer says
-  // whose saves they are, or the confirmation would quote a count the card's
-  // "left this period" row contradicts.
+  // Restore offer: the day currently breaking the streak, if it falls in the
+  // active period and that period has saves left. Saves belong to their period
+  // and lapse with it — once a new period starts, days broken in an earlier one
+  // stay broken, and that period's unspent saves can't be used. (Days already
+  // restored stay restored; only new restores are limited.)
+  //
+  // One day of grace: a period's last day isn't broken until it's over, by
+  // which point the next period has begun, so the rule alone would make every
+  // last day unrestorable. On the day after a period ends, its last day can
+  // still be restored with that period's own saves.
   let restore = null;
+  // The day the streak stops at, whether or not it can be restored, so the card
+  // can say why there's no Restore button while the shields still show saves.
+  let breakDay = null;
   if (breakingDate) {
     const breakPeriod = resolve(breakingDate);
-    const left = savesLeftIn(breakPeriod);
+    const inActivePeriod = !!activePeriod && breakPeriod.key === activePeriod.key;
+    const inGrace =
+      !inActivePeriod &&
+      breakingDate === breakPeriod.end &&
+      ymd(addDays(dayFromYmd(breakPeriod.end), 1)) === todayKey;
+    breakDay = {
+      date: breakingDate,
+      period: { start: breakPeriod.start, end: breakPeriod.end },
+      inActivePeriod,
+    };
+    const left = inActivePeriod || inGrace ? savesLeftIn(breakPeriod) : 0;
     if (left > 0) {
       restore = {
         date: breakingDate,
         savesLeft: left,
         savesTotal: savesForPeriod(breakPeriod.days),
-        period: { start: breakPeriod.start, end: breakPeriod.end },
-        inActivePeriod: breakPeriod.key === activePeriod?.key,
+        // Set only in the grace day, when the saves spent aren't the ones the
+        // card's shields count — the confirmation has to name whose they are.
+        fromPeriod: inGrace ? { start: breakPeriod.start, end: breakPeriod.end } : null,
         // What the streak becomes once this day is repaired: the run up to
         // today plus the day itself, joined to whatever run came before it
         // (which may hit another break the next offer will handle).
@@ -338,6 +358,7 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
     },
     savesLeftThisPeriod: savesLeftIn(activePeriod),
     restore,
+    breakDay,
     last7,
     periodDays,
   };

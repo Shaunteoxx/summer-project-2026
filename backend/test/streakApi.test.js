@@ -135,8 +135,7 @@ describe("restoring the day that broke the streak", () => {
       date: shift(-1),
       savesLeft: 3,
       savesTotal: 3,
-      period: { start: shift(-6), end: periodEnd(shift(-6), 30) },
-      inActivePeriod: true,
+      fromPeriod: null,
       streakAfter: 7,
     });
 
@@ -186,28 +185,47 @@ describe("restoring the day that broke the streak", () => {
     assert.deepEqual([...(await storedRestores(user))], spent);
   });
 
-  it("spends an earlier period's save when that's where the break is", async () => {
-    // Two 7-day periods, one restore each. This period's was already spent on
-    // 2 days ago; the day breaking the streak is the last day of the previous.
+  it("refuses a break from a period that has ended, even with its saves unspent", async () => {
+    // Two 7-day periods, one restore each, none spent. The day breaking the
+    // streak is in the previous period, whose restores lapsed with it.
     const { user, token } = await daysModeUser([[-10, 7], [-3, 7]]);
     await addTxn(user._id, shift(-10), "income", 70);
-    await addTxn(user._id, shift(-4), "expense", 500);
+    await addTxn(user._id, shift(-5), "expense", 500);
     await addTxn(user._id, shift(-3), "income", 70);
-    await addTxn(user._id, shift(-2), "expense", 500);
-    await User.updateOne({ _id: user._id }, { restoredDays: [shift(-2)] });
 
     const before = (await getStreak(token)).body;
-    assert.equal(before.savesLeftThisPeriod, 0);
-    assert.equal(before.restore?.date, shift(-4));
-    assert.equal(before.restore.inActivePeriod, false);
+    assert.equal(before.savesLeftThisPeriod, 1);
+    assert.equal(before.restore, null);
+    assert.equal(before.breakDay.date, shift(-5));
+    assert.equal(before.breakDay.inActivePeriod, false);
 
-    const res = await restore(token, shift(-4));
-    assert.equal(res.status, 200);
-    assert.equal(res.body.currentStreak, before.restore.streakAfter);
-    assert.equal(res.body.savesLeftThisPeriod, 0, "this period's count is unchanged");
+    assert.equal((await restore(token, shift(-5))).status, 400);
+    assert.deepEqual([...(await storedRestores(user))], []);
   });
 
-  it("works in month mode, the default for new users", async () => {
+  it("lets the last day of the period that just ended be restored today only", async () => {
+    // A 6-day period that ended yesterday (1 restore) and a new one starting
+    // today. Yesterday went over budget — it only counted once the day ended.
+    const { user, token } = await daysModeUser([[-6, 6], [0, 7]]);
+    await addTxn(user._id, shift(-6), "income", 60);
+    await addTxn(user._id, shift(-1), "expense", 500);
+    await addTxn(user._id, todayYmd(), "income", 70);
+
+    const before = (await getStreak(token)).body;
+    assert.equal(before.restore?.date, shift(-1));
+    assert.deepEqual(before.restore.fromPeriod, { start: shift(-6), end: shift(-1) });
+
+    const res = await restore(token, shift(-1));
+    assert.equal(res.status, 200);
+    assert.equal(res.body.currentStreak, before.restore.streakAfter);
+    assert.equal(res.body.savesLeftThisPeriod, 1, "the new period's restore is untouched");
+  });
+
+  // The break has to fall in the current calendar month to be restorable, which
+  // the first few days of a month can't arrange against the real clock.
+  it("works in month mode, the default for new users", {
+    skip: new Date().getUTCDate() < 4 && "needs three days of this month behind today",
+  }, async () => {
     const user = await makeUser();
     const token = signToken(user);
     await addTxn(user._id, shift(-3), "income", 3000);
