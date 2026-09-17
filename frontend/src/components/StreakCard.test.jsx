@@ -190,3 +190,48 @@ describe("no period running", () => {
     expect(screen.getByRole("button", { name: "Add Income" })).toBeInTheDocument();
   });
 });
+
+describe("restore confirmation", () => {
+  const openSheet = async (restore, over = {}) => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    fetchStreak.mockResolvedValue(streak({ restore, ...over }));
+    render(<StreakCard />);
+    await user.click(await screen.findByRole("button", { name: /Restore/ }));
+  };
+
+  it("quotes the same count as the card when the day is in this period", async () => {
+    await openSheet(
+      {
+        date: "2026-09-12",
+        savesLeft: 3,
+        savesTotal: 15,
+        period: { start: "2026-08-01", end: "2026-12-29" },
+        inActivePeriod: true,
+        streakAfter: 9,
+      },
+      { savesLeftThisPeriod: 3 }
+    );
+    expect(await screen.findByText("1 of your 3 restores left")).toBeInTheDocument();
+    expect(screen.getByText(/this period and brings your streak back to 9 days/)).toBeInTheDocument();
+  });
+
+  it("names the earlier period instead of calling its saves this period's", async () => {
+    // The card says 0 left this period, yet a restore is offered: the save
+    // comes from the period the broken day belongs to.
+    await openSheet(
+      {
+        date: "2026-07-31",
+        savesLeft: 1,
+        savesTotal: 1,
+        period: { start: "2026-07-25", end: "2026-07-31" },
+        inActivePeriod: false,
+        streakAfter: 12,
+      },
+      { savesLeftThisPeriod: 0 }
+    );
+    expect(await screen.findByText("your last restore")).toBeInTheDocument();
+    expect(screen.getByText(/from 25 – 31 Jul/)).toBeInTheDocument();
+    expect(screen.queryByText(/restores? left this period and/)).not.toBeInTheDocument();
+    expect(screen.getByText(/This period's restores aren't touched/)).toBeInTheDocument();
+  });
+});

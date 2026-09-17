@@ -41,7 +41,13 @@ const comparable = (current) => {
     leftToSpend: _l,
     ...rest
   } = current;
-  return rest;
+  // The offer grew fields describing whose saves it spends; the day and the
+  // count are what the legacy implementation had, so those still must match.
+  const restore = rest.restore && {
+    date: rest.restore.date,
+    savesLeft: rest.restore.savesLeft,
+  };
+  return { ...rest, restore };
 };
 
 describe("month mode matches the pre-periods implementation exactly", () => {
@@ -366,6 +372,49 @@ describe("restore allowance scales with period length", () => {
     );
     assert.equal(afterOneSave.savesLeftThisPeriod, 0);
     assert.equal(afterOneSave.restore, null);
+  });
+});
+
+describe("restore offer", () => {
+  it("names the period whose saves it spends when that isn't the active one", () => {
+    // Two 7-day periods, one save each. The current period already spent its
+    // save; the streak is broken on the last day of the previous one.
+    const periods = [period("2026-08-01", 7), period("2026-08-08", 7)];
+    const result = computeStreak(
+      [
+        txn("2026-08-01", "income", 70),
+        txn("2026-08-07", "expense", 80),
+        txn("2026-08-08", "income", 70),
+        txn("2026-08-09", "expense", 60),
+      ],
+      ["2026-08-09"],
+      "2026-08-10",
+      daysMode(periods)
+    );
+    assert.equal(result.savesLeftThisPeriod, 0);
+    assert.deepEqual(result.restore, {
+      date: "2026-08-07",
+      savesLeft: 1,
+      savesTotal: 1,
+      period: { start: "2026-08-01", end: "2026-08-07" },
+      inActivePeriod: false,
+      streakAfter: 10,
+    });
+  });
+
+  it("quotes the streak the restore actually produces", () => {
+    const p = [period("2026-08-01", 30)];
+    const transactions = [
+      txn("2026-08-01", "income", 300),
+      txn("2026-08-04", "expense", 100),
+    ];
+    const offered = computeStreak(transactions, [], "2026-08-06", daysMode(p));
+    assert.equal(offered.restore.inActivePeriod, true);
+    assert.equal(offered.restore.savesLeft, offered.savesLeftThisPeriod);
+
+    const after = computeStreak(transactions, ["2026-08-04"], "2026-08-06", daysMode(p));
+    assert.equal(offered.restore.streakAfter, after.currentStreak);
+    assert.equal(after.savesLeftThisPeriod, offered.savesLeftThisPeriod - 1);
   });
 });
 

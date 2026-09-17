@@ -11,7 +11,7 @@ import { fetchStreak, restoreStreak } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { formatMoney, localToday } from "@/lib/utils";
-import { formatDay } from "@/lib/period";
+import { formatDay, formatPeriodLabel } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { fadeUp } from "@/animations/variants";
 
@@ -22,10 +22,14 @@ export default function StreakCard() {
   const navigate = useNavigate();
   const toast = useToast();
   const guard = useDemoGuard();
-  const { noun } = useBudgetPeriod();
+  const { noun, mode } = useBudgetPeriod();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // The offer the sheet was opened with. A successful restore replaces `data`
+  // while the sheet is still sliding away, and reading the live offer then
+  // flashed the next offer's count (or a blank) in the closing sheet.
+  const [offer, setOffer] = useState(null);
   const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
@@ -36,11 +40,11 @@ export default function StreakCard() {
   }, []);
 
   const handleRestore = async () => {
-    if (!data?.restore) return;
+    if (!offer) return;
     setRestoring(true);
     try {
       const updated = await restoreStreak({
-        date: data.restore.date,
+        date: offer.date,
         today: localToday(),
       });
       setData(updated);
@@ -305,6 +309,7 @@ export default function StreakCard() {
                 className="gap-1.5"
                 onClick={() => {
                   if (guard()) return;
+                  setOffer(restore);
                   setConfirmOpen(true);
                 }}
               >
@@ -324,11 +329,32 @@ export default function StreakCard() {
         <div className="space-y-5">
           <div className="flex items-start gap-3 rounded-md bg-surface-2 p-4">
             <Shield className="mt-0.5 h-5 w-5 shrink-0 text-ink-2" />
-            <p className="text-[13px] leading-relaxed text-ink-2">
-              This spends <strong>1 of {restore?.savesLeft}</strong> saves left this{" "}
-              {noun} to repair the day you went over budget and bring your streak
-              back.
-            </p>
+            <div className="space-y-2 text-[13px] leading-relaxed text-ink-2">
+              <p>
+                {offer?.date ? formatDay(offer.date) : "That day"} went over its
+                budget. Restoring it uses{" "}
+                <strong>
+                  {offer?.savesLeft === 1
+                    ? "your last restore"
+                    : `1 of your ${offer?.savesLeft} restores left`}
+                </strong>{" "}
+                {/* The broken day can sit in an earlier period, whose saves it
+                    spends — name that period rather than calling it this one. */}
+                {offer?.inActivePeriod === false
+                  ? `from ${formatPeriodLabel(offer.period, { mode })}`
+                  : `this ${noun}`}
+                {offer?.streakAfter
+                  ? ` and brings your streak back to ${offer.streakAfter} ${
+                      offer.streakAfter === 1 ? "day" : "days"
+                    }.`
+                  : " and brings your streak back."}
+              </p>
+              {offer?.inActivePeriod === false && (
+                <p className="text-ink-3">
+                  This {noun}&apos;s restores aren&apos;t touched.
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex gap-3">
             <Button
@@ -340,7 +366,7 @@ export default function StreakCard() {
               Cancel
             </Button>
             <Button className="flex-1" onClick={handleRestore} disabled={restoring}>
-              {restoring ? "Restoring…" : "Use a Save"}
+              {restoring ? "Restoring…" : "Use a Restore"}
             </Button>
           </div>
         </div>

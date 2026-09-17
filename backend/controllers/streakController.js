@@ -1,4 +1,5 @@
 import Transaction from "../models/Transaction.js";
+import User from "../models/User.js";
 import { parseYmd, resolveClientToday, roundMoney } from "../lib/validation.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
 import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
@@ -242,12 +243,27 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
   }
 
   // Restore offer: the day currently breaking the streak, if its period has
-  // saves left.
+  // saves left. That period isn't always the active one — a break on the last
+  // day of the previous period spends *that* period's saves — so the offer says
+  // whose saves they are, or the confirmation would quote a count the card's
+  // "left this period" row contradicts.
   let restore = null;
   if (breakingDate) {
     const breakPeriod = resolve(breakingDate);
     const left = savesLeftIn(breakPeriod);
-    if (left > 0) restore = { date: breakingDate, savesLeft: left };
+    if (left > 0) {
+      restore = {
+        date: breakingDate,
+        savesLeft: left,
+        savesTotal: savesForPeriod(breakPeriod.days),
+        period: { start: breakPeriod.start, end: breakPeriod.end },
+        inActivePeriod: breakPeriod.key === activePeriod?.key,
+        // What the streak becomes once this day is repaired: the run up to
+        // today plus the day itself, joined to whatever run came before it
+        // (which may hit another break the next offer will handle).
+        streakAfter: streakThrough(days, breakingDate) + currentStreak + 1,
+      };
+    }
   }
 
   // Last 7 days (oldest→newest), padding history shorter than a week.
@@ -327,6 +343,18 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
   };
 }
 
+/** Consecutive win/saved days immediately before `date`, skipping untracked. */
+function streakThrough(days, date) {
+  let run = 0;
+  for (let i = days.findIndex((d) => d.ymd === date) - 1; i >= 0; i--) {
+    const { status } = days[i];
+    if (status === "untracked") continue;
+    if (status !== "win" && status !== "saved") break;
+    run += 1;
+  }
+  return run;
+}
+
 function startOfUtcToday() {
   const n = new Date();
   return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
@@ -395,10 +423,15 @@ export async function restoreStreak(req, res) {
       .json({ message: "That day can't be restored right now." });
   }
 
-  if (!req.user.restoredDays.includes(date)) {
-    req.user.restoredDays.push(date);
-    await req.user.save();
-  }
+  // $addToSet, not push-and-save: a double tap sends two requests that both
+  // pass the check above against the same stale document, and saving each
+  // copy stored the day twice.
+  const updated = await User.findByIdAndUpdate(
+    req.user._id,
+    { $addToSet: { restoredDays: date } },
+    { new: true, projection: { restoredDays: 1 } }
+  );
+  const restoredDays = updated?.restoredDays ?? [...req.user.restoredDays, date];
 
-  res.json(computeStreak(transactions, req.user.restoredDays, todayKey, config));
+  res.json(computeStreak(transactions, restoredDays, todayKey, config));
 }
