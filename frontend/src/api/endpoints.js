@@ -111,6 +111,10 @@ export const removeTransaction = (id) =>
 // --- Summary ---
 export const fetchAllSummaries = () =>
   api.get("/summary/all").then((r) => r.data);
+// All-time earned/spent/saved, stopping at the window still running. Not
+// derivable from the rows above: outside month mode that window isn't a month.
+export const fetchLifetimeSavings = (today) =>
+  api.get("/summary/lifetime", { params: { today } }).then((r) => r.data);
 
 // --- Friends ---
 export const searchUsers = (q) =>

@@ -59,7 +59,6 @@ const stats = (over = {}) => ({
   periodExpenses: 0,
   periodSavings: 0,
   leftToSpend: 0,
-  totalSavings: 0,
   percentageSaved: 0,
   ...over,
 });

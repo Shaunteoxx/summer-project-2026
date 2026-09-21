@@ -1,9 +1,7 @@
 import User from "../models/User.js";
-import Transaction from "../models/Transaction.js";
-import { resolveClientToday, roundMoney, ymd } from "../lib/validation.js";
-import { dayFromYmd } from "../lib/period.js";
+import { resolveClientToday, ymd } from "../lib/validation.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
-import { spentAmount } from "../lib/entryFields.js";
+import { lifetimeSavingsFor } from "../lib/lifetime.js";
 
 // Escape regex metacharacters so user input can't inject a pattern
 // (prevents ReDoS / catastrophic backtracking on the username search).
@@ -134,14 +132,23 @@ export async function getFriends(req, res) {
 }
 
 /**
- * GET /api/friends/comparison -> savings% leaderboard (me + friends).
+ * GET /api/friends/comparison -> all-time savings% leaderboard (me + friends).
  *
- * Everyone is scored on their own active budget period, so each person's
- * number is the one they see on their own home screen. Savings % is a ratio,
- * so it stays comparable even when two people run different length periods —
- * or when one of them is spending a slice of a lump sum rather than income
- * logged inside the window.
- * Anyone with no period running right now simply scores 0.
+ * Everyone is scored on the same question: of everything you've earned over
+ * the windows that have finished, how much did you keep. It used to score the
+ * *running* period, which made the board a race nobody could lose — on day 2
+ * of a month every player sits near 100%, because almost none of the money has
+ * been spent yet, and the ranking mostly reported who had logged the least so
+ * far. All-time is settled, so a position has to be earned over a whole window
+ * before it shows up here.
+ *
+ * Each person still needs their own period context: it names the window that's
+ * still running and therefore where their totals stop. Loading one for a friend
+ * stays a pure read — see lib/savingsCarry.js.
+ *
+ * Savings % is a ratio, so it stays comparable between people with different
+ * length periods, different income, or a lump sum instead of income at all.
+ * Anyone with nothing finished yet simply scores 0.
  */
 export async function getComparison(req, res) {
   const today = resolveClientToday(req.query.today);
@@ -158,69 +165,35 @@ export async function getComparison(req, res) {
     ...me.friends.map((f) => ({ user: f, isMe: false })),
   ];
 
-  // Each person's window differs, so resolve them first and then fetch all the
-  // transactions in one query bounded by the widest span on the board.
   const entries = await Promise.all(
     people.map(async ({ user, isMe }) => ({
       user,
       isMe,
-      period: (await loadPeriodContext(user, todayKey)).active,
+      context: await loadPeriodContext(user, todayKey),
     }))
   );
 
-  const active = entries.filter((e) => e.period);
-  const totals = new Map();
+  const figures = await lifetimeSavingsFor(entries);
 
-  if (active.length > 0) {
-    const from = active.reduce((min, e) => (e.period.start < min ? e.period.start : min), active[0].period.start);
-    const to = active.reduce((max, e) => (e.period.end > max ? e.period.end : max), active[0].period.end);
-
-    const rows = await Transaction.find({
-      userId: { $in: active.map((e) => e.user._id) },
-      date: { $gte: dayFromYmd(from), $lte: dayFromYmd(to) },
-    })
-      .select("userId type amount paidBack date")
-      .lean();
-
-    // Bucket per user against that user's own period bounds.
-    const boundsFor = new Map(active.map((e) => [String(e.user._id), e.period]));
-    for (const row of rows) {
-      const key = String(row.userId);
-      const period = boundsFor.get(key);
-      const day = ymd(new Date(row.date));
-      if (!period || day < period.start || day > period.end) continue;
-      const totalsFor = totals.get(key) ?? { income: 0, expenses: 0 };
-      if (row.type === "income") totalsFor.income += row.amount;
-      else totalsFor.expenses += spentAmount(row);
-      totals.set(key, totalsFor);
-    }
-  }
-
-  const board = entries.map(({ user, isMe, period }) => {
-    const summary = totals.get(String(user._id));
-    // Same numerator the rest of the app budgets from: a term cycle's money is
-    // its slice of the lump sum, not the income that landed inside it — which
-    // from the second month on is none. Scoring on income alone would park
-    // every term-mode friend at 0% with a negative saved figure.
-    const income = period?.funding ?? summary?.income ?? 0;
-    const totalSaved = roundMoney(income - (summary?.expenses || 0));
+  const board = entries.map(({ user, isMe }) => {
+    const mine = figures.get(String(user._id));
     return {
       id: user._id,
       username: user.username,
       profilePicture: user.profilePicture,
       avatar: user.avatar,
       isMe,
-      period: period ? { start: period.start, end: period.end, days: period.days } : null,
-      percentageSaved: income > 0 ? Math.round((totalSaved / income) * 100) : 0,
-      totalSaved,
+      percentageSaved: mine.rate,
+      totalSaved: mine.saved,
     };
   });
 
   board.sort((a, b) => b.percentageSaved - a.percentageSaved);
 
-  const mine = entries.find((e) => e.isMe)?.period ?? null;
   res.json({
-    period: mine ? { start: mine.start, end: mine.end, days: mine.days } : null,
+    // The last day anyone's figures cover is their own, so the header speaks
+    // for the reader rather than for the board.
+    through: figures.get(String(me._id))?.through ?? null,
     leaderboard: board,
   });
 }

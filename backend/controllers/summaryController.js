@@ -1,5 +1,7 @@
 import Transaction from "../models/Transaction.js";
-import { parseMonthYear, roundMoney } from "../lib/validation.js";
+import { parseMonthYear, resolveClientToday, roundMoney, ymd } from "../lib/validation.js";
+import { loadPeriodContext } from "../lib/periodContext.js";
+import { lifetimeSavings } from "../lib/lifetime.js";
 import { SPENT_AMOUNT } from "../lib/entryFields.js";
 
 function toSummary(row, userId, month, year) {
@@ -36,12 +38,6 @@ export async function aggregateSummaries(userId, match = {}) {
   ]);
 }
 
-/** Compatibility helper used by demo seeding; summaries are now computed, not cached. */
-export async function recomputeSummary(userId, month, year) {
-  const [row] = await aggregateSummaries(userId, { month, year });
-  return toSummary(row, userId, month, year);
-}
-
 /** GET /api/summary?month=&year= */
 export async function getMonthlySummary(req, res) {
   const period = parseMonthYear(req.query);
@@ -57,9 +53,19 @@ export async function getAllSummaries(req, res) {
   res.json(rows.map((row) => toSummary(row, req.user._id)));
 }
 
-export async function getLifetimeSavings(userId) {
-  const rows = await aggregateSummaries(userId);
-  return roundMoney(
-    rows.reduce((total, row) => total + row.totalIncome - row.totalExpenses, 0)
-  );
+/**
+ * GET /api/summary/lifetime?today= -> all-time earned/spent/saved.
+ *
+ * Separate from /summary/all because the two answer different questions. That
+ * one is a per-calendar-month history and has to stay whole, running month
+ * included, or the chart and the breakdown lose their last bar. These totals
+ * stop at the window still running — see lib/lifetime.js — which in days and
+ * term mode isn't a month boundary at all, so it can't be derived by dropping
+ * a row from the other.
+ */
+export async function getLifetimeSummary(req, res) {
+  const today = resolveClientToday(req.query.today);
+  if (!today) return res.status(400).json({ message: "Invalid today date" });
+  const context = await loadPeriodContext(req.user, ymd(today));
+  res.json(await lifetimeSavings(req.user, context));
 }

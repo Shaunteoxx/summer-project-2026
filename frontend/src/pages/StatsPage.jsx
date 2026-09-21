@@ -10,8 +10,13 @@ import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchAllSummaries, fetchTransactions } from "@/api/endpoints";
+import {
+  fetchAllSummaries,
+  fetchLifetimeSavings,
+  fetchTransactions,
+} from "@/api/endpoints";
 import { monthName, formatMoney, localToday, LOCALE } from "@/lib/utils";
+import { formatDay } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useToast } from "@/hooks/useToast";
@@ -23,10 +28,12 @@ import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
 const StatsBarChart = lazy(() => import("@/components/StatsBarChart"));
 
 /**
- * How far back the day-by-day calendar reaches. The headline figures and the
- * bar chart run on /summary aggregates and stay genuinely all-time; only the
- * calendar is windowed, because it needs every transaction in its span and
- * that request grows without limit as history does.
+ * How far back the day-by-day calendar reaches. Nothing else on this page is
+ * windowed like this: the bar chart and breakdown run on /summary aggregates
+ * that reach back forever, and the headline figures on /summary/lifetime,
+ * which reaches back just as far and stops only at the *near* end — the window
+ * still running. The calendar is capped because it needs every transaction in
+ * its span, and that request grows without limit as history does.
  */
 const CALENDAR_MONTHS = 12;
 
@@ -95,6 +102,11 @@ export default function StatsPage() {
   const budgetPeriod = useBudgetPeriod();
   const toast = useToast();
   const [summaries, setSummaries] = useState([]);
+  // The all-time tiles come from the server rather than being summed out of
+  // the rows below: they stop at the window still running, and outside month
+  // mode that window is not a calendar month, so no amount of dropping rows
+  // from a per-month history gets to the same number.
+  const [lifetime, setLifetime] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAllMonths, setShowAllMonths] = useState(false);
@@ -106,6 +118,10 @@ export default function StatsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    // Its own request so a failure costs the four tiles, not the page.
+    fetchLifetimeSavings(localToday())
+      .then((figures) => !cancelled && setLifetime(figures))
+      .catch(() => {});
     fetchAllSummaries()
       .then(async (rows) => {
         if (cancelled) return;
@@ -149,8 +165,9 @@ export default function StatsPage() {
   // five other months' worth.
   //
   // /api/period already prices each cycle and is in context app-wide, so the
-  // fix is a join here rather than term-awareness inside an aggregate that
-  // lifetime savings and the friends leaderboard also run on.
+  // fix is a join here rather than term-awareness inside /summary/all, which
+  // is a plain per-month history and several other screens read it as one.
+  // The all-time tiles make the same swap server-side, in lib/lifetime.js.
   const funded = fundingByMonth(budgetPeriod.history);
 
   // One shape for the three places that judge a month: the rows, the chart and
@@ -209,33 +226,18 @@ export default function StatsPage() {
     ? Math.round(judged.reduce((acc, m) => acc + m.percent, 0) / judged.length)
     : 0;
 
-  const lifetime = summaries.reduce(
-    (acc, s) => {
-      acc.income += s.totalIncome;
-      acc.spent += s.totalExpenses;
-      return acc;
-    },
-    { income: 0, spent: 0 }
-  );
-  const lifetimeSaved = lifetime.income - lifetime.spent;
-  // Every dollar counts once, so months with more income pull harder. This is
-  // the honest "of everything you've earned, how much did you keep".
-  const lifetimeRate =
-    lifetime.income > 0 ? Math.round((lifetimeSaved / lifetime.income) * 100) : 0;
 
   const historySpan = calendarSpan(summaries, localToday());
 
-  // The all-time totals sum that same partial month in, which matters most for
-  // the reader who can least afford it: with one month tracked, "Total Saved"
-  // *is* the running month and reads like an achievement on day 2. The share
-  // shrinks as history builds, so the fix isn't to rename the tile — across
-  // three years the income denominator is asking the right question — nor to
-  // drop the month from the totals, when the lens promises "everything
-  // totalled". Naming the caveat is enough, and only on the two tiles that
-  // make a claim: Earned and Spent are sums, and hinting all four would turn
-  // the caveat into wallpaper.
-  const partialMonth = summaries.some(isRunningMonth)
-    ? "Includes this month, still running"
+  // The all-time tiles used to sum the running window in and carry a caveat
+  // saying so. Naming it wasn't enough: with one month tracked the tiles *were*
+  // the running month, so "Total Saved" read like an achievement on day 2 and
+  // the rate sat near 100% precisely when it knew least. They now stop at the
+  // day before the current window opens, and say where they stop — the same
+  // line on all four, because Earned and Spent stop there too and a tile whose
+  // three neighbours disagree with it is worse than one caveat repeated.
+  const settledThrough = lifetime?.through
+    ? `Up to ${formatDay(lifetime.through, { withYear: true, shortYear: true })}`
     : undefined;
 
   // Summaries arrive oldest-first; show the breakdown newest-first, collapsed
@@ -324,7 +326,7 @@ export default function StatsPage() {
                   active={lens === "all"}
                   onClick={() => setLens("all")}
                   label="All Time"
-                  hint="Everything totalled"
+                  hint="Your finished windows"
                 />
                 <LensTab
                   active={lens === "months"}
@@ -345,21 +347,31 @@ export default function StatsPage() {
             >
               {lens === "all" ? (
                 <>
-                  <StatTile label="Total Earned" value={lifetime.income} money />
-                  <StatTile label="Total Spent" value={lifetime.spent} money />
+                  <StatTile
+                    label="Total Earned"
+                    value={lifetime?.earned ?? 0}
+                    money
+                    hint={settledThrough}
+                  />
+                  <StatTile
+                    label="Total Spent"
+                    value={lifetime?.spent ?? 0}
+                    money
+                    hint={settledThrough}
+                  />
                   <StatTile
                     label="Total Saved"
-                    value={lifetimeSaved}
+                    value={lifetime?.saved ?? 0}
                     money
                     accent
-                    hint={partialMonth}
+                    hint={settledThrough}
                   />
                   <StatTile
                     label="Savings Rate"
-                    value={lifetimeRate}
+                    value={lifetime?.rate ?? 0}
                     suffix="%"
                     accent
-                    hint={partialMonth}
+                    hint={settledThrough}
                     // Named apart from "Average month" so the two rates
                     // disagreeing reads as two questions, not a bug.
                   />

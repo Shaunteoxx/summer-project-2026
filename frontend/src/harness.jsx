@@ -306,7 +306,7 @@ function StatsView() {
           active={lens === "all"}
           onClick={() => setLens("all")}
           label="All time"
-          hint="Everything totalled"
+          hint="Your finished windows"
         />
         <LensTab
           active={lens === "months"}
@@ -319,20 +319,33 @@ function StatsView() {
       <div className="grid grid-cols-2 gap-3">
         {lens === "all" ? (
           <>
-            <StatTile label="Total earned" value={big ? 148205.5 : 4820.5} money />
-            <StatTile label="Total spent" value={big ? 113611.75 : 3611.75} money />
+            {/* All four carry the cutoff, because all four stop at it: the
+                totals end where the window you're still living in begins. */}
+            <StatTile
+              label="Total earned"
+              value={big ? 148205.5 : 4820.5}
+              money
+              hint="Up to 31 Jul 26"
+            />
+            <StatTile
+              label="Total spent"
+              value={big ? 113611.75 : 3611.75}
+              money
+              hint="Up to 31 Jul 26"
+            />
             <StatTile
               label="Total saved"
               value={big ? 34593.75 : 1208.75}
               money
               accent
+              hint="Up to 31 Jul 26"
             />
             <StatTile
               label="Savings rate"
               value={25}
               suffix="%"
               accent
-              hint="Of everything earned"
+              hint="Up to 31 Jul 26"
             />
           </>
         ) : (
@@ -869,7 +882,7 @@ function FriendsView() {
   return (
     <div className="mx-auto w-full max-w-app px-4 pt-6">
       <h1 className="text-title-lg">Friends</h1>
-      <p className="mt-1 text-[13px] text-ink-3">Savings rate · 1–31 August</p>
+      <p className="mt-1 text-[13px] text-ink-3">All-Time Savings Rate · up to 31 Jul 26</p>
 
       <div className="relative mt-4">
         <_search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />

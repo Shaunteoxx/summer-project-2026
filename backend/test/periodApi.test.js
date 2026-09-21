@@ -473,8 +473,6 @@ describe("days mode end to end", () => {
 
     const home = await call(`/api/auth/home?today=${todayYmd()}`, token);
     assert.equal(home.body.periodIncome, 500);
-    // Lifetime savings still counts everything the user ever logged.
-    assert.equal(home.body.totalSavings, 1499);
   });
 
   it("reports no budget once the period has lapsed", async () => {
@@ -518,16 +516,27 @@ describe("days mode end to end", () => {
     assert.equal(bad.status, 400);
   });
 
-  it("scores the leaderboard on each person's own period", async () => {
-    const me = await makeUser();
+  it("scores the leaderboard on settled windows, not the running one", async () => {
+    const me = await makeUser({ budgetMode: "days" });
     const friend = await makeUser();
     me.friends.push(friend._id);
     await me.save();
 
-    // Me: a 10-day period, 20% saved. Friend: still on calendar months.
+    // Me: one finished 5-day period at 20% saved, and a second one running in
+    // which nothing has been spent yet.
+    await BudgetPeriod.create({
+      userId: me._id,
+      start: shift(-12),
+      end: shift(-8),
+      length: 5,
+    });
+    await addTxn(me._id, shift(-12), "income", 100);
+    await addTxn(me._id, shift(-9), "expense", 80);
     await call("/api/period", signToken(me), "POST", { start: shift(-2), length: 10 });
-    await addTxn(me._id, shift(-2), "income", 100);
-    await addTxn(me._id, shift(-1), "expense", 80);
+    await addTxn(me._id, shift(-2), "income", 900);
+
+    // The friend is on calendar months and has only ever logged inside this
+    // one, so nothing of theirs has settled.
     await addTxn(friend._id, shift(0), "income", 200);
     await addTxn(friend._id, shift(0), "expense", 50);
 
@@ -536,9 +545,14 @@ describe("days mode end to end", () => {
     const rows = Object.fromEntries(
       res.body.leaderboard.map((r) => [r.username, r])
     );
+    // The $900 sitting in my running period is unspent, not saved, so it
+    // neither inflates my rate nor counts towards the total.
     assert.equal(rows[me.username].percentageSaved, 20);
-    assert.equal(rows[me.username].period.days, 10);
-    assert.equal(rows[friend.username].percentageSaved, 75);
+    assert.equal(rows[me.username].totalSaved, 20);
+    // Scoring the running window would have put the friend top at 75%.
+    assert.equal(rows[friend.username].percentageSaved, 0);
+    assert.equal(res.body.leaderboard[0].username, me.username);
+    assert.equal(res.body.through, shift(-3));
   });
 });
 

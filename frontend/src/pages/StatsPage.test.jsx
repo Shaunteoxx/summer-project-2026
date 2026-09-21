@@ -12,9 +12,11 @@ vi.mock("@/lib/utils", async (importOriginal) => ({
 }));
 
 const fetchAllSummaries = vi.fn();
+const fetchLifetimeSavings = vi.fn();
 const fetchTransactions = vi.fn();
 vi.mock("@/api/endpoints", () => ({
   fetchAllSummaries: (...a) => fetchAllSummaries(...a),
+  fetchLifetimeSavings: (...a) => fetchLifetimeSavings(...a),
   fetchTransactions: (...a) => fetchTransactions(...a),
 }));
 vi.mock("@/hooks/useChartColors", () => ({
@@ -61,6 +63,21 @@ const summary = (year, month, totalIncome, totalExpenses) => ({
       : 0,
 });
 
+/**
+ * What /summary/lifetime hands back. The all-time tiles are no longer summed
+ * out of the month rows — the server stops them at the window still running,
+ * which outside month mode isn't a month at all — so these figures are mocked
+ * independently of `fetchAllSummaries`. `through` defaults to the end of
+ * February, the last settled day for the 2026-03-20 mocked today.
+ */
+const lifetime = (earned, spent, through = "2026-02-28") => ({
+  earned,
+  spent,
+  saved: earned - spent,
+  rate: earned > 0 ? Math.round(((earned - spent) / earned) * 100) : 0,
+  through,
+});
+
 const txn = (date, amount, category = "F & B") => ({
   _id: date + amount,
   date: `${date}T00:00:00.000Z`,
@@ -88,6 +105,7 @@ const show = async () => {
 beforeEach(() => {
   mockPeriod = { mode: "month", history: [] };
   fetchAllSummaries.mockReset().mockResolvedValue([]);
+  fetchLifetimeSavings.mockReset().mockResolvedValue(lifetime(0, 0));
   fetchTransactions.mockReset().mockResolvedValue([]);
 });
 
@@ -98,6 +116,7 @@ describe("the two savings rates", () => {
 
   it("reports the all-time rate by dollars earned, not by month", async () => {
     fetchAllSummaries.mockResolvedValue(lumpy);
+    fetchLifetimeSavings.mockResolvedValue(lifetime(2100, 1810));
     await show();
 
     // (2100 - 1810) / 2100 = 13.8% -> 14%
@@ -131,6 +150,7 @@ describe("the two savings rates", () => {
 
   it("doesn't divide by zero when nothing was ever earned", async () => {
     fetchAllSummaries.mockResolvedValue([summary(2026, 0, 0, 0)]);
+    fetchLifetimeSavings.mockResolvedValue(lifetime(0, 0));
     await show();
     expect(screen.getByText("Savings Rate").previousSibling).toHaveTextContent("0%");
   });
@@ -274,8 +294,11 @@ describe("the calendar's 12-month cap", () => {
   });
 
   it("still totals every month in the headline figures", async () => {
-    // 30 months x $1000 earned. Capping the calendar must not cap the maths.
+    // Capping the calendar must not cap the maths: /summary/lifetime carries
+    // no 12-month window, and its figure is shown whole however far back the
+    // history reaches.
     fetchAllSummaries.mockResolvedValue(monthsBack(30));
+    fetchLifetimeSavings.mockResolvedValue(lifetime(30000, 12000));
     await show();
     expect(screen.getByText("Total Earned").previousSibling).toHaveTextContent(
       "$30,000.00"
@@ -304,34 +327,57 @@ describe("the month still in progress", () => {
     expect(screen.queryByText("80% unspent so far")).not.toBeInTheDocument();
   });
 
-  // The all-time totals sum the partial month in too. With one month tracked
-  // that tile *is* the running month, so it needs the caveat most exactly when
-  // the reader has least history to judge it against.
-  it("says the all-time totals include a month still running", async () => {
-    fetchAllSummaries.mockResolvedValue([summary(2026, 2, 1000, 200)]);
+  // The all-time totals used to sum the partial month in and carry a caveat
+  // saying so. They now leave it out entirely — money you haven't spent yet is
+  // unspent, not saved — and say where they stop instead.
+  it("leaves the running window out of the all-time totals", async () => {
+    // March is still running, so the server's figures cover February and
+    // earlier. The tiles must show what it sent, not a sum of the rows below,
+    // which do still include March.
+    fetchAllSummaries.mockResolvedValue([
+      summary(2026, 1, 1000, 200),
+      summary(2026, 2, 5000, 50),
+    ]);
+    fetchLifetimeSavings.mockResolvedValue(lifetime(1000, 200));
     await show();
-    expect(
-      await screen.findAllByText("Includes this month, still running")
-    ).toHaveLength(2);
+
+    expect(screen.getByText("Total Earned").previousSibling).toHaveTextContent(
+      "$1,000.00"
+    );
+    expect(screen.getByText("Total Saved").previousSibling).toHaveTextContent(
+      "$800.00"
+    );
+    expect(screen.getByText("Savings Rate").previousSibling).toHaveTextContent("80%");
   });
 
-  it("drops the caveat once every month has finished", async () => {
+  it("says where the totals stop, on every tile that shares the cutoff", async () => {
+    fetchAllSummaries.mockResolvedValue([summary(2026, 2, 1000, 200)]);
+    fetchLifetimeSavings.mockResolvedValue(lifetime(1000, 200));
+    await show();
+    // All four, not just the two accent ones: Earned and Spent stop at the
+    // same day, and a tile whose neighbours disagree with it is worse than one
+    // caveat repeated.
+    expect(await screen.findAllByText("Up to 28 Feb 26")).toHaveLength(4);
+  });
+
+  it("drops the note when there's no window to exclude", async () => {
+    // Days mode between two periods: nothing is in progress to hold back, so
+    // the server sends a null cutoff and there is nothing to caption.
     fetchAllSummaries.mockResolvedValue([summary(2026, 1, 1000, 200)]);
+    fetchLifetimeSavings.mockResolvedValue(lifetime(1000, 200, null));
     await show();
-    expect(
-      screen.queryByText("Includes this month, still running")
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Up to /)).not.toBeInTheDocument();
   });
 
-  it("leaves the plain sums uncaveated — they aren't making a claim", async () => {
-    fetchAllSummaries.mockResolvedValue([summary(2026, 2, 1000, 200)]);
+  it("keeps the page up when the all-time request fails", async () => {
+    fetchAllSummaries.mockResolvedValue([summary(2026, 1, 1000, 200)]);
+    fetchLifetimeSavings.mockRejectedValue(new Error("nope"));
     await show();
-    // Earned and Spent are facts about a partial month, not flattery, so the
-    // hint sits only on the two accent tiles.
-    for (const label of ["Total Earned", "Total Spent"]) {
-      const tile = screen.getByText(label).closest("div");
-      expect(tile).not.toHaveTextContent("still running");
-    }
+    // The month breakdown is the page's substance and runs on its own request.
+    expect(await screen.findByText("80% saved")).toBeInTheDocument();
+    expect(screen.getByText("Total Earned").previousSibling).toHaveTextContent(
+      "$0.00"
+    );
   });
 });
 

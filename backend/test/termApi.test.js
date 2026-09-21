@@ -388,7 +388,7 @@ describe("switching modes", () => {
 });
 
 describe("term mode on the leaderboard", () => {
-  it("scores a term-mode friend on the money their cycle actually has", async () => {
+  it("scores a term-mode friend on the allowance their finished cycles drew", async () => {
     const me = await makeUser();
     const friend = await makeUser();
     me.friends.push(friend._id);
@@ -410,12 +410,16 @@ describe("term mode on the leaderboard", () => {
     assert.equal(res.status, 200);
     const rows = Object.fromEntries(res.body.leaderboard.map((r) => [r.username, r]));
 
-    // Nothing was spent in the first two cycles, so the whole $6,000 spreads
-    // over the four that are left: $1,500 this month, $500 of it gone.
-    assert.equal(rows[friend.username].totalSaved, 1000);
-    assert.equal(rows[friend.username].percentageSaved, 67);
-    // Scoring on logged income would have made this 0 with -$500 saved.
-    assert.equal(rows[me.username].percentageSaved, 75);
+    // Two cycles have finished. They were funded $1,000 and $1,200 out of the
+    // $6,000 and spent none of it, so $2,200 is genuinely kept. The $500 spent
+    // this month belongs to the cycle still running and isn't counted yet —
+    // and neither is the $3,800 the term hasn't released.
+    assert.equal(rows[friend.username].totalSaved, 2200);
+    assert.equal(rows[friend.username].percentageSaved, 100);
+    // Reading raw income would have credited the friend the whole $6,000 lump
+    // sum as earned-and-kept before they had lived a month of it.
+    assert.equal(rows[me.username].totalSaved, 0);
+    assert.equal(rows[me.username].percentageSaved, 0);
   });
 
   it("does not write to a term-mode friend's account from the leaderboard", async () => {

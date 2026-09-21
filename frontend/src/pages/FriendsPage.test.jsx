@@ -31,21 +31,14 @@ vi.mock("@/hooks/useToast", () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }),
 }));
 vi.mock("@/hooks/useDemoGuard", () => ({ useDemoGuard: () => () => false }));
-vi.mock("@/hooks/useBudgetPeriod", () => ({
-  useBudgetPeriod: () => ({ mode: "month", noun: "month" }),
-}));
-
 import FriendsPage from "@/pages/FriendsPage";
 
 const me = { id: "u1", username: "sam", percentageSaved: 42, isMe: true };
 const mate = { id: "u2", username: "alex", percentageSaved: 31 };
 
-const show = async (leaderboard) => {
+const show = async (leaderboard, through = "2026-08-31") => {
   fetchRequests.mockResolvedValue([]);
-  fetchComparison.mockResolvedValue({
-    period: { start: "2026-09-01", end: "2026-09-30", days: 30 },
-    leaderboard,
-  });
+  fetchComparison.mockResolvedValue({ through, leaderboard });
   render(<FriendsPage />);
   await screen.findByText("Leaderboard");
 };
@@ -90,5 +83,28 @@ describe("a leaderboard with someone else on it", () => {
     expect(
       screen.queryByRole("button", { name: /Find someone/ })
     ).not.toBeInTheDocument();
+  });
+});
+
+// The board scores everyone all-time, over windows that have finished. Scoring
+// the period each player was in the middle of put everyone near 100% on day 2
+// and ranked them by who had logged least, so the header named your window;
+// now it names where your own figures stop.
+describe("what the header claims the board is", () => {
+  it("names the figure as all-time rather than as this period", async () => {
+    await show([me, mate]);
+    expect(screen.getByText(/All-Time Savings Rate/)).toBeInTheDocument();
+  });
+
+  it("says which day your own figures run up to", async () => {
+    await show([me, mate]);
+    expect(screen.getByText(/up to 31 Aug 26/)).toBeInTheDocument();
+  });
+
+  it("says nothing extra when no window is being held back", async () => {
+    // Days mode in the gap between two periods: everything counts already.
+    await show([me, mate], null);
+    expect(screen.getByText("All-Time Savings Rate")).toBeInTheDocument();
+    expect(screen.queryByText(/up to/)).not.toBeInTheDocument();
   });
 });

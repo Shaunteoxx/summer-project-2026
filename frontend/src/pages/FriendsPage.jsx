@@ -18,14 +18,12 @@ import {
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { cn, localToday } from "@/lib/utils";
-import { formatPeriodLabel } from "@/lib/period";
-import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
+import { formatDay } from "@/lib/period";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
 
 export default function FriendsPage() {
   const toast = useToast();
   const guard = useDemoGuard();
-  const budgetPeriod = useBudgetPeriod();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -105,15 +103,16 @@ export default function FriendsPage() {
     <PageWrapper>
       <motion.div variants={fadeUp} initial="initial" animate="animate">
         <h1 className="text-title-lg">Friends</h1>
-        {/* Everyone is scored on their own budget period, so the header names
-            yours rather than implying a shared window. */}
+        {/* The board scores everyone all-time, over the windows that have
+            finished. It used to score the period each of you was in the middle
+            of, which put every player near 100% on day 2 and made the ranking
+            mostly about who had logged least — so the header named your window;
+            now it names where your own figures stop. */}
         <p className="mt-1 text-[13px] text-ink-3">
-          Savings Rate
-          {comparison?.period
-            ? ` · ${formatPeriodLabel(comparison.period, { mode: budgetPeriod.mode })}`
-            : comparison
-              ? " · no period running"
-              : ""}
+          All-Time Savings Rate
+          {comparison?.through
+            ? ` · up to ${formatDay(comparison.through, { withYear: true, shortYear: true })}`
+            : ""}
         </p>
       </motion.div>
 

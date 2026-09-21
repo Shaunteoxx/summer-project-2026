@@ -54,7 +54,6 @@ const stats = {
   periodIncome: 1240,
   periodExpenses: 287.4,
   periodSavings: 300,
-  totalSavings: 0,
   // No `percentageSaved`: the page deliberately doesn't read it. The tile is
   // derived from the pace bar instead — see "the unspent tile" below.
   period: { start: "2026-08-01", end: "2026-08-31", days: 31, daysLeft: 20 },

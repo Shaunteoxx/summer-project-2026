@@ -24,7 +24,6 @@ import {
   spentAmount,
 } from "../lib/entryFields.js";
 import { signToken, sessionExhausted } from "../middleware/auth.js";
-import { getLifetimeSavings } from "./summaryController.js";
 import {
   createDemoUser,
   loadDemoSample,
@@ -679,15 +678,12 @@ export async function getHomeStats(req, res) {
   // In days mode there may be no period running — between two of them, or
   // before the first is started. There's nothing to budget, so the client gets
   // a null period and shows a "start a period" prompt instead of numbers.
-  const [periodTransactions, totalSavings] = await Promise.all([
-    active
-      ? Transaction.find({
-          userId: req.user._id,
-          date: { $gte: dayFromYmd(active.start), $lte: dayFromYmd(active.end) },
-        })
-      : [],
-    getLifetimeSavings(req.user._id),
-  ]);
+  const periodTransactions = active
+    ? await Transaction.find({
+        userId: req.user._id,
+        date: { $gte: dayFromYmd(active.start), $lte: dayFromYmd(active.end) },
+      })
+    : [];
 
   let income = 0;
   let expenses = 0;
@@ -734,7 +730,6 @@ export async function getHomeStats(req, res) {
     periodExpenses: expenses,
     periodSavings,
     leftToSpend,
-    totalSavings,
     percentageSaved:
       budget > 0 ? Math.round(((budget - expenses) / budget) * 100) : 0,
   });
