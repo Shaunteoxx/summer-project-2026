@@ -185,14 +185,34 @@ describe("the pace bar", () => {
     });
   });
 
-  it("calls spending under the elapsed share 'ahead of pace'", async () => {
+  // The verdict used to read "Ahead of pace" / "Behind pace", which inverted
+  // against the bar right below it: fill past the tick is the trouble case, so
+  // "ahead" was bad on the bar and good in the label. Under and over can't
+  // swap like that. The number is the point as much as the word — the two
+  // percentages either side of the bar already say which way this is going,
+  // and neither can say by how much.
+  it("says how far under even spending you are, in money", async () => {
+    // $940 to spend, 11 of 31 days gone, so even spending is $333.55 by now.
+    // $287.40 out leaves $46.15 of that unspent.
     await show();
-    expect(screen.getByRole("button", { name: /Ahead of pace/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /\$46\.15 under pace/ })
+    ).toBeInTheDocument();
   });
 
-  it("calls spending over the elapsed share 'behind pace'", async () => {
+  it("says how far over even spending you are, in money", async () => {
     await show({ periodExpenses: 700, leftToSpend: 240 });
-    expect(screen.getByRole("button", { name: /Behind pace/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /\$366\.45 over pace/ })
+    ).toBeInTheDocument();
+  });
+
+  it("names neither direction when the gap rounds away", async () => {
+    // Spending exactly the elapsed share. "$0.00 under pace" would be a worse
+    // sentence than the one this replaced.
+    await show({ periodExpenses: 333.55, leftToSpend: 606.45 });
+    expect(screen.getByRole("button", { name: /On even pace/ })).toBeInTheDocument();
+    expect(screen.queryByText(/under pace|over pace/)).not.toBeInTheDocument();
   });
 
   // The verdict reads the spent figure, so it shares that figure's line rather
@@ -202,7 +222,7 @@ describe("the pace bar", () => {
   it("puts the verdict on the same line as the spent figure", async () => {
     await show();
     const spent = await screen.findByText("31% spent");
-    const verdict = screen.getByRole("button", { name: /Ahead of pace/ });
+    const verdict = screen.getByRole("button", { name: /under pace/ });
 
     // One row holding both, and nothing else — the verdict no longer has a
     // row of its own below the bar.
@@ -214,7 +234,7 @@ describe("the pace bar", () => {
   it("sends the verdict to the plan page, at its pace card", async () => {
     const user = (await import("@testing-library/user-event")).default.setup();
     await show();
-    await user.click(screen.getByRole("button", { name: /Ahead of pace/ }));
+    await user.click(screen.getByRole("button", { name: /under pace/ }));
     expect(navigate).toHaveBeenCalledWith("/plan", { state: { focus: "pace" } });
   });
 
@@ -498,8 +518,8 @@ describe("setting up an account that has no window yet", () => {
 
 // Term mode: the window's money is its slice of a lump sum that arrived in an
 // earlier cycle, so `periodIncome` is 0 from month two on. The page used to
-// divide by that, which pegged the bar at 0% and the verdict at "Behind pace"
-// for every month but the first.
+// divide by that, which pegged the bar at 0% and the verdict over pace for
+// every month but the first.
 describe("a funded term cycle", () => {
   const funded = {
     mode: "term",
@@ -524,10 +544,12 @@ describe("a funded term cycle", () => {
     expect(await screen.findByText("29% spent")).toBeInTheDocument();
   });
 
-  it("does not call a funded cycle behind pace", async () => {
+  it("does not put a funded cycle over pace", async () => {
     await show(funded);
-    expect(screen.queryByText("Behind pace")).not.toBeInTheDocument();
-    expect(screen.getByText("Ahead of pace")).toBeInTheDocument();
+    // $1,000 for the cycle, 11 of 31 days gone: even spending is $354.84 and
+    // $287.40 is out, so $67.44 of it is still unspent.
+    expect(screen.queryByText(/over pace/)).not.toBeInTheDocument();
+    expect(screen.getByText("$67.44 under pace")).toBeInTheDocument();
   });
 
   it("names the strip's first cell for what actually funds the month", async () => {

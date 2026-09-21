@@ -1043,9 +1043,15 @@ function HeroView() {
   const elapsedPct = ((totalDays - daysLeft) / totalDays) * 100;
   const dayOfPeriod = totalDays - daysLeft + 1;
   const d = budget * (elapsedPct / 100) - spent;
-  const onPace = Math.abs(d) < 0.5, underPace = d >= 0;
+  const onPace = Math.abs(d) < 0.5;
   const anchor = (pct) => (pct < 50 ? { left: `${pct}%` } : { right: `${100 - pct}%` });
-  const verdict = over ? `${fm(leftToSpend)} past` : spentPct <= elapsedPct ? "Ahead of pace" : "Behind pace";
+  // The gap in money, not "Ahead of pace" / "Behind pace": that inverted
+  // against the bar below it, where fill past the tick is the trouble case.
+  const verdict = over
+    ? `${fm(leftToSpend)} past`
+    : onPace
+      ? "On even pace"
+      : `${fm(d)} ${d > 0 ? "under" : "over"} pace`;
   const verdictRef = React.useRef(null);
   const [verdictWidth, setVerdictWidth] = React.useState(0);
   React.useLayoutEffect(() => {
@@ -1074,7 +1080,7 @@ function HeroView() {
             </TrackingLabel>
             <button
               ref={verdictRef}
-              className={`absolute right-0 top-0 flex h-[15px] items-center gap-0.5 text-[11px] font-medium ${over ? "text-negative" : spentPct <= elapsedPct ? "text-positive" : "text-warning"}`}
+              className={`absolute right-0 top-0 flex h-[15px] items-center gap-0.5 text-[11px] font-medium ${over ? "text-negative" : onPace ? "text-ink-2" : d > 0 ? "text-positive" : "text-warning"}`}
             >
               {verdict}
               <_chev className="h-3 w-3" />

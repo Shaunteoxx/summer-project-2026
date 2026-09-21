@@ -177,11 +177,12 @@ export default function HomePage() {
   };
 
   // The pace bar. Fill is how much of the period's budget has gone; the tick is
-  // where you'd be if you spent evenly. Ahead of the tick is trouble, behind it
-  // is fine — both numbers already exist, they were just never compared.
+  // where you'd be if you spent evenly. Fill past the tick is the trouble case
+  // and short of it is fine — both numbers already exist, they were just never
+  // compared.
   // In term mode the window's money is its slice of the lump sum, which
   // arrived in an earlier cycle — periodIncome is 0 from cycle two on, and
-  // dividing by it would peg the bar at "behind pace" forever.
+  // dividing by it would peg the bar over pace forever.
   const periodBudget = stats?.periodFunding ?? stats?.periodIncome ?? 0;
   const budget = Math.max(periodBudget - (stats?.periodSavings ?? 0), 0);
   const spent = stats?.periodExpenses ?? 0;
@@ -190,16 +191,28 @@ export default function HomePage() {
   const elapsedPct =
     totalDays > 0 ? Math.min(((totalDays - daysLeft) / totalDays) * 100, 100) : 0;
   const fillPct = overspent ? 100 : spentPct;
-  // Spending less of the budget than the period has used up is the good case.
-  // The two percentages sit either side of the bar, so the verdict is now
-  // backed by figures the reader can check rather than asserted on its own.
-  const aheadOfPace = spentPct <= elapsedPct;
+  // How far off even spending you are, in money.
+  //
+  // This read "Ahead of pace" / "Behind pace", and inverted against the bar
+  // directly below it: on the bar, fill past the tick is the trouble case — so
+  // "ahead" meant bad there and good in the label, twenty pixels apart. Under
+  // and over can't swap like that, because they describe an amount rather than
+  // a position in a race.
+  //
+  // A number rather than a verdict for the same reason the rest of the hero is
+  // figures: the two percentages either side of the bar already say which way
+  // this is going, and the one thing they can't say is by how much — a
+  // percentage of a budget isn't a sum you can spend.
+  const paceGap = budget * (elapsedPct / 100) - spent;
+  // Under half a dollar either way is not a gap worth naming, and "$0.00 under
+  // pace" would be a worse sentence than the one it replaced.
+  const onPace = Math.abs(paceGap) < 0.5;
   const paceVerdict = overspent
     ? `${formatMoney(Math.abs(stats?.leftToSpend ?? 0))} past`
-    : aheadOfPace
-      ? "Ahead of pace"
-      : "Behind pace";
-  // With no budget and no period there is nothing to be ahead or behind of.
+    : onPace
+      ? "On even pace"
+      : `${formatMoney(Math.abs(paceGap))} ${paceGap > 0 ? "under" : "over"} pace`;
+  // With no budget and no period there is no even pace to be off.
   const showVerdict = !loading && (overspent || (totalDays > 0 && budget > 0));
 
   // Which window all of the above is about. The greeting says what day it is
@@ -236,7 +249,7 @@ export default function HomePage() {
 
   // The verdict is pinned to the right of the same line the spent label tracks
   // along, so the label needs its width to know where to stop. Measured rather
-  // than guessed: "Behind pace" and "$1,204.50 past" are nowhere near the same
+  // than guessed: "On even pace" and "$1,204.50 past" are nowhere near the same
   // size, and the wider one is the one that would be run into.
   const verdictRef = useRef(null);
   const [verdictWidth, setVerdictWidth] = useState(0);
@@ -492,9 +505,11 @@ export default function HomePage() {
                       className={`absolute right-0 top-0 flex h-[15px] items-center gap-0.5 rounded-sm text-[11px] font-medium transition-colors duration-base ease-out before:absolute before:-inset-x-2 before:-top-4 before:-bottom-4 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         overspent
                           ? "text-negative"
-                          : aheadOfPace
-                            ? "text-positive"
-                            : "text-warning"
+                          : onPace
+                            ? "text-ink-2"
+                            : paceGap > 0
+                              ? "text-positive"
+                              : "text-warning"
                       }`}
                     >
                       {paceVerdict}
