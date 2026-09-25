@@ -8,7 +8,8 @@
  * icon: the favicon, Android and notifications always use the wallet.
  *
  * Drawn in code on a 1024 grid so every size comes from one source: the home
- * screen icons, the maskable one, the favicon and the notification badge.
+ * screen icons, the maskable one, the favicon, the notification badge, and the
+ * mark in the app itself (the top bar, sign-in and the loader).
  * scripts/icons.mjs renders them, so change the drawing here.
  */
 

@@ -1,3 +1,5 @@
+import BrandMark from "@/components/BrandMark";
+
 /**
  * Cold-start loader — the auth gate and first paint.
  *
@@ -7,8 +9,8 @@
  * wash. This is one indeterminate track that at least travels in a direction,
  * under the wordmark — the only place in the app where the brand is the hero.
  *
- * The mark inverts between themes rather than switching to a colour, so the
- * loader never introduces a hue the rest of the app doesn't use.
+ * The mark is the app icon itself, so the first screen matches the icon that
+ * was just tapped to open it.
  */
 export default function BrandLoader() {
   return (
@@ -17,9 +19,7 @@ export default function BrandLoader() {
       role="status"
       aria-label="Loading Broke No More"
     >
-      <div className="grid h-[52px] w-[52px] place-items-center rounded-[17px] bg-ink text-[26px] font-semibold tracking-[-0.05em] text-canvas">
-        B
-      </div>
+      <BrandMark size={52} />
       <p className="mt-[18px] text-base font-semibold tracking-tight">Broke No More</p>
       <p className="mt-[5px] text-[12.5px] text-ink-3">Working out your budget…</p>
 

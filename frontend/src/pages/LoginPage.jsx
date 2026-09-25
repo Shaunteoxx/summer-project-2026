@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { setToken } from "@/api/client";
@@ -57,17 +58,10 @@ export default function LoginPage() {
         transition={{ duration: 0.4, ease: EASE }}
         className="mx-auto w-full max-w-[22rem]"
       >
-        {/* The wordmark, not a wallet icon: this is the one screen where the
-            brand is the subject, and the same mark the cold-start loader
-            shows — so the app doesn't introduce itself twice with two
-            different faces. */}
-        <div
-          role="img"
-          aria-label="Broke No More"
-          className="grid h-14 w-14 place-items-center rounded-[18px] bg-ink text-[28px] font-semibold tracking-[-0.05em] text-surface"
-        >
-          B
-        </div>
+        {/* The app icon: the one screen where the brand is the subject, and
+            the same mark the Home Screen and the cold-start loader show — so
+            the app doesn't introduce itself twice with two different faces. */}
+        <BrandMark size={56} label="Broke No More" />
 
         {/* The headline is the promise, not the product name. Someone who has
             just landed needs to know what this does; the name is on the mark

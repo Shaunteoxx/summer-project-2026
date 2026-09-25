@@ -5,11 +5,11 @@
  *
  *   npm run icons
  *
- * Writes public/favicon.svg and the PNGs in public/icons/, then stamps each
- * file's content hash into its URL in index.html, the manifest and
- * src/lib/appIcon.js. Chrome treats an installed app's icon URLs as immutable:
- * without a new URL it never offers the new icon to people who already have
- * the app.
+ * Writes public/favicon.svg, the in-app mark at src/assets/brand-mark.svg and
+ * the PNGs in public/icons/, then stamps each public file's content hash into
+ * its URL in index.html, the manifest and src/lib/appIcon.js. Chrome treats an
+ * installed app's icon URLs as immutable: without a new URL it never offers
+ * the new icon to people who already have the app.
  *
  * Each PNG renders at 1024px and is downscaled, since headless Chrome won't
  * open a window narrower than 500px. The window is taller than the art and the
@@ -65,6 +65,10 @@ const OUTPUTS = [
 // Too small for the lift shadow to show, and fewer points on the tile's curve
 // keep the file light.
 const favicon = iconSvg({ shape: "squircle", lift: false, steps: 96 });
+// The in-app mark (components/BrandMark): the same tile, drawn up to 56px on
+// the sign-in screen, so its curve gets more points. It's imported from src,
+// so Vite fingerprints it and no version stamp is needed.
+const brandMark = iconSvg({ shape: "squircle", lift: false, steps: 180 });
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex").slice(0, 8);
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -86,6 +90,9 @@ try {
   await writeFile(join(PUBLIC, "favicon.svg"), `${favicon}\n`);
   versions["/favicon.svg"] = hash(favicon);
   console.log("wrote public/favicon.svg");
+  await mkdir(join(ROOT, "src/assets"), { recursive: true });
+  await writeFile(join(ROOT, "src/assets/brand-mark.svg"), `${brandMark}\n`);
+  console.log("wrote src/assets/brand-mark.svg");
 
   for (const [name, markup] of Object.entries(VARIANTS)) {
     const html = join(work, `${name}.html`);

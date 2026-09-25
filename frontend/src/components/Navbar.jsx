@@ -4,6 +4,7 @@ import { FlaskConical } from "lucide-react";
 
 import Avatar from "@/components/Avatar";
 import BottomSheet from "@/components/BottomSheet";
+import BrandMark from "@/components/BrandMark";
 import ThemeToggle from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { loadDemoSample } from "@/api/endpoints";
@@ -13,9 +14,10 @@ import { useToast } from "@/hooks/useToast";
 /**
  * Slim top app bar: wordmark left, avatar right.
  *
- * The brandmark is ink rather than green. Green now means money arriving or
- * money kept, and a green tile in the chrome would immediately dilute that back
- * into "brand colour".
+ * The brandmark is the app icon, an ink tile rather than a green one. Green
+ * means money arriving or money kept, which is what the notes in the wallet
+ * are, and a green tile in the chrome would dilute that back into "brand
+ * colour".
  *
  * The theme toggle stays here. I moved it to More → Appearance on the grounds
  * that a setting belongs in settings — but it's a control people flick several
@@ -58,9 +60,7 @@ export default function Navbar() {
             onClick={() => navigate("/")}
             className="flex items-center gap-2 rounded-sm text-[15px] font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <span className="grid h-[22px] w-[22px] place-items-center rounded-[7px] bg-ink text-[12px] font-semibold tracking-[-0.03em] text-surface">
-              B
-            </span>
+            <BrandMark size={22} />
             Broke No More
           </button>
 
