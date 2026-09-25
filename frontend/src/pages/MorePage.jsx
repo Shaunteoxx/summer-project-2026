@@ -23,6 +23,7 @@ import {
   Vibrate,
   Compass,
   Lightbulb,
+  Smartphone,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -35,6 +36,7 @@ import CategoriesSheet from "@/components/CategoriesSheet";
 import RecurringSheet from "@/components/RecurringSheet";
 import SegmentPill from "@/components/SegmentPill";
 import ToursSheet from "@/components/ToursSheet";
+import AppIconSheet from "@/components/AppIconSheet";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,9 +51,10 @@ import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { detectedTimeZone } from "@/lib/push";
+import { detectedTimeZone, isStandalone } from "@/lib/push";
 import { AVATARS, avatarSrc } from "@/lib/avatars";
 import { haptic, hapticsEnabled, setHapticsEnabled } from "@/lib/haptics";
+import { appIcon, canChooseAppIcon } from "@/lib/appIcon";
 import { emitTour } from "@/tour/signals";
 import { useTour, useTourContext } from "@/tour/TourProvider";
 import { cn, formatMoney, monthName, localToday } from "@/lib/utils";
@@ -113,6 +116,13 @@ export default function MorePage() {
   const guard = useDemoGuard();
   const notifications = usePushNotifications(user, refresh);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  // Only iPhone and iPad take their Home Screen icon from the page, and only
+  // when it's added from Safari: see lib/appIcon.js. Read on every render, so
+  // the row picks up a new choice when its sheet closes.
+  const [appIconOpen, setAppIconOpen] = useState(false);
+  const iconChoice = canChooseAppIcon();
+  const installed = isStandalone();
+  const homeIcon = appIcon();
   // Only offered on a touch device: a laptop has nothing to vibrate, and a
   // switch that does nothing reads as broken.
   const touchDevice = useCoarsePointer();
@@ -750,6 +760,25 @@ export default function MorePage() {
             />
           }
         />
+        {iconChoice && (
+          <Row
+            icon={Smartphone}
+            title="App Icon"
+            // Inside the installed app there's no telling which icon it was
+            // added with, so no value is shown.
+            meta={installed ? "Set when you added the app" : "Shown on your Home Screen"}
+            value={
+              !installed && (
+                <img
+                  src={homeIcon.src}
+                  alt={homeIcon.name}
+                  className="h-7 w-7 shrink-0 rounded-[22.5%]"
+                />
+              )
+            }
+            onClick={() => setAppIconOpen(true)}
+          />
+        )}
         {touchDevice && (
           <Row
             icon={Vibrate}
@@ -1369,6 +1398,14 @@ export default function MorePage() {
         user={user}
         toast={toast}
       />
+
+      {iconChoice && (
+        <AppIconSheet
+          open={appIconOpen}
+          onClose={() => setAppIconOpen(false)}
+          installed={installed}
+        />
+      )}
 
       {/* Delete Account confirmation */}
       <BottomSheet

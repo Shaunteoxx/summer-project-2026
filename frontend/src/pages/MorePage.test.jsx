@@ -58,6 +58,12 @@ vi.mock("@/hooks/useDemoGuard", () => ({ useDemoGuard: () => () => false }));
 // A phone unless a test says otherwise; the vibration switch only exists there.
 let mockCoarse = true;
 vi.mock("@/hooks/useCoarsePointer", () => ({ useCoarsePointer: () => mockCoarse }));
+// Not an iPhone unless a test says so; only iOS offers the Home Screen icon.
+let mockIos = false;
+vi.mock("@/lib/appIcon", async (importOriginal) => ({
+  ...(await importOriginal()),
+  canChooseAppIcon: () => mockIos,
+}));
 vi.mock("@/hooks/useAccounts", () => ({ useAccounts: () => ({ active: [] }) }));
 vi.mock("@/hooks/useCategories", () => ({ useCategories: () => ({ custom: [] }) }));
 vi.mock("@/hooks/useRecurring", () => ({
@@ -106,6 +112,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockPeriod = monthPeriod();
   mockCoarse = true;
+  mockIos = false;
 });
 
 describe("switching budget mode", () => {
@@ -192,5 +199,29 @@ describe("the vibration setting", () => {
     mockCoarse = false;
     renderAt();
     expect(screen.queryByRole("switch", { name: /Vibration/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("the app icon setting", () => {
+  it("is offered on an iPhone, showing the icon it will add", () => {
+    mockIos = true;
+    renderAt();
+    expect(screen.getByRole("button", { name: /App Icon/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Wallet" })).toBeInTheDocument();
+  });
+
+  it("isn't offered where the page can't set the Home Screen icon", () => {
+    renderAt();
+    expect(screen.queryByRole("button", { name: /App Icon/ })).not.toBeInTheDocument();
+  });
+
+  it("shows the new pick once its sheet closes", async () => {
+    mockIos = true;
+    const user = userEvent.setup();
+    renderAt();
+    await user.click(screen.getByRole("button", { name: /App Icon/ }));
+    await user.click(await screen.findByRole("button", { name: "Piggy Bank" }));
+    await user.click(screen.getByRole("button", { name: "Close dialog" }));
+    expect(await screen.findByRole("img", { name: "Piggy Bank" })).toBeInTheDocument();
   });
 });

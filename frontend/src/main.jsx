@@ -12,6 +12,7 @@ import { ThemeProvider } from "./hooks/useTheme.jsx";
 import { ToastProvider } from "./hooks/useToast.jsx";
 import { TourProvider } from "./tour/TourProvider.jsx";
 import { registerServiceWorker } from "./lib/push";
+import { applyAppIcon } from "./lib/appIcon";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -42,6 +43,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
 
 // Outside React, so StrictMode's double render can't register twice.
 registerServiceWorker();
+
+// The Home Screen icon this device picked under More, in place before anyone
+// taps Add to Home Screen.
+applyAppIcon();
 
 // iOS Safari only applies :active to an element with a touch listener on it or
 // above it. React's root listener usually provides one; this makes the pressed
