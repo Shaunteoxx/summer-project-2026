@@ -17,9 +17,15 @@ function applyTheme(theme) {
   const root = document.documentElement;
   root.classList.toggle("dark", theme === "dark");
   root.style.colorScheme = theme;
-  // Keep the mobile browser chrome in sync with the app background.
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", theme === "dark" ? "#10151f" : "#f6faf8");
+  // Keep the mobile browser chrome in sync with the app background — the
+  // canvas token of each theme. Both tags, and their media queries dropped: an
+  // in-app choice has to win over the OS setting, and querySelector alone only
+  // ever found the first (light-media) tag, so a dark app on a light phone kept
+  // a light status bar.
+  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+    meta.removeAttribute("media");
+    meta.setAttribute("content", theme === "dark" ? "#161618" : "#FBFBF9");
+  });
 }
 
 export function ThemeProvider({ children }) {

@@ -66,7 +66,7 @@ export default function SpendingCalendar({
               className={cn(
                 "flex aspect-square flex-col items-center justify-center rounded-[8px] transition-colors duration-base ease-out",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                !d.isFuture && !d.isToday && "hover:brightness-[0.97]",
+                !d.isFuture && !d.isToday && "hover:brightness-[0.97] active:brightness-[0.93]",
                 // Future days in the period are an outline, not a fill: nothing
                 // has happened yet, so there's no verdict to tint.
                 d.isFuture

@@ -2,8 +2,13 @@ import { useCountUp } from "@/hooks/useCountUp";
 import { LOCALE } from "@/lib/utils";
 
 /**
- * Renders a number that counts up from 0 on mount / value change.
+ * Renders a number that counts up from 0 on first sight and tweens from the
+ * figure on screen whenever the value changes.
  * Supports a currency prefix, plain-number, or percentage suffix.
+ *
+ * `memoryKey` names the figure across mounts (see useCountUp): give the same
+ * key wherever the same number reappears on a later visit, and it picks up from
+ * what the reader last saw instead of recounting from zero.
  */
 export default function AnimatedNumber({
   value,
@@ -12,8 +17,9 @@ export default function AnimatedNumber({
   decimals = 0,
   duration = 1200,
   className = "",
+  memoryKey,
 }) {
-  const display = useCountUp(value, { duration, decimals });
+  const display = useCountUp(value, { duration, decimals, memoryKey });
 
   // Same pinned locale as formatMoney, and for the same reason: every hero
   // figure on Home counts up through here, so leaving this to the runtime would

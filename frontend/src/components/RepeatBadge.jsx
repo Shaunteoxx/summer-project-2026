@@ -27,7 +27,10 @@ export default function RepeatBadge({ transaction }) {
 
   const label = FREQUENCY_LABEL[rule?.frequency] ?? "Repeats";
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-1.5 py-[3px] text-[11px] font-medium leading-none text-ink-2">
+    <span
+      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-1.5 py-[3px] text-[11px] font-medium leading-none text-ink-2"
+      data-tour="repeat-badge"
+    >
       <Repeat className="h-3 w-3" aria-hidden="true" />
       <span>{label}</span>
       <span className="sr-only"> repeating entry</span>

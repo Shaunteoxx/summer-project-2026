@@ -23,6 +23,8 @@ import {
   updateProfile,
   deleteAccount,
   setSavings,
+  markTours,
+  forgetTours,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -95,6 +97,10 @@ router.patch("/recurring/:id", requireAuth, asyncHandler(updateRecurring));
 router.delete("/recurring/:id", requireAuth, asyncHandler(removeRecurring));
 router.patch("/profile", requireAuth, asyncHandler(updateProfile));
 router.put("/savings", requireAuth, asyncHandler(setSavings));
+// Which tours have run. POST for the reset too, rather than a DELETE carrying
+// a body, which some proxies strip.
+router.post("/tours", requireAuth, asyncHandler(markTours));
+router.post("/tours/forget", requireAuth, asyncHandler(forgetTours));
 router.delete("/me", requireAuth, asyncHandler(deleteAccount));
 
 export default router;

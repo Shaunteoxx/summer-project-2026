@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Plus, Wallet, ChevronDown, Check, Tag } from "lucide-react";
 
 import FieldError from "@/components/FieldError";
+import SegmentPill from "@/components/SegmentPill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/useToast";
@@ -31,10 +32,11 @@ import { CUSTOM_COLOR_OPTIONS } from "@/lib/categories";
 export function EntryTypeToggle({ value, onChange }) {
   return (
     <div
-      className="grid grid-cols-2 gap-0.5 rounded-md bg-surface-2 p-[3px]"
+      className="relative grid grid-cols-2 gap-0.5 rounded-md bg-surface-2 p-[3px]"
       role="group"
       aria-label="Entry type"
     >
+      <SegmentPill index={value === "income" ? 1 : 0} count={2} />
       {[
         { value: "expense", label: "Expense" },
         { value: "income", label: "Income" },
@@ -44,10 +46,10 @@ export function EntryTypeToggle({ value, onChange }) {
           type="button"
           aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
-          className={`rounded-[9px] py-1.5 text-[13px] transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+          className={`relative rounded-[9px] py-1.5 text-[13px] transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
             value === opt.value
-              ? "bg-surface font-semibold text-ink shadow-card"
-              : "font-medium text-ink-3 hover:text-ink-2"
+              ? "font-semibold text-ink"
+              : "font-medium text-ink-3 hover:text-ink-2 active:opacity-60"
           }`}
         >
           {opt.label}
@@ -231,7 +233,7 @@ export function CategoryPicker({ idPrefix, type, value, onChange, error, shake, 
             onClick={() => picker.setShowNew((v) => !v)}
             aria-expanded={picker.showNew}
             className={`-my-1 flex h-8 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-              picker.showNew ? "bg-ink/[0.06] text-ink" : "text-ink-3 hover:bg-surface-2 hover:text-ink"
+              picker.showNew ? "bg-ink/[0.06] text-ink" : "text-ink-3 hover:bg-surface-2 active:bg-surface-3 hover:text-ink"
             }`}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -261,7 +263,7 @@ export function CategoryPicker({ idPrefix, type, value, onChange, error, shake, 
                 >
                   <span
                     className={`grid aspect-square w-full place-items-center rounded-[11px] transition-colors duration-base ease-out ${
-                      selected ? "" : "bg-surface-2 group-hover:bg-surface-3"
+                      selected ? "" : "bg-surface-2 group-hover:bg-surface-3 active:bg-hairline-strong"
                     }`}
                     style={
                       selected
@@ -304,7 +306,7 @@ export function CategoryPicker({ idPrefix, type, value, onChange, error, shake, 
               aria-invalid={Boolean(error)}
               aria-describedby={error ? errorId : undefined}
               className={cn(
-                "flex h-11 w-full items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex h-11 w-full items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 active:bg-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 error && "ring-2 ring-negative"
               )}
             >
@@ -464,10 +466,11 @@ export function useAccountChoice(accountId) {
  * confirming it rather than choosing. The options open inline below; see
  * AccountOptions.
  */
-export function AccountSelect({ type, choice, open, onToggle, className }) {
+export function AccountSelect({ type, choice, open, onToggle, className, ...rest }) {
   const { selected } = choice;
   return (
     <button
+      {...rest}
       type="button"
       onClick={onToggle}
       aria-expanded={open}
@@ -475,7 +478,7 @@ export function AccountSelect({ type, choice, open, onToggle, className }) {
         selected ? selected.name : "no account"
       }. Choose account`}
       className={cn(
-        "flex h-[46px] w-full min-w-0 items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "flex h-[46px] w-full min-w-0 items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 active:bg-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className
       )}
     >
@@ -522,7 +525,7 @@ export function AccountOptions({ type, choice, value, onChange, onClose }) {
             className={`flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-2 ${
               selected
                 ? "border-transparent"
-                : "border-hairline-strong bg-surface text-ink-2 hover:bg-surface-3"
+                : "border-hairline-strong bg-surface text-ink-2 hover:bg-surface-3 active:bg-hairline-strong"
             }`}
             style={selected ? { backgroundColor: `${a.color}22`, borderColor: a.color } : undefined}
           >

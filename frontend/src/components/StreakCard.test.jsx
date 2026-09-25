@@ -297,3 +297,85 @@ describe("explaining where the streak stops", () => {
     ).toBeInTheDocument();
   });
 });
+
+// The streak goes up overnight, so the first look of the day is when there's
+// news. The card shows yesterday's figure, then rolls to today's — and names a
+// milestone or a new best when one was crossed.
+describe("a rise since yesterday", () => {
+  const seenYesterday = (record) =>
+    localStorage.setItem(
+      "bnm_streak_seen",
+      JSON.stringify({ user: null, day: "2026-09-14", ...record })
+    );
+
+  it("rolls from yesterday's count to today's", async () => {
+    seenYesterday({ streak: 4, best: 20 });
+    fetchStreak.mockResolvedValue(streak({ currentStreak: 5 }));
+    render(<StreakCard />);
+
+    expect(await screen.findByText("4")).toBeInTheDocument();
+    expect(await screen.findByText("5", {}, { timeout: 2000 })).toBeInTheDocument();
+  });
+
+  it("names the badge a rise earns", async () => {
+    seenYesterday({ streak: 9, best: 20 });
+    fetchStreak.mockResolvedValue(streak({ currentStreak: 10 }));
+    render(<StreakCard />);
+
+    expect(await screen.findByText("New badge: Silver", {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Silver badge/ })).toBeInTheDocument();
+  });
+
+  it("calls out a new best instead of restating the old one", async () => {
+    seenYesterday({ streak: 20, best: 20 });
+    fetchStreak.mockResolvedValue(streak({ currentStreak: 21, longestStreak: 21 }));
+    render(<StreakCard />);
+
+    expect(await screen.findByText("New best", {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(screen.queryByText("Best 21")).not.toBeInTheDocument();
+  });
+
+  it("stays quiet the first time it sees a streak", async () => {
+    fetchStreak.mockResolvedValue(streak({ currentStreak: 7 }));
+    render(<StreakCard />);
+
+    expect(await screen.findByText("7")).toBeInTheDocument();
+    expect(screen.getByText("days on budget")).toBeInTheDocument();
+    expect(screen.getByText("Best 20")).toBeInTheDocument();
+  });
+});
+
+// A badge every five days: the header shows the one held and the days to the
+// next, and the badge opens the whole ladder.
+describe("streak badges", () => {
+  it("shows the badge held and how far the next one is", async () => {
+    fetchStreak.mockResolvedValue(streak({ currentStreak: 12, longestStreak: 20 }));
+    render(<StreakCard />);
+
+    expect(await screen.findByRole("button", { name: /^Silver badge/ })).toBeInTheDocument();
+    expect(screen.getByText("Gold in 3 days")).toBeInTheDocument();
+  });
+
+  it("points at the first badge before there is one", async () => {
+    fetchStreak.mockResolvedValue(streak({ currentStreak: 2, longestStreak: 2 }));
+    render(<StreakCard />);
+
+    expect(await screen.findByRole("button", { name: "See the streak badges" })).toBeInTheDocument();
+    expect(screen.getByText("Bronze in 3 days")).toBeInTheDocument();
+  });
+
+  it("lays out the ladder: held, earned before, and next", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    // Holding Bronze now, but the best streak once reached Gold.
+    fetchStreak.mockResolvedValue(streak({ currentStreak: 7, longestStreak: 17 }));
+    render(<StreakCard />);
+    await user.click(await screen.findByRole("button", { name: /^Bronze badge/ }));
+
+    const rows = screen.getAllByRole("listitem");
+    const row = (name) => rows.find((li) => li.textContent.startsWith(name));
+    expect(row("Bronze")).toHaveTextContent("Current");
+    expect(row("Silver")).toHaveTextContent("Earned");
+    expect(row("Gold")).toHaveTextContent("Earned");
+    expect(row("Platinum")).not.toHaveTextContent(/Earned|Current|to go/);
+  });
+});

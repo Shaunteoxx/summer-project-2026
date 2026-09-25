@@ -16,7 +16,6 @@ import StreakCard from "@/components/StreakCard";
 import CategoryIcon from "@/components/CategoryIcon";
 import RepeatBadge from "@/components/RepeatBadge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchHomeStats, fetchTransactions } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
@@ -24,81 +23,13 @@ import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
 import { countedAmount, formatMoney, localToday } from "@/lib/utils";
 import { formatDay, formatDayRange, noWindowCopy } from "@/lib/period";
+import { SETUP } from "@/lib/setup";
+import { SetupCard, useSetupQuest } from "@/tour/SetupQuest";
+import { useTour } from "@/tour/TourProvider";
 import { fadeUp } from "@/animations/variants";
 
 /** How many recent entries the home list shows. */
 const RECENT_COUNT = 4;
-
-/**
- * The first-run script, per budget mode.
- *
- * `stepIndex` is which step is live once a window exists — 0 where there was
- * never a window to start, 1 where step one was starting it. Everything else is
- * copy the empty state and the checklist share, so the two can't drift.
- */
-/**
- * The first-run script, per budget mode.
- *
- * `stepIndex` is which step is live once a window exists — 0 where there was
- * never a window to start, 1 where step one was starting it. Everything else is
- * copy the empty state and the checklist share, so the two can't drift.
- *
- * Each step carries `go`, the thing it actually opens. The steps used to name
- * the More row you had to go and find ("under More → Savings Target") because
- * they were text and text was all they could do; now that each one is a button
- * that opens the sheet itself, naming the route would describe a journey the
- * tap skips. The one place a row name still earns its keep is the More screen
- * itself, where the labels match.
- */
-const SETUP = {
-  month: {
-    steps: [
-      { text: "Log the money coming in this month", go: "income" },
-      { text: "Set what you want to keep each month", go: "savings" },
-    ],
-    stepIndex: 0,
-    logBody: "Add your income for the month and your daily budget appears here.",
-    // Only month mode carries this. A new account is always in month mode
-    // (User.budgetMode defaults to it) and nothing on the first-run path
-    // otherwise says the other two exist — the days and term checklists
-    // explain themselves, but you can't see one until you've already chosen
-    // it. This app is for students, whose money often arrives as a semester's
-    // allowance rather than monthly, so leaving that undiscoverable quietly
-    // gives the wrong budget model to the reader it was built for.
-    //
-    // A line rather than a step: month mode needs no setup, so a step that is
-    // already done for almost everyone is busywork in a list whose whole job
-    // is saying what to do next. Switching is non-destructive either way.
-    alternatives:
-      "Money not monthly? Budget by a set number of days, or spread one allowance across a term.",
-  },
-  days: {
-    steps: [
-      { text: "Start a budget period, and say how long it runs", go: "period" },
-      { text: "Log the money coming in for it", go: "income" },
-      { text: "Set what you want to keep", go: "savings" },
-    ],
-    stepIndex: 1,
-    logBody:
-      "Add the money for this period and your daily budget appears here.",
-  },
-  term: {
-    steps: [
-      {
-        text: "Set your allowance term, and say how many months it covers",
-        go: "period",
-      },
-      {
-        text: "Log the lump sum once — it's split across those months for you",
-        go: "income",
-      },
-      { text: "Set what you want to keep each month", go: "savings" },
-    ],
-    stepIndex: 1,
-    logBody:
-      "Log your allowance once and it's split across the term, a month at a time.",
-  },
-};
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -107,6 +38,9 @@ export default function HomePage() {
   const { getCategory } = useCategories();
   const [stats, setStats] = useState(null);
   const [recent, setRecent] = useState([]);
+  // Whether anything has ever been spent — the setup's last step. The list
+  // below only keeps four, so it's read off the full fetch here.
+  const [hasExpense, setHasExpense] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -118,7 +52,9 @@ export default function HomePage() {
     ])
       .then(([s, txns]) => {
         setStats(s);
-        setRecent(Array.isArray(txns) ? txns.slice(0, RECENT_COUNT) : []);
+        const list = Array.isArray(txns) ? txns : [];
+        setRecent(list.slice(0, RECENT_COUNT));
+        setHasExpense(list.some((t) => t.type === "expense"));
       })
       .catch(() => {
         setStats(null);
@@ -147,34 +83,35 @@ export default function HomePage() {
   // by mode rather than by wording: a term is a span you declare once and then
   // fund with a single lump sum, a days period is a span you re-start each time
   // one ends, and a month needs no span at all. Each step opens the thing it
-  // describes rather than naming a row to go and find — see SETUP.
+  // describes rather than naming a row to go and find — see lib/setup.
   const setup = SETUP[period.mode] ?? SETUP.month;
+  // Which of those steps are done, and the guide that walks through the rest.
+  const quest = useSetupQuest({
+    mode: period.mode,
+    hasWindow: Boolean(period.current),
+    needsPeriod,
+    stats,
+    hasExpense,
+    nothingLogged,
+    loading,
+  });
   // Title, sentence and button for the missing window come from lib/period so
   // Tracker and Plan say the same thing about the same gap. Only the checklist
   // below is Home's own.
   const noWindow = noWindowCopy(period.mode, period.status);
   const overspent = (stats?.leftToSpend ?? 0) < 0;
 
-  /**
-   * Where a checklist step actually goes.
-   *
-   * The savings sheet needs a window to attach a target to: in days mode with
-   * nothing running, MorePage's own opener refuses and toasts "Start a budget
-   * period first". Sending the reader there to be told no is the dead end this
-   * whole change is about, so the step that can't run yet routes to the thing
-   * that unblocks it instead.
-   */
-  const goToStep = (go) => {
-    if (go === "income") {
-      navigate("/transactions", { state: { openAdd: "income" } });
-      return;
-    }
-    const needsWindowFirst =
-      go === "savings" && period.mode === "days" && !period.current;
-    navigate("/more", {
-      state: { open: needsWindowFirst ? "period" : go },
-    });
-  };
+  // First visit to a brand-new account: the welcome, which starts the guided
+  // setup. Once everything in it is done: the card that closes it. Otherwise,
+  // once there's something on this page to explain: its tour — but not while
+  // setup is still under way, which has its own guide.
+  useTour("setup.welcome", !loading && !period.loading && nothingLogged && !quest.begun);
+  useTour(
+    "setup.finish",
+    !loading && !nothingLogged && quest.begun && quest.allDone && !quest.finished
+  );
+  useTour("home", !loading && !nothingLogged && !noPeriod && !quest.visible);
+  useTour("tip.overspent", !loading && !nothingLogged && overspent);
 
   // The pace bar. Fill is how much of the period's budget has gone; the tick is
   // where you'd be if you spent evenly. Fill past the tick is the trouble case
@@ -334,67 +271,14 @@ export default function HomePage() {
             />
           )}
 
-          <Card className="mt-[34px]">
-            <CardContent className="p-[18px]">
-              <p className="text-[14px] font-semibold tracking-[-0.01em]">
-                Set Up in {setup.steps.length === 2 ? "Two" : "Three"} Steps
-              </p>
-              {setup.steps.map((step, i) => {
-                // The step to do now, rather than always the first. Once a
-                // window exists, "start a period" is behind you and lighting it
-                // would send the reader back to something they've done — but
-                // while it's still missing, it *is* the step, so `stepIndex`
-                // only applies from the point the window is there.
-                const current = i === (needsPeriod ? 0 : setup.stepIndex);
-                return (
-                  <button
-                    key={step.text}
-                    type="button"
-                    onClick={() => goToStep(step.go)}
-                    className="-mx-1 mt-1 flex w-[calc(100%+0.5rem)] items-start gap-3 rounded-sm px-1 py-2 text-left transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {/* The current step is ink; the rest stay quiet until they
-                        are the one to do. */}
-                    <span
-                      className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
-                        current ? "bg-ink text-surface" : "bg-surface-2 text-ink-3"
-                      }`}
-                    >
-                      {i + 1}
-                    </span>
-                    <span
-                      className={`text-[13px] leading-relaxed ${
-                        current ? "text-ink-2" : "text-ink-3"
-                      }`}
-                    >
-                      {step.text}
-                    </span>
-                  </button>
-                );
-              })}
-
-              {/* Under a rule rather than as a fourth row: it isn't a step, and
-                  numbering it would imply work the reader doesn't have to do.
-                  A button, not a line of prose with a page name in it, because
-                  every other instruction here names a row you have to go and
-                  find — this one can just take you there. */}
-              {setup.alternatives && (
-                <button
-                  type="button"
-                  onClick={() => navigate("/more", { state: { open: "period" } })}
-                  className="mt-3.5 flex w-full items-center gap-1.5 rounded-sm border-t border-hairline pt-3 text-left text-[12.5px] leading-relaxed text-ink-3 transition-colors duration-base ease-out hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span>
-                    {setup.alternatives}{" "}
-                    <span className="font-medium text-ink-2">
-                      Change how you budget
-                    </span>
-                  </span>
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 self-end text-ink-3" />
-                </button>
-              )}
-            </CardContent>
-          </Card>
+          <div className="mt-[34px]">
+            <SetupCard
+              quest={quest}
+              nothingLogged
+              alternatives={setup.alternatives}
+              onChangeMode={() => navigate("/more", { state: { open: "period" } })}
+            />
+          </div>
         </motion.div>
       )}
 
@@ -436,7 +320,10 @@ export default function HomePage() {
           />
         ) : (
           <>
-            <div className="flex flex-col items-center text-center">
+            <div
+              className="flex flex-col items-center text-center"
+              data-tour={loading ? undefined : "home.hero"}
+            >
               {/* Even the overline waits. It names a figure, and a label over a
                   blank is a claim the screen can't back up yet. */}
               {loading ? (
@@ -458,6 +345,9 @@ export default function HomePage() {
                     value={Math.abs(stats?.leftToSpend ?? 0)}
                     prefix={overspent ? "−$" : "$"}
                     decimals={2}
+                    // Remembered across visits: after logging a coffee, this
+                    // is the figure that ticks down by exactly that much.
+                    memoryKey="home.leftToSpend"
                   />
                 </p>
               )}
@@ -474,7 +364,7 @@ export default function HomePage() {
                 pinned one on one line would eventually collide, so the spent
                 label's clamp is told how much of the right-hand end the
                 verdict is occupying and stops before it. */}
-            <div className="mt-[18px]">
+            <div className="mt-[18px]" data-tour={loading ? undefined : "home.pace"}>
               {!loading && (
                 <div className="relative h-[15px]">
                   <TrackingLabel
@@ -494,6 +384,7 @@ export default function HomePage() {
                     <button
                       ref={verdictRef}
                       type="button"
+                      data-tour="home.verdict"
                       onClick={() => navigate("/plan", { state: { focus: "pace" } })}
                       aria-label={`${paceVerdict} — see your pace and forecast`}
                       // The label rides the bar line, so it can only be 15px
@@ -575,7 +466,10 @@ export default function HomePage() {
             )}
 
             {overspent && (
-              <div className="mt-[18px] rounded-md bg-negative/[0.08] p-3.5">
+              <div
+                className="mt-[18px] rounded-md bg-negative/[0.08] p-3.5"
+                data-tour="home.overspent"
+              >
                 <div className="flex items-start gap-2.5">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-negative" />
                   <p className="text-[12.5px] leading-relaxed text-ink-2">
@@ -641,7 +535,8 @@ export default function HomePage() {
         <button
           type="button"
           onClick={() => navigate("/tracker")}
-          className="group mt-[10px] flex w-full items-stretch border-y border-hairline text-center transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          data-tour={loading ? undefined : "home.strip"}
+          className="group mt-[10px] flex w-full items-stretch border-y border-hairline text-center transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <StripCell
             label={stats?.periodFunding == null ? "In" : "Allowance"}
@@ -661,6 +556,15 @@ export default function HomePage() {
           </span>
           <span className="sr-only">See the full breakdown on Tracker</span>
         </button>
+      )}
+
+      {/* Setup, still under way. Below the figures rather than above them:
+          the hero is what the last step just changed, and the reason to look
+          at this page at all. */}
+      {quest.visible && (
+        <div className="mt-4">
+          <SetupCard quest={quest} nothingLogged={false} />
+        </div>
       )}
 
       {/* Today's budget + streak. Not while there's no period: the card's own
@@ -697,7 +601,7 @@ export default function HomePage() {
             type="button"
             onClick={() => navigate("/transactions")}
             aria-label="Recent entries — see all"
-            className="-my-2 flex min-h-[44px] items-center gap-1 rounded-sm py-2 text-left transition-colors duration-base ease-out hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="-my-2 flex min-h-[44px] items-center gap-1 rounded-sm py-2 text-left transition-colors duration-base ease-out hover:text-ink-2 active:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <span className="text-overline text-ink-3">Recent</span>
             <ChevronRight className="h-3.5 w-3.5 text-ink-3" aria-hidden="true" />
@@ -729,7 +633,7 @@ export default function HomePage() {
                 <li key={t._id ?? t.id} className="border-t border-hairline first:border-t-0">
                   <button
                     onClick={() => navigate("/transactions")}
-                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
                     <CategoryIcon category={category} />
                     <span className="min-w-0 flex-1">
@@ -813,7 +717,12 @@ function StripCell({ label, value, loading, accent }) {
             accent ? "text-positive" : "text-ink"
           }`}
         >
-          <AnimatedNumber value={value ?? 0} prefix="$" decimals={2} />
+          <AnimatedNumber
+            value={value ?? 0}
+            prefix="$"
+            decimals={2}
+            memoryKey={`home.strip.${label}`}
+          />
         </p>
       )}
     </div>

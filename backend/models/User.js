@@ -136,6 +136,20 @@ const userSchema = new mongoose.Schema(
         color: { type: String, required: true },
       },
     ],
+    // The tours and tips this person has finished or skipped, as the client
+    // names them: "home@1" for a page tour (the version lets a rewritten tour
+    // show again), "setup.begun" and friends for the first-run quest. The
+    // server keeps the set and nothing else; what each id means is the
+    // client's business.
+    //
+    // On the account rather than in localStorage because an iPhone Home Screen
+    // app doesn't share storage with Safari. Kept per device, adding the app
+    // to the Home Screen — the moment someone is most likely to start using it
+    // every day — would replay every tour they had already been through.
+    tours: { type: [String], default: [] },
+    // Nothing starts on its own. A replay asked for from More still runs:
+    // asking for a tour is the opposite of having turned them off.
+    toursOff: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeftRight } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAccountTotals } from "@/api/endpoints";
@@ -28,11 +29,13 @@ import { fadeUp } from "@/animations/variants";
  *
  * Renders nothing until the user has made an account.
  */
-export default function AccountsCard({ onTransfer = null }) {
+export default function AccountsCard({ onTransfer = null, refreshKey = 0 }) {
   const { hasAccounts } = useAccounts();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // `refreshKey` is the page saying the ledger under this card changed — an
+  // entry added or edited, a transfer made — so the sums are re-fetched.
   const load = useCallback(() => {
     if (!hasAccounts) return;
     setLoading(true);
@@ -41,13 +44,16 @@ export default function AccountsCard({ onTransfer = null }) {
       .catch(() => null)
       .then(setData)
       .finally(() => setLoading(false));
-  }, [hasAccounts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAccounts, refreshKey]);
 
   useEffect(load, [load]);
 
   if (!hasAccounts) return null;
 
-  if (loading) {
+  // Skeleton on the first load only. A refresh keeps the old figures up until
+  // the new ones land, rather than blanking the card each time you log.
+  if (loading && !data) {
     return (
       <Card>
         <CardContent className="space-y-3 p-[18px]">
@@ -101,7 +107,7 @@ export default function AccountsCard({ onTransfer = null }) {
     <motion.div variants={fadeUp} initial="initial" animate="animate">
       <Card>
         <CardContent className="p-[18px]">
-          <div className="flex items-baseline justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-title">Account Activity</h2>
               {/* The card is a set of sums over one window and never says
@@ -114,16 +120,24 @@ export default function AccountsCard({ onTransfer = null }) {
             {/* Transfers move money between the accounts listed right below,
                 so this is where the action belongs — it used to be a
                 full-width button competing with adding a transaction, which
-                is a far more common thing to want. */}
+                is a far more common thing to want.
+
+                A filled secondary button rather than bare text. As ink-2 text
+                with an icon it sat level with the period caption beside it and
+                read as another label on the card; the well is what says
+                "press me" without competing with the add button. */}
             {onTransfer && (
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={onTransfer}
-                className="flex shrink-0 items-center gap-1.5 rounded-sm text-[12.5px] font-medium text-ink-2 transition-colors duration-base ease-out hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                data-tour="tx.transfer"
+                className="shrink-0 gap-1.5 px-3 text-[12.5px]"
               >
                 <ArrowLeftRight className="h-3.5 w-3.5" />
                 Transfer
-              </button>
+              </Button>
             )}
           </div>
 

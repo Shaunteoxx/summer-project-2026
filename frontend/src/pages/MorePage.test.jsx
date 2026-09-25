@@ -55,6 +55,9 @@ vi.mock("@/hooks/useToast", () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }),
 }));
 vi.mock("@/hooks/useDemoGuard", () => ({ useDemoGuard: () => () => false }));
+// A phone unless a test says otherwise; the vibration switch only exists there.
+let mockCoarse = true;
+vi.mock("@/hooks/useCoarsePointer", () => ({ useCoarsePointer: () => mockCoarse }));
 vi.mock("@/hooks/useAccounts", () => ({ useAccounts: () => ({ active: [] }) }));
 vi.mock("@/hooks/useCategories", () => ({ useCategories: () => ({ custom: [] }) }));
 vi.mock("@/hooks/useRecurring", () => ({
@@ -102,6 +105,7 @@ const renderAt = (entry = "/more") =>
 beforeEach(() => {
   vi.clearAllMocks();
   mockPeriod = monthPeriod();
+  mockCoarse = true;
 });
 
 describe("switching budget mode", () => {
@@ -163,5 +167,30 @@ describe("deep-linked sheets", () => {
     );
     // No deep link, so no auto-return.
     expect(navigate).not.toHaveBeenCalledWith(-1);
+  });
+});
+
+describe("the vibration setting", () => {
+  it("is on by default on a phone", () => {
+    renderAt();
+    expect(screen.getByRole("switch", { name: /Vibration/ })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("turns off with one tap, and stays off on this device", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderAt();
+    await user.click(screen.getByRole("switch", { name: /Vibration/ }));
+    expect(screen.getByRole("switch", { name: /Vibration/ })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByText("Off on this device")).toBeInTheDocument();
+
+    unmount();
+    renderAt();
+    expect(screen.getByRole("switch", { name: /Vibration/ })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("isn't offered on a computer, which has nothing to vibrate", () => {
+    mockCoarse = false;
+    renderAt();
+    expect(screen.queryByRole("switch", { name: /Vibration/ })).not.toBeInTheDocument();
   });
 });

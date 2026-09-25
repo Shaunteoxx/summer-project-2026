@@ -128,7 +128,7 @@ export default function TransferSheet({ open, onClose, onTransferred }) {
                       ? `Amount, ${amountDisplay} dollars. Opens calculator.`
                       : "Amount, not set. Opens calculator."
                   }
-                  className="flex h-11 w-full items-center justify-between gap-2 rounded-md border border-hairline-strong bg-surface px-3 py-2 text-base transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-11 w-full items-center justify-between gap-2 rounded-md border border-hairline-strong bg-surface px-3 py-2 text-base transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <span
                     className={cn(
@@ -201,7 +201,7 @@ function AccountRow({ label, value, onChange, accounts }) {
               className={`flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 selected
                   ? "border-transparent"
-                  : "border-hairline-strong text-ink-2 hover:bg-surface-2"
+                  : "border-hairline-strong text-ink-2 hover:bg-surface-2 active:bg-surface-3"
               }`}
               style={
                 selected

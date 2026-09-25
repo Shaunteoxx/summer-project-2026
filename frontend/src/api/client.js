@@ -34,15 +34,30 @@ export function clearToken() {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
-/** Epoch ms this token expires, or null if it carries no readable `exp`. */
-function tokenExpiry(token) {
+/** The token's claims, or null if it has none that parse. */
+function tokenClaims(token) {
   try {
     const payload = token.split(".")[1];
-    const { exp } = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
-    return typeof exp === "number" ? exp * 1000 : null;
+    return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
   } catch {
     return null;
   }
+}
+
+/** Epoch ms this token expires, or null if it carries no readable `exp`. */
+function tokenExpiry(token) {
+  const exp = tokenClaims(token)?.exp;
+  return typeof exp === "number" ? exp * 1000 : null;
+}
+
+/**
+ * The signed-in user's id, read from the token without a request — for keying
+ * per-user state kept on the device. Not a security check: nothing here
+ * verifies the signature, and nothing that uses it needs one.
+ */
+export function tokenUserId() {
+  const token = getToken();
+  return token ? (tokenClaims(token)?.id ?? null) : null;
 }
 
 /**

@@ -44,6 +44,13 @@ export const deleteAccount = () =>
 export const setMonthlySavings = (payload) =>
   api.put("/auth/savings", payload).then((r) => r.data);
 
+// --- Tours ---
+// Which tours have run, saved on the account (see User.tours).
+export const markTours = (ids) =>
+  api.post("/auth/tours", { ids }).then((r) => r.data);
+export const forgetTours = (ids) =>
+  api.post("/auth/tours/forget", { ids }).then((r) => r.data);
+
 // --- Bank accounts ---
 // Created/edited through /auth because they are embedded on the user; the
 // /accounts endpoint below is the read-only per-period totals view.

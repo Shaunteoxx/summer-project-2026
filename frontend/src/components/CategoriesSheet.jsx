@@ -107,7 +107,7 @@ export default function CategoriesSheet({ open, onClose }) {
               className={`rounded-[9px] py-1.5 text-[13px] transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 type === opt.value
                   ? "bg-surface font-semibold text-ink shadow-card dark:bg-surface-3"
-                  : "font-medium text-ink-3 hover:text-ink-2"
+                  : "font-medium text-ink-3 hover:text-ink-2 active:opacity-60"
               }`}
             >
               {opt.label}

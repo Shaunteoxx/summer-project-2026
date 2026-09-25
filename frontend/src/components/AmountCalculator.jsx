@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Delete } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { haptic } from "@/lib/haptics";
 import { cn, formatMoney } from "@/lib/utils";
 import { applyKey, evaluate, formatExpression, roundMoney, stateFromValue } from "@/lib/calc";
 
@@ -31,11 +32,11 @@ const TONES = {
  * Three tiers, one ramp — the keypad reads as depth without a single shadow.
  */
 const KEY_TONES = {
-  digit: "bg-surface-2 text-ink hover:bg-surface-3",
+  digit: "bg-surface-2 text-ink hover:bg-surface-3 active:bg-hairline-strong",
   operator: "bg-surface-3 text-ink hover:bg-hairline-strong",
-  equals: "bg-ink text-surface hover:bg-ink-2",
+  equals: "bg-ink text-surface hover:bg-ink-2 active:bg-ink-2",
   // Legible rather than loud: clearing is secondary, but not a whisper.
-  utility: "bg-surface-2 text-ink-2 hover:bg-surface-3",
+  utility: "bg-surface-2 text-ink-2 hover:bg-surface-3 active:bg-hairline-strong",
 };
 
 // 4 columns × 5 rows. Spans are chosen so every row fills exactly 4 columns.
@@ -220,7 +221,11 @@ export default function AmountCalculator({ initialValue, tone, onApply, onCancel
           <motion.button
             key={key}
             type="button"
-            onClick={() => press(key)}
+            onClick={() => {
+              // Taps only: a hardware keyboard has keys you can feel already.
+              haptic();
+              press(key);
+            }}
             aria-label={ariaLabel}
             whileTap={reduceMotion ? undefined : { scale: 0.94 }}
             transition={{ type: "spring", stiffness: 400, damping: 17 }}

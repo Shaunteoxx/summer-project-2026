@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { cn, localToday } from "@/lib/utils";
 import { formatDay } from "@/lib/period";
+import { useTour } from "@/tour/TourProvider";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
 
 export default function FriendsPage() {
@@ -29,6 +30,8 @@ export default function FriendsPage() {
   const [searching, setSearching] = useState(false);
   const [requests, setRequests] = useState([]);
   const [comparison, setComparison] = useState(null);
+  useTour("friends", Boolean(comparison));
+  useTour("tip.friend-request", requests.length > 0);
   // The leaderboard's "you're the only one here" note acts on this rather than
   // naming another screen: the field is already on the page, just scrolled off
   // the top by the time you've read down to the note.
@@ -124,6 +127,7 @@ export default function FriendsPage() {
         animate="animate"
         onSubmit={handleSearch}
         className="relative mt-4"
+        data-tour="friends.search"
       >
         <Search
           className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3"
@@ -174,7 +178,7 @@ export default function FriendsPage() {
       )}
 
       {requests.length > 0 && (
-        <ListSection label={`Requests · ${requests.length}`}>
+        <ListSection label={`Requests · ${requests.length}`} data-tour="friends.requests">
           <motion.ul
             variants={staggerContainer(0.08, 0.05)}
             initial="initial"
@@ -216,7 +220,7 @@ export default function FriendsPage() {
       {/* Leaderboard. The bars are gone: with a rank column and the rate
           written out, a bar scaled to the leader added a second encoding of
           the same number and made a list of five people look like a chart. */}
-      <section className="mt-6">
+      <section className="mt-6" data-tour={comparison ? "friends.leaderboard" : undefined}>
         <h2 className="mb-2.5 px-0.5 text-overline text-ink-3">Leaderboard</h2>
         {!comparison ? (
           <div className="border-y border-hairline bg-surface">
@@ -287,7 +291,7 @@ export default function FriendsPage() {
                   });
                   searchRef.current?.focus();
                 }}
-                className="mt-3 flex w-full items-center gap-1.5 rounded-sm px-0.5 text-left text-[13px] leading-relaxed text-ink-3 transition-colors duration-base ease-out hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-3 flex w-full items-center gap-1.5 rounded-sm px-0.5 text-left text-[13px] leading-relaxed text-ink-3 transition-colors duration-base ease-out hover:text-ink-2 active:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span>
                   Add friends to compare your savings with theirs.{" "}
@@ -304,9 +308,10 @@ export default function FriendsPage() {
 }
 
 /** An overline-labelled group of rows in one card. */
-function ListSection({ label, children }) {
+function ListSection({ label, children, ...rest }) {
   return (
     <motion.section
+      {...rest}
       variants={fadeUp}
       initial="initial"
       animate="animate"
@@ -337,8 +342,8 @@ function PillButton({ children, variant, ...props }) {
         "transition-colors duration-base ease-out",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         variant === "outline"
-          ? "border border-hairline-strong font-medium text-ink-2 hover:bg-surface-2"
-          : "bg-ink font-semibold text-surface hover:bg-ink-2"
+          ? "border border-hairline-strong font-medium text-ink-2 hover:bg-surface-2 active:bg-surface-3"
+          : "bg-ink font-semibold text-surface hover:bg-ink-2 active:bg-ink-2"
       )}
     >
       {children}

@@ -23,6 +23,8 @@ import TransferSheet from "@/components/TransferSheet";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import CategoryIcon from "@/components/CategoryIcon";
 import RepeatBadge, { ruleFor } from "@/components/RepeatBadge";
+import SegmentPill from "@/components/SegmentPill";
+import SwipeToDelete from "@/components/SwipeToDelete";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,9 +44,24 @@ import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useRecurring } from "@/hooks/useRecurring";
-import { fadeUp } from "@/animations/variants";
+import { useTour } from "@/tour/TourProvider";
+import { DUR, EASE, fadeUp } from "@/animations/variants";
 
 const DELETE_GRACE_MS = 10000;
+
+// How a deleted row leaves. The trash button slides it right and fades it,
+// which is what says the delete can still be undone. A swipe has already
+// carried the row off to the left, so what's left is the red strip, and that
+// folds shut instead — the rows below close the gap rather than jumping it.
+const BUTTON_EXIT = { opacity: 0, x: 24, transition: { duration: 0.25 } };
+const SWIPE_EXIT = { height: 0, opacity: 0, transition: { duration: 0.22, ease: EASE } };
+
+// Let the sheet finish leaving before the page moves under it, so the scroll
+// to a new row reads as a second step rather than a lurch behind the sheet.
+const AFTER_SHEET_MS = DUR.sheet * 1000 + 40;
+// Longer than the row-land animation (0.3s delay + 2.2s). After it the tint is
+// dropped, or leaving a filter and coming back would remount it and replay it.
+const LANDED_MS = 2800;
 
 /**
  * What the undo toast says after a delete.
@@ -60,6 +77,13 @@ export function deletedMessage(transaction, rules) {
   const next = rule.frequency === "weekly" ? "next week" : "next month";
   return `Deleted this one. ${rule.description} still repeats ${next}.`;
 }
+
+/**
+ * A row's React key and DOM handle. An entry added here keeps the provisional
+ * key it was drawn with even after the server gives it a real id, so the row
+ * doesn't remount — and replay or lose its highlight — the moment it's saved.
+ */
+const rowKey = (t) => t.clientKey ?? t._id;
 
 const FILTERS = [
   { value: "all", label: "All" },
@@ -98,6 +122,9 @@ export default function TransactionsPage() {
   // The row the sheet is editing, or null. Mutually exclusive with formType —
   // the sheet is one sheet, and it is either adding or correcting.
   const [editing, setEditing] = useState(null);
+  // A save that failed after the sheet closed: the draft and the reason, for
+  // the sheet to reopen on. Cleared whenever the sheet closes.
+  const [restore, setRestore] = useState(null);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   // "" is every account; an id narrows to one.
@@ -107,6 +134,18 @@ export default function TransactionsPage() {
 
   // Pending deletes awaiting their 10s undo window: id -> timeout handle.
   const pendingDeletes = useRef(new Map());
+  // The row that just arrived — added, edited or undeleted — so it can be
+  // highlighted and scrolled to. `n` changes every time, so landing the same
+  // row twice replays the highlight.
+  const [landed, setLanded] = useState(null);
+  const land = (key) => setLanded({ key, n: Date.now() });
+  // The row deleted by swiping, if the last delete was one. Read by the exit
+  // animation through AnimatePresence, since a removed row can't take props.
+  const [swipedId, setSwipedId] = useState(null);
+  // Bumped whenever the ledger changes in a way the Account Activity card
+  // above sums over, so it re-fetches instead of showing the old totals.
+  const [ledgerVersion, setLedgerVersion] = useState(0);
+  const touchedLedger = () => setLedgerVersion((v) => v + 1);
 
   const now = new Date();
   const budgetPeriod = useBudgetPeriod();
@@ -158,8 +197,58 @@ export default function TransactionsPage() {
       ? createdYmd >= current.start && createdYmd <= current.end
       : new Date(created.date).getUTCMonth() === now.getMonth() &&
         new Date(created.date).getUTCFullYear() === now.getFullYear();
-    if (inView) setTransactions((prev) => [created, ...prev]);
+    if (inView) {
+      setTransactions((prev) => [created, ...prev]);
+      land(rowKey(created));
+    }
   };
+
+  /**
+   * The server has the entry the sheet already put here. Swap in its version
+   * — real id, anything it normalised — and let the totals above catch up.
+   */
+  const handleSaved = ({ key, row }) => {
+    setTransactions((prev) =>
+      prev.map((t) => (rowKey(t) === key ? { ...row, clientKey: t.clientKey } : t))
+    );
+    touchedLedger();
+  };
+
+  /**
+   * The server refused, after the sheet had closed on it. Take the new row
+   * back out, or put the row as it was back in, and reopen the sheet on what
+   * was typed so nothing has to be entered twice.
+   */
+  const handleSaveFailed = ({ key, original, retry }) => {
+    setTransactions((prev) => {
+      if (!original) return prev.filter((t) => rowKey(t) !== key);
+      return prev.some((t) => t._id === original._id)
+        ? prev.map((t) => (t._id === original._id ? original : t))
+        : [original, ...prev];
+    });
+    if (!retry) return;
+    setRestore(retry);
+    if (original) setEditing(original);
+    else setFormType(retry.type);
+  };
+
+  // Show where the entry went. A backdated one lands among older days, maybe
+  // well below the fold, and the highlight is no use on a row you can't see.
+  // "nearest" leaves the page alone when it's already on screen.
+  useEffect(() => {
+    if (!landed) return;
+    const scroll = setTimeout(() => {
+      document
+        .querySelector(`[data-entry-key="${landed.key}"]`)
+        // Optional: jsdom doesn't implement it.
+        ?.scrollIntoView?.({ block: "nearest" });
+    }, AFTER_SHEET_MS);
+    const done = setTimeout(() => setLanded(null), LANDED_MS);
+    return () => {
+      clearTimeout(scroll);
+      clearTimeout(done);
+    };
+  }, [landed]);
 
   /**
    * An edit can move a row out of the window being listed — re-dating a lunch
@@ -174,9 +263,12 @@ export default function TransactionsPage() {
         new Date(updated.date).getUTCFullYear() === now.getFullYear();
     setTransactions((prev) =>
       inView
-        ? prev.map((t) => (t._id === updated._id ? updated : t))
+        ? prev.map((t) =>
+            t._id === updated._id ? { ...updated, clientKey: t.clientKey } : t
+          )
         : prev.filter((t) => t._id !== updated._id)
     );
+    if (inView) land(rowKey(updated));
   };
 
   const totals = transactions.reduce(
@@ -286,6 +378,13 @@ export default function TransactionsPage() {
     });
   })();
 
+  // The row the page tour points at: the first you could open right now. A
+  // pending one can't be edited until the server has it.
+  const tourRow = visible.find((e) => e.kind === "txn" && !e.row.pending)?.row ?? null;
+  useTour("transactions", !loading && hasEntries);
+  useTour("tip.repeating", !loading && visibleTransactions.some((t) => t.recurringId));
+  useTour("tip.accounts", !loading && hasEntries && hasAccounts && accounts.length > 1);
+
 
   /**
    * Same optimistic-with-undo shape as a transaction delete, but transfers are
@@ -313,7 +412,7 @@ export default function TransactionsPage() {
   };
 
   // Optimistically remove, then commit the server delete after a 10s undo window.
-  const handleDelete = (id) => {
+  const handleDelete = (id, { swiped = false } = {}) => {
     if (guard()) return;
     const index = transactions.findIndex((t) => t._id === id);
     if (index === -1) return;
@@ -327,6 +426,7 @@ export default function TransactionsPage() {
         return next;
       });
 
+    setSwipedId(swiped ? id : null);
     setTransactions((prev) => prev.filter((t) => t._id !== id));
 
     const timer = setTimeout(() => {
@@ -351,6 +451,7 @@ export default function TransactionsPage() {
             pendingDeletes.current.delete(id);
           }
           restore();
+          land(rowKey(removed));
         },
       },
     });
@@ -381,8 +482,11 @@ export default function TransactionsPage() {
       {/* Account activity — above the search and filter row on purpose. It
           summarises the whole period, so it belongs above the controls that
           narrow it, keeping the filters adjacent to the rows they filter. */}
-      <div className="mt-[15px]">
-        <AccountsCard onTransfer={accounts.length > 1 ? () => setTransferOpen(true) : null} />
+      <div className="mt-[15px]" data-tour="tx.accounts">
+        <AccountsCard
+          onTransfer={accounts.length > 1 ? () => setTransferOpen(true) : null}
+          refreshKey={ledgerVersion}
+        />
       </div>
 
       {/* No Income/Expense buttons here any more. The sheet carries its own
@@ -395,17 +499,27 @@ export default function TransactionsPage() {
       <AddTransactionSheet
         type={formType}
         editing={editing}
+        restore={restore}
         onClose={() => {
           setFormType(null);
           setEditing(null);
+          setRestore(null);
         }}
         onAdded={handleAdded}
         onUpdated={handleUpdated}
+        onSaved={handleSaved}
+        onFailed={handleSaveFailed}
       />
 
       <TransferSheet
         open={transferOpen}
         onClose={() => setTransferOpen(false)}
+        // The new transfer belongs in the ledger and in the card's columns
+        // straight away, not after the next visit.
+        onTransferred={() => {
+          load();
+          touchedLedger();
+        }}
       />
 
       {/* Search, with the account filter beside it. Type and account are not
@@ -416,7 +530,7 @@ export default function TransactionsPage() {
           two accounts or eight. */}
       {!loading && hasEntries && (
         <div className="mt-6 flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
+          <div className="relative min-w-0 flex-1" data-tour="tx.search">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
             <Input
               type="search"
@@ -439,7 +553,7 @@ export default function TransactionsPage() {
                 type="button"
                 onClick={() => setQuery("")}
                 aria-label="Clear search"
-                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -450,6 +564,7 @@ export default function TransactionsPage() {
             <button
               type="button"
               onClick={() => setAccountPickerOpen(true)}
+              data-tour="tx.account-filter"
               aria-label={
                 selectedAccount
                   ? `Filtering by ${selectedAccount.name}. Change account`
@@ -458,7 +573,7 @@ export default function TransactionsPage() {
               className={`flex h-11 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 selectedAccount
                   ? "border-ink/40 bg-ink/[0.06] text-ink"
-                  : "border-hairline-strong text-ink-2 hover:bg-surface-2"
+                  : "border-hairline-strong text-ink-2 hover:bg-surface-2 active:bg-surface-3"
               }`}
             >
               {selectedAccount ? (
@@ -483,8 +598,13 @@ export default function TransactionsPage() {
         <div
           role="group"
           aria-label="Filter by type"
-          className="mt-3 flex gap-0.5 rounded-md bg-surface-2 p-[3px]"
+          data-tour="tx.types"
+          className="relative mt-3 flex gap-0.5 rounded-md bg-surface-2 p-[3px]"
         >
+          <SegmentPill
+            index={FILTERS.findIndex((f) => f.value === filter)}
+            count={FILTERS.length}
+          />
           {FILTERS.map((f) => (
             <button
               key={f.value}
@@ -492,17 +612,10 @@ export default function TransactionsPage() {
               className={`relative flex-1 rounded-[9px] px-3 py-1.5 text-[13px] transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 filter === f.value
                   ? "text-foreground"
-                  : "font-medium text-ink-3 hover:text-ink-2"
+                  : "font-medium text-ink-3 hover:text-ink-2 active:opacity-60"
               }`}
             >
-              {filter === f.value && (
-                <motion.span
-                  layoutId="tx-filter-pill"
-                  className="absolute inset-0 rounded-[9px] bg-surface shadow-card dark:bg-surface-3"
-                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                />
-              )}
-              <span className="relative">{f.label}</span>
+              {f.label}
             </button>
           ))}
         </div>
@@ -594,9 +707,12 @@ export default function TransactionsPage() {
              day it belongs to, and the repetition is what made the list read as
              noisy rather than as a register. */
           <div>
-            {days.map(({ key, entries, net, counted, label }) => (
+            {days.map(({ key, entries, net, counted, label }, dayIndex) => (
               <section key={key} className="mt-4 first:mt-0">
-                <header className="flex items-baseline justify-between gap-3 pb-2">
+                <header
+                  className="flex items-baseline justify-between gap-3 pb-2"
+                  data-tour={dayIndex === 0 ? "tx.day" : undefined}
+                >
                   <h2 className="text-overline text-ink-3">{label}</h2>
                   <span
                     className={cn(
@@ -622,7 +738,7 @@ export default function TransactionsPage() {
                     isn't leaving, it was never in this result: it goes at
                     once, and only a row you actually deleted animates out. */}
                 <ul className="-mx-4 border-y border-hairline bg-surface [&>*+*]:border-t [&>*+*]:border-hairline">
-                  <AnimatePresence initial={false}>
+                  <AnimatePresence initial={false} custom={swipedId}>
                     {entries.map((entry) => {
                       if (entry.kind === "transfer") {
                         const m = entry.row;
@@ -646,69 +762,106 @@ export default function TransactionsPage() {
                       // blank row until the next reload. Only the exit is
                       // animated, because a delete is undoable and the slide is
                       // what says so.
+                      //
+                      // What marks a new row instead is a tint laid *over* it
+                      // that fades away. The row itself is at full opacity from
+                      // its first frame, so a stalled animation can only ever
+                      // leave a faint highlight, never a blank.
                       return (
                         <motion.li
-                          key={t._id}
-                          exit={{ opacity: 0, x: 24, transition: { duration: 0.25 } }}
-                          className="flex items-center gap-1 px-4 py-[13px]"
+                          key={rowKey(t)}
+                          data-entry-key={rowKey(t)}
+                          data-tour={t === tourRow ? "tx.row" : undefined}
+                          custom={swipedId}
+                          variants={{
+                            exit: (swiped) => (swiped === t._id ? SWIPE_EXIT : BUTTON_EXIT),
+                          }}
+                          exit="exit"
+                          // Margins clear the sticky header above and the tab
+                          // bar plus add button below when this is scrolled to.
+                          className="relative overflow-hidden scroll-mt-[72px] scroll-mb-[calc(148px+env(safe-area-inset-bottom))]"
                         >
-                          {/* The row itself opens the edit sheet. Everything but
-                              the delete button is one target, so a mistyped
-                              amount is a tap on the amount to fix — delete stays
-                              a separate, deliberate button beside it. */}
-                          <button
-                            type="button"
-                            onClick={() => setEditing(t)}
-                            aria-label={`Edit ${t.description}`}
-                            className="-my-1 flex min-w-0 flex-1 items-center gap-3 rounded-sm py-1 text-left transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          <SwipeToDelete
+                            onDelete={() => handleDelete(t._id, { swiped: true })}
+                            // Not yet saved: no server id to edit or delete by.
+                            disabled={t.pending}
+                            className="flex items-center gap-1 px-4 py-[13px]"
                           >
-                            <CategoryIcon category={cat} />
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-center gap-1.5 text-[15px] font-medium tracking-[-0.01em]">
-                                <span className="truncate">{t.description}</span>
-                                {/* Rows written by a repeating entry say so.
-                                    Nobody typed them, so without this they read
-                                    as entries you don't remember making. */}
-                                <RepeatBadge transaction={t} />
-                              </span>
-                              {/* The date has moved to the day header, so the
-                                  meta line is category and account — plus, on a
-                                  shared bill, what came back. The figure on the
-                                  right is then your share, so the line says what
-                                  it was a share of. */}
-                              <span className="mt-0.5 block truncate text-meta text-ink-3">
-                                {t.category}
-                                {t.paidBack > 0 && (
-                                  <>
-                                    {" "}· {formatMoney(t.paidBack)} of {formatMoney(t.amount)} paid
-                                    back
-                                  </>
-                                )}
-                                {account && <> · {account.name}</>}
-                              </span>
-                            </span>
-                            <span
-                              className={cn(
-                                "num shrink-0 text-[15px] font-medium",
-                                isIncome ? "text-positive" : "text-ink"
-                              )}
+                            {/* The row itself opens the edit sheet. Everything but
+                                the delete button is one target, so a mistyped
+                                amount is a tap on the amount to fix — delete stays
+                                a separate, deliberate button beside it. */}
+                            <button
+                              type="button"
+                              onClick={() => setEditing(t)}
+                              disabled={t.pending}
+                              aria-label={`Edit ${t.description}`}
+                              className="-my-1 flex min-w-0 flex-1 items-center gap-3 rounded-sm py-1 text-left transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                              {isIncome ? "+" : "−"}
-                              {formatMoney(countedAmount(t))}
-                            </span>
-                          </button>
-                          <button
-                            onClick={() => handleDelete(t._id)}
-                            aria-label={`Delete ${t.description}`}
-                            // 44px of target in a 36px-looking button. It grows
-                            // to the RIGHT, into the row's own px-4 padding —
-                            // widening it leftward instead would close the 4px
-                            // gap to the edit button beside it, and a mis-tap
-                            // there deletes rather than opens.
-                            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                              <CategoryIcon category={cat} />
+                              <span className="min-w-0 flex-1">
+                                <span className="flex items-center gap-1.5 text-[15px] font-medium tracking-[-0.01em]">
+                                  <span className="truncate">{t.description}</span>
+                                  {/* Rows written by a repeating entry say so.
+                                      Nobody typed them, so without this they read
+                                      as entries you don't remember making. */}
+                                  <RepeatBadge transaction={t} />
+                                </span>
+                                {/* The date has moved to the day header, so the
+                                    meta line is category and account — plus, on a
+                                    shared bill, what came back. The figure on the
+                                    right is then your share, so the line says what
+                                    it was a share of. */}
+                                <span className="mt-0.5 block truncate text-meta text-ink-3">
+                                  {t.category}
+                                  {t.paidBack > 0 && (
+                                    <>
+                                      {" "}· {formatMoney(t.paidBack)} of {formatMoney(t.amount)} paid
+                                      back
+                                    </>
+                                  )}
+                                  {account && <> · {account.name}</>}
+                                  {/* Only if the save is slow enough to notice:
+                                      the fade holds back ~0.4s, so a normal
+                                      save confirms before this ever shows. */}
+                                  {t.pending && (
+                                    <span className="opacity-0 motion-safe:animate-fade-in-delayed motion-reduce:opacity-100">
+                                      {" "}· Saving…
+                                    </span>
+                                  )}
+                                </span>
+                              </span>
+                              <span
+                                className={cn(
+                                  "num shrink-0 text-[15px] font-medium",
+                                  isIncome ? "text-positive" : "text-ink"
+                                )}
+                              >
+                                {isIncome ? "+" : "−"}
+                                {formatMoney(countedAmount(t))}
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => handleDelete(t._id)}
+                              disabled={t.pending}
+                              aria-label={`Delete ${t.description}`}
+                              // 44px of target in a 36px-looking button. It grows
+                              // to the RIGHT, into the row's own px-4 padding —
+                              // widening it leftward instead would close the 4px
+                              // gap to the edit button beside it, and a mis-tap
+                              // there deletes rather than opens.
+                              className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] active:bg-negative/[0.14] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </SwipeToDelete>
+                          {landed?.key === rowKey(t) && (
+                            <span
+                              key={landed.n}
+                              aria-hidden="true"
+                              className="pointer-events-none absolute inset-0 animate-row-land bg-ink/[0.07]"
+                            />
+                          )}
                         </motion.li>
                       );
                     })}
@@ -757,7 +910,7 @@ function TransferRow({ transfer, from, to, onDelete }) {
         type="button"
         onClick={onDelete}
         aria-label={`Delete transfer of ${formatMoney(transfer.amount)}`}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] active:bg-negative/[0.14] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Trash2 className="h-4 w-4" />
       </button>
@@ -790,7 +943,7 @@ function AccountFilterSheet({ open, onClose, accounts, selectedId, onSelect }) {
                 className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   selected
                     ? "border-ink/40 bg-ink/[0.06] text-ink"
-                    : "border-hairline-strong hover:bg-surface-2"
+                    : "border-hairline-strong hover:bg-surface-2 active:bg-surface-3"
                 }`}
               >
                 {a.color ? (

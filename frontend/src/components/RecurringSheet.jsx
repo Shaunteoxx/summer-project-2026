@@ -392,7 +392,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                   className={`rounded-[9px] py-1.5 text-[13px] transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     form.frequency === opt.value
                       ? "bg-surface font-semibold text-ink shadow-card"
-                      : "font-medium text-ink-3 hover:text-ink-2"
+                      : "font-medium text-ink-3 hover:text-ink-2 active:opacity-60"
                   }`}
                 >
                   {opt.label}
@@ -405,7 +405,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
               onClick={() => setDayPickerOpen((v) => !v)}
               aria-expanded={dayPickerOpen}
               aria-label={`${scheduleLabel}. Choose day`}
-              className="flex h-[46px] w-full min-w-0 items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-[46px] w-full min-w-0 items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 active:bg-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <CalendarDays className="h-[15px] w-[15px] shrink-0 text-ink-3" />
               <span className="min-w-0 flex-1 truncate text-left font-medium">
@@ -435,7 +435,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                       aria-label={weekly ? WEEKDAY_NAMES[index] : ordinal(option)}
                       className={cn(
                         "num grid h-9 place-items-center rounded-[9px] text-[13px] font-medium transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        selected ? "bg-ink text-surface" : "bg-surface text-ink-2 hover:bg-surface-3"
+                        selected ? "bg-ink text-surface" : "bg-surface text-ink-2 hover:bg-surface-3 active:bg-hairline-strong"
                       )}
                     >
                       {weekly ? option.slice(0, 2) : option}
@@ -489,7 +489,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                         type="button"
                         onClick={() => startEditing(rule)}
                         aria-label={`Edit ${rule.description}`}
-                        className="-m-1 min-w-0 flex-1 rounded-sm p-1 text-left transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="-m-1 min-w-0 flex-1 rounded-sm p-1 text-left transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <span className="flex items-baseline gap-2">
                           <span className="truncate text-[15px] font-medium tracking-[-0.01em]">{rule.description}</span>
@@ -516,7 +516,7 @@ export default function RecurringSheet({ open, onClose, rules, onAdd, onUpdate, 
                             type="button"
                             onClick={() => handlePause(rule)}
                             aria-label={`${rule.paused ? "Resume" : "Pause"} ${rule.description}`}
-                            className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             {rule.paused ? (
                               <Play className="h-4 w-4" />

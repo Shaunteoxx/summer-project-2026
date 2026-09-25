@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { cn, formatMoney } from "@/lib/utils";
 import { formatPeriodLabel } from "@/lib/period";
+import { emitTour } from "@/tour/signals";
 import { fadeUp } from "@/animations/variants";
 
 /**
@@ -67,6 +68,7 @@ export default function SavingsGoalCard({
         await refresh();
       }
       setOpen(false);
+      emitTour("savings:saved");
       toast.success(
         amount > 0
           ? `Savings goal set for ${label}`
@@ -120,7 +122,7 @@ export default function SavingsGoalCard({
                   aria-label="Edit savings target"
                   // -my-2/-mr-1 keeps the label where the header row put it
                   // while the target underneath grows to 44px high.
-                  className="-my-2 -mr-1 flex min-h-[44px] items-center rounded-sm px-2 py-1 text-[12.5px] font-medium text-ink-2 transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="-my-2 -mr-1 flex min-h-[44px] items-center rounded-sm px-2 py-1 text-[12.5px] font-medium text-ink-2 transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Edit
                 </button>

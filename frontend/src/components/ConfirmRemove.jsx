@@ -26,7 +26,7 @@ export default function ConfirmRemove({ name, armed, onArm, onConfirm, onCancel,
         onClick={onArm}
         disabled={disabled}
         aria-label={`Remove ${name}`}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] active:bg-negative/[0.14] hover:text-negative disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Trash2 className="h-4 w-4" />
       </button>
@@ -42,7 +42,7 @@ export default function ConfirmRemove({ name, armed, onArm, onConfirm, onCancel,
         // Contains the visible word, so voice control can say what it sees.
         aria-label={`Yes, remove ${name}`}
         className={cn(
-          "flex h-9 items-center gap-1.5 rounded-sm bg-negative/[0.08] px-2.5 text-[12.5px] font-semibold text-negative transition-colors duration-base ease-out hover:bg-negative/[0.14] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
+          "flex h-9 items-center gap-1.5 rounded-sm bg-negative/[0.08] px-2.5 text-[12.5px] font-semibold text-negative transition-colors duration-base ease-out hover:bg-negative/[0.14] active:bg-negative/[0.2] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
         )}
       >
         <Trash2 className="h-3.5 w-3.5" />
@@ -53,7 +53,7 @@ export default function ConfirmRemove({ name, armed, onArm, onConfirm, onCancel,
         onClick={onCancel}
         disabled={disabled}
         aria-label={`Keep ${name}`}
-        className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 hover:text-ink disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <X className="h-4 w-4" />
       </button>

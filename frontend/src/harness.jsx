@@ -10,7 +10,7 @@
  *
  * Query params:
  *   theme   light | dark              (default dark; applied in harness.html)
- *   view    calculator | savings | stats | keyboard  (default calculator)
+ *   view    calculator | savings | stats | keyboard | badges  (default calculator)
  *   tone    destructive | success     expense or income styling (calculator)
  *   amount  seed value for the field, e.g. 48
  *   repeat  1 to start the savings view's toggle switched on
@@ -37,6 +37,8 @@ import { AuthProvider } from "./hooks/useAuth.jsx";
 import { BudgetPeriodProvider } from "./hooks/useBudgetPeriod.jsx";
 import AmountCalculator from "./components/AmountCalculator.jsx";
 import SwitchRow from "./components/SwitchRow.jsx";
+import StreakBadge from "./components/StreakBadge.jsx";
+import { badgeAt } from "./lib/streakBadges.js";
 import { LensTab, StatTile } from "./pages/StatsPage.jsx";
 import { SavedVsSpentCard, CategoryCard, TermCard } from "./pages/TrackerPage.jsx";
 import {
@@ -70,6 +72,7 @@ const I = {
 import { ThemeProvider } from "./hooks/useTheme.jsx";
 import { useChartColors } from "./hooks/useChartColors.js";
 import { Button } from "./components/ui/button.jsx";
+import { Card, CardContent } from "./components/ui/card.jsx";
 import { Input } from "./components/ui/input.jsx";
 import { Label } from "./components/ui/label.jsx";
 import "./index.css";
@@ -1164,7 +1167,48 @@ const VIEWS = {
   friends: FriendsView,
   grouped: LedgerGroupedView,
   hero: HeroView,
+  badges: BadgesView,
 };
+
+/**
+ * The streak badge ladder, earned and locked, at the size the streak card uses
+ * and larger — the one place every tier can be compared side by side.
+ */
+function BadgesView() {
+  const tiers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 20];
+  return (
+    <div className="mx-auto max-w-app space-y-4 bg-canvas p-4">
+      <Card>
+        <CardContent className="grid grid-cols-5 gap-y-5 p-5">
+          {tiers.map((t) => {
+            const b = badgeAt(t);
+            return (
+              <div key={t} className="flex flex-col items-center gap-1.5">
+                <StreakBadge badge={b} size={42} />
+                <span className="text-[11px] font-medium text-ink-2">{b.label}</span>
+                <span className="num text-[10px] text-ink-3">{b.days}d</span>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="flex items-center justify-between p-5">
+          {[1, 3, 5, 7, 9].map((t) => (
+            <StreakBadge key={t} badge={badgeAt(t)} size={60} />
+          ))}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="flex items-center justify-between p-5">
+          {[1, 2, 3, 4, 5, 6, 7].map((t) => (
+            <StreakBadge key={t} badge={badgeAt(t)} size={36} locked />
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 function Harness() {
   useViewportReadout();

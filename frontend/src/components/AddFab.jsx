@@ -50,6 +50,7 @@ export default function AddFab() {
         {visible && (
           <motion.button
             type="button"
+            data-tour="fab"
             aria-label="Add a transaction"
             onClick={() =>
               navigate("/transactions", { state: { openAdd: "expense" } })

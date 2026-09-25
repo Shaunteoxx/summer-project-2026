@@ -380,7 +380,7 @@ function PagePicker({ label, spent, index, count, onChange }) {
         onClick={() => step(-1)}
         disabled={index === 0}
         aria-label="Previous month"
-        className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-surface-2 text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 disabled:opacity-30 disabled:hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-surface-2 text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 active:bg-hairline-strong disabled:opacity-30 disabled:hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
@@ -395,7 +395,7 @@ function PagePicker({ label, spent, index, count, onChange }) {
         onClick={() => step(1)}
         disabled={index === count - 1}
         aria-label="Next month"
-        className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-surface-2 text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 disabled:opacity-30 disabled:hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-surface-2 text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 active:bg-hairline-strong disabled:opacity-30 disabled:hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ChevronRight className="h-4 w-4" />
       </button>
@@ -415,7 +415,7 @@ function ViewToggle({ active, onClick, icon: Icon, label }) {
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active
           ? "bg-surface text-ink shadow-card dark:bg-surface-3"
-          : "text-ink-3 hover:text-ink-2"
+          : "text-ink-3 hover:text-ink-2 active:opacity-60"
       )}
     >
       <Icon className="h-4 w-4" />

@@ -7,6 +7,7 @@ import SpendingTabs from "@/components/SpendingTabs";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import DailySpendingCard from "@/components/DailySpendingCard";
 import EmptyState from "@/components/EmptyState";
+import SegmentPill from "@/components/SegmentPill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +21,7 @@ import { formatDay } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useToast } from "@/hooks/useToast";
+import { useTour } from "@/tour/TourProvider";
 import { fadeUp, staggerContainer, fadeScaleItem } from "@/animations/variants";
 
 // The monthly bar chart carries recharts (~113KB gzipped), so it's split into
@@ -247,6 +249,8 @@ export default function StatsPage() {
     ? monthsNewestFirst
     : monthsNewestFirst.slice(0, COLLAPSED_COUNT);
 
+  useTour("history", !loading && data.length > 0);
+
   return (
     <PageWrapper>
       {/* The History half of the spending surface — the same switch the Tracker
@@ -318,10 +322,12 @@ export default function StatsPage() {
                 below are per-month by nature and stay put. */}
             <motion.div variants={fadeUp} initial="initial" animate="animate">
               <div
-                className="grid grid-cols-2 gap-0.5 rounded-md bg-surface-2 p-[3px]"
+                className="relative grid grid-cols-2 gap-0.5 rounded-md bg-surface-2 p-[3px]"
                 role="group"
                 aria-label="Headline figures"
+                data-tour="history.lens"
               >
+                <SegmentPill index={lens === "all" ? 0 : 1} count={2} />
                 <LensTab
                   active={lens === "all"}
                   onClick={() => setLens("all")}
@@ -344,6 +350,7 @@ export default function StatsPage() {
               initial="initial"
               animate="animate"
               className="grid grid-cols-2 gap-3"
+              data-tour="history.tiles"
             >
               {lens === "all" ? (
                 <>
@@ -393,7 +400,7 @@ export default function StatsPage() {
               )}
             </motion.div>
 
-          <motion.div variants={fadeUp} initial="initial" animate="animate">
+          <motion.div variants={fadeUp} initial="initial" animate="animate" data-tour="history.chart">
             <Card>
               <CardContent className="p-4 pl-1">
                 <div className="h-80">
@@ -543,7 +550,7 @@ export default function StatsPage() {
                     type="button"
                     onClick={() => setShowAllMonths((v) => !v)}
                     aria-expanded={showAllMonths}
-                    className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-sm px-3 py-2.5 text-[13px] font-semibold text-ink-2 transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-sm px-3 py-2.5 text-[13px] font-semibold text-ink-2 transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {showAllMonths
                       ? "Show Less"
@@ -571,10 +578,10 @@ export function LensTab({ active, onClick, label, hint }) {
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-[9px] px-3 py-2 text-center transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      className={`relative rounded-[9px] px-3 py-2 text-center transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         active
-          ? "bg-surface font-semibold text-ink shadow-card dark:bg-surface-3"
-          : "text-ink-3 hover:text-ink-2"
+          ? "font-semibold text-ink"
+          : "text-ink-3 hover:text-ink-2 active:opacity-60"
       }`}
     >
       <span className="block text-[13px]">{label}</span>

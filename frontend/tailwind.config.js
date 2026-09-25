@@ -6,6 +6,11 @@ const token = (name) => `hsl(var(--${name}) / <alpha-value>)`;
 
 export default {
   darkMode: ["class"],
+  // hover: only where a real hover exists. On a phone a tap fires :hover and
+  // then leaves it stuck on the element until the next tap elsewhere, so a row
+  // you tapped stayed highlighted as if still selected. Touch gets `active:`
+  // instead — every hover background has a pressed step one surface darker.
+  future: { hoverOnlyWhenSupported: true },
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     container: {
@@ -154,13 +159,30 @@ export default {
           "0%, 60%": { opacity: "0" },
           "100%": { opacity: "1" },
         },
+        /* The tint over a ledger row that just arrived. */
+        "row-land": {
+          "0%, 40%": { opacity: "1" },
+          "100%": { opacity: "0" },
+        },
+        /* The ring around something a tour is asking you to tap. Opacity
+           only: it sits on the element's edge, and a ring that grew would
+           cover the thing it points at. */
+        "tour-pulse": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.35" },
+        },
       },
       animation: {
         "fade-in": "fade-in 180ms cubic-bezier(0.32,0.72,0,1)",
+        // Waits out the closing sheet, holds long enough to be found after a
+        // scroll, then fades. `both` keeps it lit through the delay and gone
+        // afterwards, so a stalled animation ends on the row, not the tint.
+        "row-land": "row-land 2.2s cubic-bezier(0.32,0.72,0,1) 0.3s both",
         "sheet-up": "sheet-up 340ms cubic-bezier(0.32,0.72,0,1)",
         "track-slide":
           "track-slide 1.15s cubic-bezier(0.65,0,0.35,1) infinite",
         "fade-in-delayed": "fade-in-delayed 700ms ease-out forwards",
+        "tour-pulse": "tour-pulse 1.6s cubic-bezier(0.65,0,0.35,1) infinite",
       },
     },
   },

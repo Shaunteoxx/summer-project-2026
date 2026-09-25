@@ -22,7 +22,11 @@ const addCategory = vi.fn();
 let mockTransactions = [];
 let mockTransfers = [];
 const removeTransfer = vi.fn();
+// Asked after an add, for what the entry did to today. Offline by default, so
+// every confirmation below that doesn't care is the plain one.
+const fetchStreak = vi.fn();
 vi.mock("@/api/endpoints", () => ({
+  fetchStreak: (...args) => fetchStreak(...args),
   fetchTransactions: () => Promise.resolve(mockTransactions),
   addTransaction: (...args) => addTransaction(...args),
   updateTransaction: (...args) => updateTransaction(...args),
@@ -38,10 +42,12 @@ vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { savingsByMonth: {} } }),
 }));
 const showToast = vi.fn();
+const successToast = vi.fn();
+const errorToast = vi.fn();
 vi.mock("@/hooks/useToast", () => ({
   useToast: () => ({
-    success: vi.fn(),
-    error: vi.fn(),
+    success: (...args) => successToast(...args),
+    error: (...args) => errorToast(...args),
     info: vi.fn(),
     show: (...args) => showToast(...args),
   }),
@@ -206,6 +212,9 @@ beforeEach(() => {
   addRule.mockReset().mockResolvedValue({});
   mockRules = [];
   showToast.mockReset();
+  successToast.mockReset();
+  errorToast.mockReset();
+  fetchStreak.mockReset().mockRejectedValue(new Error("offline"));
 });
 
 describe("optional description", () => {
@@ -275,6 +284,20 @@ describe("optional description", () => {
     expect(within(row).getByText("−$4.00")).toBeInTheDocument();
     // The entrance animation this guards against showed up here as an inline
     // `opacity: 0` that nothing ever cleared.
+    expect(row.style.opacity).toBe("");
+  });
+
+  it("marks where the new row landed", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet();
+
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
+    await enterAmount(user, sheet, "4");
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
+
+    const row = await screen.findByRole("listitem");
+    // A tint laid over the row, never the row's own opacity — see above.
+    expect(row.querySelector(".animate-row-land")).not.toBeNull();
     expect(row.style.opacity).toBe("");
   });
 
@@ -1267,5 +1290,184 @@ describe("money paid back on a shared bill", () => {
     await user.click(sheet.getByRole("button", { name: "Save Changes" }));
 
     expect(updateTransaction).toHaveBeenCalledWith("t7", { paidBack: 0 });
+  });
+});
+
+// The entry is logged on Transactions, but the figure it moves is on Home. So
+// the confirmation carries it: what's left of today, in the streak card's words.
+describe("what an entry did to today", () => {
+  const today = (over) => ({
+    periodStatus: "active",
+    hasIncome: true,
+    overspentBy: 0,
+    today: { spent: 12.6, budget: 40, remaining: 27.4, within: true },
+    ...over,
+  });
+
+  const addFour = async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet();
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
+    await enterAmount(user, sheet, "4");
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
+  };
+
+  it("says what's left to spend today", async () => {
+    fetchStreak.mockResolvedValue(today());
+    await addFour();
+    await waitFor(() =>
+      expect(successToast).toHaveBeenCalledWith(
+        "Added −$4.00 · $27.40 left today"
+      )
+    );
+  });
+
+  it("warns when the entry took today over its budget", async () => {
+    fetchStreak.mockResolvedValue(
+      today({ today: { spent: 43.2, budget: 40, remaining: -3.2, within: false } })
+    );
+    await addFour();
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith({
+        message: "Added −$4.00 · $3.20 over today",
+        variant: "warning",
+      })
+    );
+  });
+
+  it("leaves the budget out once the whole period is overspent", async () => {
+    fetchStreak.mockResolvedValue(today({ overspentBy: 80 }));
+    await addFour();
+    await waitFor(() => expect(successToast).toHaveBeenCalledWith("Added −$4.00 · F & B"));
+  });
+
+  it("still confirms the entry when the budget can't be fetched", async () => {
+    await addFour();
+    await waitFor(() => expect(successToast).toHaveBeenCalledWith("Added −$4.00 · F & B"));
+  });
+});
+
+// Saving doesn't wait for the server: the row is in and the sheet is gone on
+// the tap. What has to hold is the other half — a save that fails afterwards
+// loses nothing, and a row the server hasn't confirmed can't be acted on.
+describe("saving without waiting", () => {
+  /** A promise the test settles by hand, standing in for a slow server. */
+  const deferred = () => {
+    let resolve, reject;
+    const promise = new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+  const refused = { response: { data: { message: "The server said no." } } };
+
+  const fillLunch = async (user) => {
+    const sheet = await openExpenseSheet();
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
+    await user.type(sheet.getByLabelText("Description"), "Chicken rice");
+    await enterAmount(user, sheet, "4");
+    return sheet;
+  };
+
+  it("puts the row in and closes the sheet before the server answers", async () => {
+    const server = deferred();
+    addTransaction.mockReturnValue(server.promise);
+    const user = userEvent.setup();
+    await fillLunch(user);
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByText("Chicken rice")).toBeInTheDocument();
+    // Nothing to delete or edit by until the server gives it an id.
+    expect(screen.getByRole("button", { name: "Delete Chicken rice" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit Chicken rice" })).toBeDisabled();
+
+    server.resolve({ ...submitted(), _id: "t9", date: "2026-08-12T00:00:00.000Z" });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Delete Chicken rice" })).toBeEnabled()
+    );
+  });
+
+  it("takes the row back out and reopens on the draft when the save fails", async () => {
+    const server = deferred();
+    addTransaction.mockReturnValue(server.promise);
+    const user = userEvent.setup();
+    await fillLunch(user);
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    server.reject(refused);
+
+    const sheet = within(await screen.findByRole("dialog"));
+    expect(sheet.getByText("The server said no.")).toBeInTheDocument();
+    expect(sheet.getByLabelText("Description")).toHaveValue("Chicken rice");
+    expect(sheet.getByLabelText(/^Amount/)).toHaveTextContent("−$4.00");
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
+  });
+
+  it("doesn't reopen over a sheet already in use, and says what to redo", async () => {
+    mockTransactions = [
+      {
+        _id: "t1",
+        date: "2026-08-05T00:00:00.000Z",
+        type: "expense",
+        amount: 12,
+        category: "Transport",
+        description: "Bus",
+        accountId: null,
+      },
+    ];
+    const server = deferred();
+    addTransaction.mockReturnValue(server.promise);
+    const user = userEvent.setup();
+    await fillLunch(user);
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    // Already fixing another entry when the first one fails.
+    await user.click(screen.getByRole("button", { name: "Edit Bus" }));
+    server.reject(refused);
+
+    await waitFor(() =>
+      expect(errorToast).toHaveBeenCalledWith(
+        "Couldn't save −$4.00 · F & B. Please add it again."
+      )
+    );
+    const editor = within(screen.getByRole("dialog", { name: "Edit Expense" }));
+    expect(editor.getByLabelText("Description")).toHaveValue("Bus");
+    expect(screen.queryByText("Chicken rice")).not.toBeInTheDocument();
+  });
+
+  it("puts an edited row back as it was when the change is refused", async () => {
+    const lunch = {
+      _id: "t1",
+      date: "2026-08-05T00:00:00.000Z",
+      type: "expense",
+      amount: 12,
+      category: "F & B",
+      description: "Lunch",
+      accountId: null,
+    };
+    mockTransactions = [lunch];
+    const server = deferred();
+    updateTransaction.mockReturnValue(server.promise);
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Edit Lunch" }));
+    const sheet = within(screen.getByRole("dialog"));
+    await user.clear(sheet.getByLabelText("Description"));
+    await user.type(sheet.getByLabelText("Description"), "Dinner");
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+    // The change shows at once...
+    expect(await screen.findByText("Dinner")).toBeInTheDocument();
+    server.reject(refused);
+
+    // ...and is undone in the ledger, but not in the editor it reopens.
+    const editor = within(await screen.findByRole("dialog", { name: "Edit Expense" }));
+    expect(editor.getByLabelText("Description")).toHaveValue("Dinner");
+    expect(editor.getByText("The server said no.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Lunch" })).toBeInTheDocument();
   });
 });

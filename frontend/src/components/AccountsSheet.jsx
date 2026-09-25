@@ -124,7 +124,7 @@ export default function AccountsSheet({ open, onClose }) {
                       aria-label={
                         a.archived ? `Restore ${a.name}` : `Archive ${a.name}`
                       }
-                      className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {a.archived ? (
                         <ArchiveRestore className="h-4 w-4" />

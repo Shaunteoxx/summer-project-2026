@@ -16,6 +16,7 @@ import { cn, formatMoney, localToday } from "@/lib/utils";
 import { addDaysYmd, formatDay, noWindowCopy } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useToast } from "@/hooks/useToast";
+import { useTour } from "@/tour/TourProvider";
 import { staggerContainer, fadeUp } from "@/animations/variants";
 
 /**
@@ -86,6 +87,10 @@ export default function PlanPage() {
   const nothingLogged = spentSoFar <= 0;
   // Title case for a label — see design/COPY_CONVENTIONS.md.
   const titleNoun = noun === "period" ? "Period" : "Month";
+
+  // Not on a visit that came here for the pace card: the tour would start by
+  // scrolling away from the one thing the reader tapped through to see.
+  useTour("plan", !loading && income > 0 && navState?.focus !== "pace");
 
   return (
     <PageWrapper>
@@ -190,23 +195,27 @@ export default function PlanPage() {
           animate="animate"
           className="mt-[22px]"
         >
-          <DynamicDailyHero
-            income={income}
-            savings={savings}
-            spentSoFar={spentSoFar}
-            daysAfterToday={daysAfterToday}
-            noun={noun}
-          />
-          <div className="mt-[26px] space-y-3">
-            <WhatIfCard
-              leftToday={leftToday}
+          <div data-tour="plan.daily">
+            <DynamicDailyHero
               income={income}
               savings={savings}
               spentSoFar={spentSoFar}
               daysAfterToday={daysAfterToday}
               noun={noun}
             />
-            <div ref={paceRef}>
+          </div>
+          <div className="mt-[26px] space-y-3">
+            <div data-tour="plan.whatif">
+              <WhatIfCard
+                leftToday={leftToday}
+                income={income}
+                savings={savings}
+                spentSoFar={spentSoFar}
+                daysAfterToday={daysAfterToday}
+                noun={noun}
+              />
+            </div>
+            <div ref={paceRef} data-tour="plan.pace">
               <PaceForecastCard
                 income={income}
                 savings={savings}
@@ -219,13 +228,15 @@ export default function PlanPage() {
                 noun={noun}
               />
             </div>
-            <GoalDailyCard
-              income={income}
-              savings={savings}
-              spentBeforeToday={spentBeforeToday}
-              daysLeft={daysLeft}
-              noun={noun}
-            />
+            <div data-tour="plan.goal">
+              <GoalDailyCard
+                income={income}
+                savings={savings}
+                spentBeforeToday={spentBeforeToday}
+                daysLeft={daysLeft}
+                noun={noun}
+              />
+            </div>
           </div>
         </motion.div>
       )}

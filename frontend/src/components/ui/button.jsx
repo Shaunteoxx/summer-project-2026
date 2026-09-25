@@ -20,16 +20,16 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-ink text-surface hover:bg-ink-2",
+        default: "bg-ink text-surface hover:bg-ink-2 active:bg-ink-2",
         // Foreground via the theme token, not a hardcoded white: dark mode's
         // reds/greens are light enough that white text fails AA on them, so the
         // token flips to a near-black in dark while staying white in light.
-        destructive: "bg-negative text-destructive-foreground hover:bg-negative/90",
-        success: "bg-positive text-success-foreground hover:bg-positive/90",
-        outline: "border border-hairline-strong bg-surface text-ink hover:bg-surface-2",
-        secondary: "bg-surface-2 text-ink hover:bg-surface-3",
-        ghost: "text-ink hover:bg-surface-2",
-        link: "text-ink underline-offset-4 hover:underline",
+        destructive: "bg-negative text-destructive-foreground hover:bg-negative/90 active:bg-negative/80",
+        success: "bg-positive text-success-foreground hover:bg-positive/90 active:bg-positive/80",
+        outline: "border border-hairline-strong bg-surface text-ink hover:bg-surface-2 active:bg-surface-3",
+        secondary: "bg-surface-2 text-ink hover:bg-surface-3 active:bg-hairline-strong",
+        ghost: "text-ink hover:bg-surface-2 active:bg-surface-3",
+        link: "text-ink underline-offset-4 hover:underline active:opacity-60",
       },
       size: {
         default: "h-[46px] px-5",

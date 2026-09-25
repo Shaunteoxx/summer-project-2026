@@ -74,7 +74,7 @@ export const CATEGORIES_BY_TYPE = {
 
 /** Neutral fallback for unknown / deleted categories. Matches ink-3. */
 export const FALLBACK_COLOR = "#6B6F74";
-export const FALLBACK_COLOR_DARK = "#8A8B90";
+export const FALLBACK_COLOR_DARK = "#96979C";
 
 /**
  * Palette offered when creating a custom category. Same OKLCH lightness and

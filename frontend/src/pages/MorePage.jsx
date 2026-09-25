@@ -20,16 +20,21 @@ import {
   Bell,
   Share,
   SquarePlus,
+  Vibrate,
+  Compass,
+  Lightbulb,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
 import Avatar from "@/components/Avatar";
 import BottomSheet from "@/components/BottomSheet";
 import FieldError from "@/components/FieldError";
-import SwitchRow from "@/components/SwitchRow";
+import SwitchRow, { SwitchTrack } from "@/components/SwitchRow";
 import AccountsSheet from "@/components/AccountsSheet";
 import CategoriesSheet from "@/components/CategoriesSheet";
 import RecurringSheet from "@/components/RecurringSheet";
+import SegmentPill from "@/components/SegmentPill";
+import ToursSheet from "@/components/ToursSheet";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,9 +47,13 @@ import { useRecurring } from "@/hooks/useRecurring";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
+import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { detectedTimeZone } from "@/lib/push";
 import { AVATARS, avatarSrc } from "@/lib/avatars";
+import { haptic, hapticsEnabled, setHapticsEnabled } from "@/lib/haptics";
+import { emitTour } from "@/tour/signals";
+import { useTour, useTourContext } from "@/tour/TourProvider";
 import { cn, formatMoney, monthName, localToday } from "@/lib/utils";
 import {
   MAX_PERIOD_DAYS,
@@ -104,6 +113,17 @@ export default function MorePage() {
   const guard = useDemoGuard();
   const notifications = usePushNotifications(user, refresh);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  // Only offered on a touch device: a laptop has nothing to vibrate, and a
+  // switch that does nothing reads as broken.
+  const touchDevice = useCoarsePointer();
+  const [vibration, setVibration] = useState(hapticsEnabled);
+  const toggleVibration = () => {
+    const on = !vibration;
+    setHapticsEnabled(on);
+    setVibration(on);
+    // Turning it on answers with a tap, so you know what you've turned on.
+    if (on) haptic();
+  };
   const isDays = period.mode === "days";
   // Term cycles are calendar months, so everything about savings follows the
   // month path — only the Budget Period row and sheet need to know.
@@ -173,6 +193,8 @@ export default function MorePage() {
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
+  const [toursOpen, setToursOpen] = useState(false);
+  const tour = useTourContext();
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -324,6 +346,12 @@ export default function MorePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepReturn, periodOpen, savingsOpen, accountsOpen, categoriesOpen, recurringOpen]);
 
+  // This page's tour — but not on a visit that only came here for one sheet
+  // and is about to be handed back. The Budget Period sheet has its own: the
+  // one sheet that only ever describes the mode you're already in.
+  useTour("more", !deepReturn);
+  useTour("sheet.period", periodOpen);
+
   // Tapping a segment proposes a mode; it does not change one. What comes back
   // if you change your mind is only the streak's *scoring* — entries and stored
   // windows survive either way — but the figure moves enough (a best streak can
@@ -377,6 +405,7 @@ export default function MorePage() {
     try {
       await startPeriod({ start: periodStart, length, savingsTarget: target });
       await Promise.all([refresh(), period.refresh()]);
+      emitTour("period:saved");
       setPeriodOpen(false);
       toast.success(`Period started — ${length} days`);
     } catch (err) {
@@ -408,6 +437,7 @@ export default function MorePage() {
     try {
       await run();
       await Promise.all([refresh(), period.refresh()]);
+      emitTour("period:saved");
       setPeriodOpen(false);
       toast.success(done);
     } catch (err) {
@@ -463,6 +493,7 @@ export default function MorePage() {
     try {
       await updatePeriod(period.current.id, { start: periodStart, length });
       await period.refresh();
+      emitTour("period:saved");
       setPeriodOpen(false);
       toast.success("Period updated");
     } catch (err) {
@@ -522,6 +553,7 @@ export default function MorePage() {
       if (isDays) {
         await updatePeriod(period.current.id, { savingsTarget: amount });
         await period.refresh();
+        emitTour("savings:saved");
         setSavingsOpen(false);
         toast.success("Savings target updated");
         return;
@@ -532,6 +564,7 @@ export default function MorePage() {
         repeat: repeatSavings,
       });
       await refresh();
+      emitTour("savings:saved");
       setSavingsOpen(false);
       toast.success(
         repeatSavings
@@ -610,6 +643,7 @@ export default function MorePage() {
         <Row
           icon={CalendarRange}
           title="Budget Period"
+          data-tour="more.period"
           meta={
             !isDays && !isTerm
               ? "Resets on the 1st"
@@ -643,6 +677,7 @@ export default function MorePage() {
         <Row
           icon={Wallet}
           title="Bank Accounts"
+          data-tour="more.accounts"
           meta="Tag where money comes and goes"
           value={<RowValue>{accountCount}</RowValue>}
           onClick={() => {
@@ -653,6 +688,7 @@ export default function MorePage() {
         <Row
           icon={Tag}
           title="Categories"
+          data-tour="more.categories"
           meta="Your own, on top of the built-in ones"
           value={<RowValue>{customCategories.length}</RowValue>}
           onClick={() => {
@@ -663,6 +699,7 @@ export default function MorePage() {
         <Row
           icon={Repeat}
           title="Repeating Entries"
+          data-tour="more.recurring"
           meta={
             rules.length === 0
               ? "Add rent and subscriptions once"
@@ -679,6 +716,7 @@ export default function MorePage() {
         <Row
           icon={PiggyBank}
           title="Savings Target"
+          data-tour="more.savings"
           meta={
             isDays
               ? period.current
@@ -712,14 +750,49 @@ export default function MorePage() {
             />
           }
         />
+        {touchDevice && (
+          <Row
+            icon={Vibrate}
+            title="Vibration"
+            meta={vibration ? "Taps as you type and save" : "Off on this device"}
+            chevron={false}
+            onClick={toggleVibration}
+            role="switch"
+            aria-checked={vibration}
+            value={<SwitchTrack checked={vibration} />}
+          />
+        )}
         {!["loading", "hidden"].includes(notifications.status) && (
           <Row
             icon={Bell}
             title="Notifications"
+            data-tour="more.notifications"
             meta={notificationsMeta(notifications, { ...DEFAULT_HOURS, ...user?.notificationHours })}
             onClick={() => setNotificationsOpen(true)}
           />
         )}
+      </Section>
+
+      {/* Help: every page's tour, to replay, and the switch for the tips that
+          turn up as you go. The switch is per account, like the tours. */}
+      <Section label="Help">
+        <Row
+          icon={Compass}
+          title="Page Tours"
+          meta="A quick look at what's on each page"
+          onClick={() => setToursOpen(true)}
+          data-tour="more.help"
+        />
+        <Row
+          icon={Lightbulb}
+          title="Tips"
+          meta={tour.off ? "Off — tours only when you ask" : "Shown as you come across things"}
+          chevron={false}
+          onClick={() => tour.setOff(!tour.off)}
+          role="switch"
+          aria-checked={!tour.off}
+          value={<SwitchTrack checked={!tour.off} />}
+        />
       </Section>
 
       {/* Account */}
@@ -737,7 +810,7 @@ export default function MorePage() {
             if (guard()) return;
             setDeleteOpen(true);
           }}
-          className="rounded-sm px-2.5 py-1.5 text-[13px] font-medium text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
+          className="rounded-sm px-2.5 py-1.5 text-[13px] font-medium text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] active:bg-negative/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
         >
           Delete Account
         </button>
@@ -834,13 +907,15 @@ export default function MorePage() {
         onRemove={removeRule}
       />
 
+      <ToursSheet open={toursOpen} onClose={() => setToursOpen(false)} />
+
       {/* Savings target sheet */}
       <BottomSheet
         open={savingsOpen}
         onClose={() => !savingSavings && setSavingsOpen(false)}
         title="Savings Target"
       >
-        <div className="space-y-4">
+        <div className="space-y-4" data-tour="savings.form">
           {/* Month stepper — days mode edits the running period instead, so
               there's nothing to step through. */}
           <div
@@ -852,7 +927,7 @@ export default function MorePage() {
               type="button"
               onClick={() => stepSavingsMonth(-1)}
               aria-label="Previous month"
-              className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 active:bg-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -863,7 +938,7 @@ export default function MorePage() {
               type="button"
               onClick={() => stepSavingsMonth(1)}
               aria-label="Next month"
-              className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 active:bg-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
@@ -935,10 +1010,14 @@ export default function MorePage() {
         <motion.div animate={periodShake} className="space-y-5">
           {/* Mode toggle */}
           <div
-            className="grid grid-cols-3 gap-0.5 rounded-md bg-surface-2 p-[3px]"
+            className="relative grid grid-cols-3 gap-0.5 rounded-md bg-surface-2 p-[3px]"
             role="group"
             aria-label="Budget period mode"
           >
+            <SegmentPill
+              index={["month", "days", "term"].indexOf(selectedMode)}
+              count={3}
+            />
             {/* One line each. The hints that used to sit under these labels
                 ("Calendar", "Custom Length") said less than the paragraph
                 right below, and made this the only two-line segmented control
@@ -948,12 +1027,14 @@ export default function MorePage() {
               disabled={savingPeriod}
               onClick={() => chooseMode("month")}
               label="Month"
+              tour="period.month"
             />
             <ModeTab
               active={selectedMode === "days"}
               disabled={savingPeriod}
               onClick={() => chooseMode("days")}
               label="Days"
+              tour="period.days"
             />
             {/* "Allowance" rather than "Term": nobody calls it a term, and it
                 would sit one row above "Savings Target" reading like a pair. */}
@@ -962,6 +1043,7 @@ export default function MorePage() {
               disabled={savingPeriod}
               onClick={() => chooseMode("term")}
               label="Allowance"
+              tour="period.term"
             />
           </div>
 
@@ -1000,280 +1082,283 @@ export default function MorePage() {
             </p>
           )}
 
-          {isTerm ? (
-            <TermPanel
-              period={period}
-              start={termStart}
-              months={termMonths}
-              onStart={setTermStart}
-              onMonths={setTermMonths}
-              disabled={savingPeriod}
-              confirming={confirmDeleteId === period.term?.id}
-              onConfirm={() => setConfirmDeleteId(period.term?.id)}
-              onCancelConfirm={() => setConfirmDeleteId(null)}
-              onDelete={handleDeleteTerm}
-              onSave={period.term ? handleUpdateTerm : handleStartTerm}
-            />
-          ) : !isDays ? (
-            <p className="text-[13px] leading-relaxed text-ink-3">
-              Your budget runs from the 1st to the last day of each calendar
-              month, and your daily budget is what's left spread over the days
-              remaining. Switch to <strong>Days</strong> if your allowance covers
-              something other than a month — a fortnight, or five weeks. Switch to{" "}
-              <strong>Allowance</strong> if one lump sum has to last several
-              months.
-            </p>
-          ) : (
-            <>
-              {period.current ? (
-                <div className="space-y-4">
-                  {/* A well, not a bordered card: it states what's running, it
-                      isn't a control, and a border would give it the same
-                      weight as the fields underneath that are. */}
-                  <div className="rounded-xl bg-surface-2 p-4">
-                    <p className="text-overline text-ink-3">Running now</p>
-                    <p className="mt-1.5 text-[15px] font-semibold tracking-[-0.01em]">
-                      {formatPeriodLabel(period.current)}
-                    </p>
-                    <p className="mt-0.5 text-[12.5px] text-ink-3">
-                      {period.current.days} days ·{" "}
-                      {period.current.daysLeft === 0
-                        ? "ends today"
-                        : `${period.current.daysLeft} left`}{" "}
-                      · {period.current.savesTotal} restore
-                      {period.current.savesTotal === 1 ? "" : "s"}
-                    </p>
-                  </div>
+          {/* Everything under the mode: the form the setup guide points at. */}
+          <div className="space-y-5" data-tour="period.form">
+            {isTerm ? (
+              <TermPanel
+                period={period}
+                start={termStart}
+                months={termMonths}
+                onStart={setTermStart}
+                onMonths={setTermMonths}
+                disabled={savingPeriod}
+                confirming={confirmDeleteId === period.term?.id}
+                onConfirm={() => setConfirmDeleteId(period.term?.id)}
+                onCancelConfirm={() => setConfirmDeleteId(null)}
+                onDelete={handleDeleteTerm}
+                onSave={period.term ? handleUpdateTerm : handleStartTerm}
+              />
+            ) : !isDays ? (
+              <p className="text-[13px] leading-relaxed text-ink-3">
+                Your budget runs from the 1st to the last day of each calendar
+                month, and your daily budget is what's left spread over the days
+                remaining. Switch to <strong>Days</strong> if your allowance covers
+                something other than a month — a fortnight, or five weeks. Switch to{" "}
+                <strong>Allowance</strong> if one lump sum has to last several
+                months.
+              </p>
+            ) : (
+              <>
+                {period.current ? (
+                  <div className="space-y-4">
+                    {/* A well, not a bordered card: it states what's running, it
+                        isn't a control, and a border would give it the same
+                        weight as the fields underneath that are. */}
+                    <div className="rounded-xl bg-surface-2 p-4">
+                      <p className="text-overline text-ink-3">Running now</p>
+                      <p className="mt-1.5 text-[15px] font-semibold tracking-[-0.01em]">
+                        {formatPeriodLabel(period.current)}
+                      </p>
+                      <p className="mt-0.5 text-[12.5px] text-ink-3">
+                        {period.current.days} days ·{" "}
+                        {period.current.daysLeft === 0
+                          ? "ends today"
+                          : `${period.current.daysLeft} left`}{" "}
+                        · {period.current.savesTotal} restore
+                        {period.current.savesTotal === 1 ? "" : "s"}
+                      </p>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="period-edit-start">Start Date</Label>
-                    <Input
-                      id="period-edit-start"
-                      type="date"
-                      value={periodStart}
-                      max={localToday()}
-                      onChange={(e) => {
-                        setPeriodStart(e.target.value);
+                    <div className="space-y-2">
+                      <Label htmlFor="period-edit-start">Start Date</Label>
+                      <Input
+                        id="period-edit-start"
+                        type="date"
+                        value={periodStart}
+                        max={localToday()}
+                        onChange={(e) => {
+                          setPeriodStart(e.target.value);
+                          setPeriodError("");
+                        }}
+                      />
+                    </div>
+
+                    <LengthField
+                      id="period-length"
+                      value={periodLength}
+                      disabled={savingPeriod}
+                      onChange={(v) => {
+                        setPeriodLength(v);
                         setPeriodError("");
                       }}
-                    />
-                  </div>
-
-                  <LengthField
-                    id="period-length"
-                    value={periodLength}
-                    disabled={savingPeriod}
-                    onChange={(v) => {
-                      setPeriodLength(v);
-                      setPeriodError("");
-                    }}
-                  >
-                    <p className="text-[12px] leading-relaxed text-ink-3">
-                      Runs to{" "}
-                      <strong>
-                        {periodStart && Number(periodLength) >= MIN_PERIOD_DAYS
-                          ? formatDay(periodEnd(periodStart, Number(periodLength)), {
-                              withYear: true,
-                            })
-                          : "—"}
-                      </strong>
-                      . Your daily budget is recalculated from what&apos;s left.
-                    </p>
-                  </LengthField>
-
-                  {periodError && <FieldError>{periodError}</FieldError>}
-
-                  <Button
-                    onClick={handleUpdatePeriod}
-                    disabled={savingPeriod}
-                    className="w-full"
-                  >
-                    {savingPeriod ? "Saving…" : "Save Changes"}
-                  </Button>
-
-                  {/* Removing the running period — the escape hatch for one
-                      started by mistake. */}
-                  {confirmDeleteId === period.current.id ? (
-                    <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
-                      <p className="text-[12px] leading-relaxed text-ink-3">
-                        Remove <strong>{formatPeriodLabel(period.current)}</strong>?
-                        Its days stop being budgeted and drop out of your streak.
-                        <strong> Your transactions are kept</strong> and still
-                        count on Stats.
-                      </p>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          disabled={savingPeriod}
-                          onClick={() => setConfirmDeleteId(null)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="flex-1"
-                          disabled={savingPeriod}
-                          onClick={() => handleDeletePeriod(period.current.id)}
-                        >
-                          {savingPeriod ? "Removing…" : "Remove Period"}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteId(period.current.id)}
-                      className="w-full rounded-sm py-3 text-center text-[13px] font-medium text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
                     >
-                      Remove This Period
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {period.status === "lapsed" && period.previous && (
-                    <div className="rounded-lg border border-hairline bg-surface-2 p-4">
-                      <p className="text-[13px] leading-relaxed text-ink-3">
-                        Your last period ran{" "}
-                        <strong className="text-foreground">
-                          {formatPeriodLabel(period.previous)}
-                        </strong>{" "}
-                        and has ended. Days since then aren't tracked until you
-                        start the next one.
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label htmlFor="period-start">Start Date</Label>
-                    <Input
-                      id="period-start"
-                      type="date"
-                      value={periodStart}
-                      max={localToday()}
-                      onChange={(e) => {
-                        setPeriodStart(e.target.value);
-                        setPeriodError("");
-                      }}
-                    />
-                  </div>
-
-                  <LengthField
-                    id="period-new-length"
-                    value={periodLength}
-                    disabled={savingPeriod}
-                    onChange={(v) => {
-                      setPeriodLength(v);
-                      setPeriodError("");
-                    }}
-                  >
-                    {periodStart && Number(periodLength) >= MIN_PERIOD_DAYS && (
                       <p className="text-[12px] leading-relaxed text-ink-3">
-                        Runs until{" "}
+                        Runs to{" "}
                         <strong>
-                          {formatDay(periodEnd(periodStart, Number(periodLength)), {
-                            withYear: true,
-                          })}
+                          {periodStart && Number(periodLength) >= MIN_PERIOD_DAYS
+                            ? formatDay(periodEnd(periodStart, Number(periodLength)), {
+                                withYear: true,
+                              })
+                            : "—"}
                         </strong>
-                        .
+                        . Your daily budget is recalculated from what&apos;s left.
                       </p>
-                    )}
-                  </LengthField>
+                    </LengthField>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="period-target">Savings target (optional)</Label>
-                    <Input
-                      id="period-target"
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={periodTarget}
-                      onChange={(e) => {
-                        setPeriodTarget(e.target.value);
+                    {periodError && <FieldError>{periodError}</FieldError>}
+
+                    <Button
+                      onClick={handleUpdatePeriod}
+                      disabled={savingPeriod}
+                      className="w-full"
+                    >
+                      {savingPeriod ? "Saving…" : "Save Changes"}
+                    </Button>
+
+                    {/* Removing the running period — the escape hatch for one
+                        started by mistake. */}
+                    {confirmDeleteId === period.current.id ? (
+                      <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+                        <p className="text-[12px] leading-relaxed text-ink-3">
+                          Remove <strong>{formatPeriodLabel(period.current)}</strong>?
+                          Its days stop being budgeted and drop out of your streak.
+                          <strong> Your transactions are kept</strong> and still
+                          count on Stats.
+                        </p>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            disabled={savingPeriod}
+                            onClick={() => setConfirmDeleteId(null)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="flex-1"
+                            disabled={savingPeriod}
+                            onClick={() => handleDeletePeriod(period.current.id)}
+                          >
+                            {savingPeriod ? "Removing…" : "Remove Period"}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(period.current.id)}
+                        className="w-full rounded-sm py-3 text-center text-[13px] font-medium text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] active:bg-negative/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
+                      >
+                        Remove This Period
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {period.status === "lapsed" && period.previous && (
+                      <div className="rounded-lg border border-hairline bg-surface-2 p-4">
+                        <p className="text-[13px] leading-relaxed text-ink-3">
+                          Your last period ran{" "}
+                          <strong className="text-foreground">
+                            {formatPeriodLabel(period.previous)}
+                          </strong>{" "}
+                          and has ended. Days since then aren't tracked until you
+                          start the next one.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="period-start">Start Date</Label>
+                      <Input
+                        id="period-start"
+                        type="date"
+                        value={periodStart}
+                        max={localToday()}
+                        onChange={(e) => {
+                          setPeriodStart(e.target.value);
+                          setPeriodError("");
+                        }}
+                      />
+                    </div>
+
+                    <LengthField
+                      id="period-new-length"
+                      value={periodLength}
+                      disabled={savingPeriod}
+                      onChange={(v) => {
+                        setPeriodLength(v);
                         setPeriodError("");
                       }}
-                    />
+                    >
+                      {periodStart && Number(periodLength) >= MIN_PERIOD_DAYS && (
+                        <p className="text-[12px] leading-relaxed text-ink-3">
+                          Runs until{" "}
+                          <strong>
+                            {formatDay(periodEnd(periodStart, Number(periodLength)), {
+                              withYear: true,
+                            })}
+                          </strong>
+                          .
+                        </p>
+                      )}
+                    </LengthField>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="period-target">Savings target (optional)</Label>
+                      <Input
+                        id="period-target"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={periodTarget}
+                        onChange={(e) => {
+                          setPeriodTarget(e.target.value);
+                          setPeriodError("");
+                        }}
+                      />
+                    </div>
+
+                    {periodError && <FieldError>{periodError}</FieldError>}
+
+                    <Button
+                      onClick={handleStartPeriod}
+                      disabled={savingPeriod}
+                      className="w-full"
+                    >
+                      {savingPeriod ? "Starting…" : "Start Period"}
+                    </Button>
                   </div>
+                )}
 
-                  {periodError && <FieldError>{periodError}</FieldError>}
-
-                  <Button
-                    onClick={handleStartPeriod}
-                    disabled={savingPeriod}
-                    className="w-full"
-                  >
-                    {savingPeriod ? "Starting…" : "Start Period"}
-                  </Button>
-                </div>
-              )}
-
-              {pastPeriods.length > 0 && (
-                <div className="space-y-2 border-t border-hairline pt-4">
-                  <p className="text-overline text-ink-3">
-                    Past periods
-                  </p>
-                  <ul className="space-y-1.5">
-                    {pastPeriods.slice(0, 5).map((p) => (
-                      <li key={p.id}>
-                        {confirmDeleteId === p.id ? (
-                          <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2.5">
-                            <p className="text-[12px] leading-relaxed text-ink-3">
-                              Remove <strong>{formatPeriodLabel(p)}</strong>? Its
-                              days stop being budgeted.{" "}
-                              <strong>Transactions are kept.</strong>
-                            </p>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 flex-1 text-xs"
-                                disabled={savingPeriod}
-                                onClick={() => setConfirmDeleteId(null)}
-                              >
-                                Cancel
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                className="h-7 flex-1 text-xs"
-                                disabled={savingPeriod}
-                                onClick={() => handleDeletePeriod(p.id)}
-                              >
-                                Remove
-                              </Button>
+                {pastPeriods.length > 0 && (
+                  <div className="space-y-2 border-t border-hairline pt-4">
+                    <p className="text-overline text-ink-3">
+                      Past periods
+                    </p>
+                    <ul className="space-y-1.5">
+                      {pastPeriods.slice(0, 5).map((p) => (
+                        <li key={p.id}>
+                          {confirmDeleteId === p.id ? (
+                            <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2.5">
+                              <p className="text-[12px] leading-relaxed text-ink-3">
+                                Remove <strong>{formatPeriodLabel(p)}</strong>? Its
+                                days stop being budgeted.{" "}
+                                <strong>Transactions are kept.</strong>
+                              </p>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 flex-1 text-xs"
+                                  disabled={savingPeriod}
+                                  onClick={() => setConfirmDeleteId(null)}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-7 flex-1 text-xs"
+                                  disabled={savingPeriod}
+                                  onClick={() => handleDeletePeriod(p.id)}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="min-w-0 flex-1 truncate">
-                              {formatPeriodLabel(p)}
-                            </span>
-                            <span className="num shrink-0 text-[12px] text-ink-3">
-                              {p.days} days
-                              {p.savings > 0 ? ` · ${formatMoney(p.savings)}` : ""}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(p.id)}
-                              aria-label={`Remove ${formatPeriodLabel(p)}`}
-                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </>
-          )}
+                          ) : (
+                            <div className="flex items-center justify-between gap-2 text-sm">
+                              <span className="min-w-0 flex-1 truncate">
+                                {formatPeriodLabel(p)}
+                              </span>
+                              <span className="num shrink-0 text-[12px] text-ink-3">
+                                {p.days} days
+                                {p.savings > 0 ? ` · ${formatMoney(p.savings)}` : ""}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(p.id)}
+                                aria-label={`Remove ${formatPeriodLabel(p)}`}
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] active:bg-negative/[0.14] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </motion.div>
       </BottomSheet>
 
@@ -1505,17 +1590,18 @@ function StepNumber({ n }) {
   );
 }
 
-function ModeTab({ active, disabled, onClick, label }) {
+function ModeTab({ active, disabled, onClick, label, tour }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       aria-pressed={active}
-      className={`rounded-[9px] px-3 py-1.5 text-center text-[13px] transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      data-tour={tour}
+      className={`relative rounded-[9px] px-3 py-1.5 text-center text-[13px] transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         active
-          ? "bg-surface font-semibold text-ink shadow-card dark:bg-surface-3"
-          : "font-medium text-ink-3 hover:text-ink-2"
+          ? "font-semibold text-ink"
+          : "font-medium text-ink-3 hover:text-ink-2 active:opacity-60"
       }`}
     >
       {label}
@@ -1618,7 +1704,7 @@ function TermPanel({
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 monthCount === n
                   ? "border-transparent bg-ink text-surface"
-                  : "border-hairline-strong text-ink-2 hover:bg-surface-2"
+                  : "border-hairline-strong text-ink-2 hover:bg-surface-2 active:bg-surface-3"
               }`}
             >
               {n} months
@@ -1691,7 +1777,7 @@ function LengthField({ id, value, onChange, disabled, children }) {
             className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               Number(value) === n
                 ? "border-transparent bg-ink text-surface"
-                : "border-hairline-strong text-ink-2 hover:bg-surface-2"
+                : "border-hairline-strong text-ink-2 hover:bg-surface-2 active:bg-surface-3"
             }`}
           >
             {n} days
@@ -1732,16 +1818,17 @@ export function Section({ label, children }) {
  * Renders as a button only when it does something — a static row shouldn't be
  * in the tab order or announce itself as clickable.
  */
-export function Row({ icon: Icon, title, meta, value, onClick, chevron = true }) {
+export function Row({ icon: Icon, title, meta, value, onClick, chevron = true, ...rest }) {
   const Tag = onClick ? "button" : "div";
 
   return (
     <Tag
       {...(onClick ? { onClick, type: "button" } : {})}
+      {...rest}
       className={cn(
         "flex w-full items-center gap-3 px-4 py-[13px] text-left",
         onClick &&
-          "transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          "transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       )}
     >
       <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-sm bg-surface-2 text-ink-2">
@@ -1823,7 +1910,7 @@ function AvatarTile({ selected, label, onClick, children }) {
       className={`relative flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-sm border p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
         selected
           ? "border-ink bg-ink/[0.06]"
-          : "border-hairline-strong hover:bg-surface-2"
+          : "border-hairline-strong hover:bg-surface-2 active:bg-surface-3"
       }`}
     >
       {selected && (

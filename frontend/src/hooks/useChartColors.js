@@ -22,18 +22,18 @@ export function useChartColors() {
     // back from `saved` rather than a fourth hue, so the ring reads as a single
     // scale — available, committed, gone — instead of three unrelated colours.
     reserved: isDark ? "#2A7D63" : "#7FB8A0",
-    spent: isDark ? "#3F4045" : "#C9C9C4",
+    spent: isDark ? "#48494F" : "#C9C9C4",
     // Emphasis (today) + the over-budget signal in the daily tracker.
     primary: isDark ? "#F4F4F3" : "#17181A",
-    over: isDark ? "#E9635A" : "#B4342A",
-    grid: isDark ? "#232326" : "#E7E7E2",
-    axis: isDark ? "#8A8B90" : "#6B6F74",
+    over: isDark ? "#EE6C63" : "#B4342A",
+    grid: isDark ? "#2F2F32" : "#E7E7E2",
+    axis: isDark ? "#96979C" : "#6B6F74",
     cursor: isDark ? "rgba(255,255,255,0.04)" : "rgba(23,24,26,0.04)",
-    tooltipBg: isDark ? "#1D1D20" : "#FFFFFF",
-    tooltipBorder: isDark ? "#303035" : "#E7E7E2",
+    tooltipBg: isDark ? "#28282C" : "#FFFFFF",
+    tooltipBorder: isDark ? "#404045" : "#E7E7E2",
     tooltipText: isDark ? "#F4F4F3" : "#17181A",
     ink: isDark ? "#F4F4F3" : "#17181A",
-    ink3: isDark ? "#8A8B90" : "#6B6F74",
-    surface2: isDark ? "#1D1D20" : "#F3F3F0",
+    ink3: isDark ? "#96979C" : "#6B6F74",
+    surface2: isDark ? "#28282C" : "#F3F3F0",
   };
 }

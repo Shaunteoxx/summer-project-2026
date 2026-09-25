@@ -69,6 +69,21 @@
     --chart-grid: 60 9% 90%;
     --chart-neutral: 60 5% 78%;   /* the "spent" arc / bar */
 
+    /* ── Streak badges ─────────────────────────────────────────────────────
+       The ladder people already know — bronze, silver, gold, then gems — so
+       the order reads without a legend. Flat, like everything else: the art
+       is a 13% tint of each colour ruled in the colour itself. The badge's
+       name is also set in its colour when you earn it, so each holds 4.5:1
+       as text on a card, not just 3:1 as a graphic. Green and red stay out:
+       they mean money kept and over budget.                               */
+    --badge-bronze: 24 52% 42%;      /* #A36033  4.9:1 */
+    --badge-silver: 214 10% 45%;     /* #67717E  5.0:1 */
+    --badge-gold: 40 90% 31%;        /* #966708  5.0:1 */
+    --badge-platinum: 188 22% 40%;   /* #50767C  5.0:1 */
+    --badge-sapphire: 222 62% 50%;   /* #3060CF  5.7:1 */
+    --badge-amethyst: 272 42% 52%;   /* #8851B8  5.4:1 */
+    --badge-diamond: 193 80% 32%;    /* #107793  5.1:1 */
+
     /* ── Elevation — two shadows in the whole system. Cards are flat. ─── */
     --shadow-card: 0 1px 2px hsl(210 11% 7% / 0.04);
     --shadow-float: 0 16px 40px -12px hsl(210 11% 7% / 0.20),
@@ -99,23 +114,32 @@
   }
 
   .dark {
-    /* True-neutral near-black. No blue cast — dark mode is the same product
-       at a lower brightness, not a different one. */
-    --canvas: 240 5% 4%;          /* #0A0A0B */
-    --surface: 240 5% 8%;         /* #141416 */
-    --surface-2: 240 5% 12%;      /* #1D1D20 */
-    --surface-3: 240 5% 16%;      /* #26262A */
+    /* True-neutral charcoal. No blue cast — dark mode is the same product at a
+       lower brightness, not a different one.
 
-    --hairline: 240 4% 14%;       /* #232326 */
-    --hairline-strong: 240 5% 20%;/* #303035 */
+       Lifted from the original near-black (#0A0A0B canvas): on an OLED phone
+       at night that read as a hole in the screen rather than a surface, and
+       the cards (#131315) sat so close to it that the ramp's depth was lost.
+       Each step is now ~4% L apart, so canvas → card → well → pressed read as
+       four distinct layers. ink-2, ink-3 and negative moved up with it so the
+       tightest pairings hold: ink-3 on surface-2 went 4.89 → 5.04, and the
+       worst in the ramp (ink-3 on the pressed surface-3) is 4.31, as before.
+       Ratios below are against surface, where most text sits. */
+    --canvas: 240 4% 9%;          /* #161618 */
+    --surface: 240 4% 12.5%;      /* #1F1F21 */
+    --surface-2: 240 4% 16.5%;    /* #28282C */
+    --surface-3: 240 4% 21%;      /* #333338 */
 
-    --ink: 60 4% 95%;             /* #F4F4F3  16.7:1 */
-    --ink-2: 228 3% 68%;          /* #ABACB0   8.1:1 */
-    --ink-3: 230 3% 55%;          /* #8A8B90   5.4:1 */
+    --hairline: 240 4% 19%;       /* #2F2F32 */
+    --hairline-strong: 240 4% 26%;/* #404045 */
 
-    --positive: 157 60% 55%;      /* #45D19C   9.5:1 */
-    --negative: 4 76% 63%;        /* #E9635A   5.6:1 */
-    --warning: 38 85% 62%;        /* #F0B24A   9.8:1 */
+    --ink: 60 4% 95%;             /* #F3F3F2  14.8:1 on surface */
+    --ink-2: 228 3% 70%;          /* #B0B1B5   7.7:1 */
+    --ink-3: 230 3% 60%;          /* #96979C   5.6:1 */
+
+    --positive: 157 60% 55%;      /* #45D19C   8.5:1 */
+    --negative: 4 80% 66%;        /* #EE6C63   5.5:1 */
+    --warning: 38 85% 62%;        /* #F0B24A   8.9:1 */
 
     --cat-food: 10 98% 75%;                              /* #FE9580  oklch(.775 0.140 32) */
     --cat-transport: 33 85% 61%;                         /* #F0A346  oklch(.775 0.132 68) */
@@ -126,9 +150,18 @@
     --cat-job: 286 73% 77%;                               /* #DB98EF  oklch(.775 0.140 318) */
     --cat-gifts: 333 90% 77%;                             /* #F98EBF  oklch(.775 0.140 352) */
 
-    --chart-axis: 230 3% 55%;
-    --chart-grid: 240 4% 14%;
-    --chart-neutral: 240 4% 26%;
+    /* All 6.3:1 or better on surface. */
+    --badge-bronze: 24 58% 63%;
+    --badge-silver: 214 12% 72%;
+    --badge-gold: 44 82% 60%;
+    --badge-platinum: 186 26% 66%;
+    --badge-sapphire: 222 88% 72%;
+    --badge-amethyst: 272 72% 77%;
+    --badge-diamond: 190 78% 62%;
+
+    --chart-axis: 230 3% 60%;
+    --chart-grid: 240 4% 19%;
+    --chart-neutral: 240 4% 30%;
 
     --shadow-card: 0 0 0 0 transparent;
     --shadow-float: 0 20px 48px -12px hsl(0 0% 0% / 0.7),
@@ -152,6 +185,10 @@
   html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
+    /* iOS paints its own translucent grey box over anything tapped. Controls
+       here carry their own pressed state (the active: step on each), and the
+       two together flashed a grey rectangle over a rounded one. */
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -179,6 +216,20 @@
   }
   input[type="date"]::-webkit-date-and-time-value {
     text-align: left;
+  }
+
+  /* Anything a tour can point at scrolls clear of the app bar above and the
+     tab bar and add button below, rather than under them. */
+  [data-tour] {
+    scroll-margin-top: 76px;
+    scroll-margin-bottom: calc(150px + env(safe-area-inset-bottom));
+  }
+
+  /* Toasts sit over the add button's corner. While a tour card is up they'd
+     cover the very thing it's pointing at — and whatever they say, the card
+     is saying already — so they wait underneath until it's gone. */
+  body[data-touring] [data-toast-viewport] {
+    visibility: hidden;
   }
 
   /* Every digit in the app is lining + tabular. Money must never reflow or

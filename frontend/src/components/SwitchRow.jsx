@@ -1,5 +1,7 @@
 import { useId } from "react";
 
+import { haptic } from "@/lib/haptics";
+
 /**
  * A labelled on/off setting: title, supporting text, and a switch, with the
  * whole row as the hit target — the description is usually the widest part, so
@@ -25,11 +27,14 @@ export default function SwitchRow({ checked, onChange, label, description, disab
       aria-labelledby={`${id}-label`}
       aria-describedby={description ? `${id}-hint` : undefined}
       disabled={disabled}
-      onClick={() => onChange(!checked)}
+      onClick={() => {
+        haptic();
+        onChange(!checked);
+      }}
       className={`flex w-full items-center gap-4 rounded-xl border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${
         checked
           ? "border-hairline-strong bg-surface-2"
-          : "border-hairline-strong hover:bg-surface-2"
+          : "border-hairline-strong hover:bg-surface-2 active:bg-surface-3"
       }`}
     >
       <span className="min-w-0 flex-1">
@@ -45,18 +50,29 @@ export default function SwitchRow({ checked, onChange, label, description, disab
           </span>
         )}
       </span>
-      <span
-        aria-hidden="true"
-        className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors ${
-          checked ? "bg-positive" : "bg-surface-3"
-        }`}
-      >
-        <span
-          className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-            checked ? "translate-x-5" : "translate-x-0"
-          }`}
-        />
-      </span>
+      <SwitchTrack checked={checked} />
     </button>
+  );
+}
+
+/**
+ * The switch itself, for a row that is already the control (it carries the
+ * role and the click). Decorative, so hidden from screen readers — the row
+ * announces on/off.
+ */
+export function SwitchTrack({ checked }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors ${
+        checked ? "bg-positive" : "bg-surface-3"
+      }`}
+    >
+      <span
+        className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-5" : "translate-x-0"
+        }`}
+      />
+    </span>
   );
 }

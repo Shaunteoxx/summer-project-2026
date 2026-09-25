@@ -20,6 +20,7 @@ import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useToast } from "@/hooks/useToast";
+import { useTour } from "@/tour/TourProvider";
 import { fadeUp } from "@/animations/variants";
 
 export default function TrackerPage() {
@@ -127,6 +128,8 @@ export default function TrackerPage() {
     return arr;
   })();
 
+  useTour("tracker", !loading && hasData && Boolean(current));
+
   return (
     <PageWrapper>
       {/* This period vs History — two views of one surface. The switch lives
@@ -135,7 +138,7 @@ export default function TrackerPage() {
           button that used to sit in the header (and a second one at the foot),
           and it's what gives history a home now that it's no longer a row in
           the More menu. */}
-      <motion.div variants={fadeUp} initial="initial" animate="animate">
+      <motion.div variants={fadeUp} initial="initial" animate="animate" data-tour="tracker.tabs">
         <SpendingTabs />
       </motion.div>
 
@@ -285,7 +288,7 @@ export default function TrackerPage() {
       ) : (
         <div className="mt-5 space-y-3">
           {/* Saved vs spent */}
-          <motion.div variants={fadeUp} initial="initial" animate="animate">
+          <motion.div variants={fadeUp} initial="initial" animate="animate" data-tour="tracker.ring">
             <SavedVsSpentCard
               saved={saved}
               spent={spent}
@@ -308,29 +311,33 @@ export default function TrackerPage() {
               are about September; this one is about the six months September
               is month three of, which is the only place that shows. */}
           {showTerm && (
-            <motion.div variants={fadeUp} initial="initial" animate="animate">
+            <motion.div variants={fadeUp} initial="initial" animate="animate" data-tour="tracker.term">
               <TermCard term={term} current={current} cycles={budgetPeriod.history} />
             </motion.div>
           )}
 
           {/* Savings goal */}
-          <SavingsGoalCard
-            target={periodSavings}
-            income={income}
-            spent={spent}
-            period={current}
-            onUpdated={load}
-          />
+          <div data-tour="tracker.savings">
+            <SavingsGoalCard
+              target={periodSavings}
+              income={income}
+              spent={spent}
+              period={current}
+              onUpdated={load}
+            />
+          </div>
 
           {/* Daily spending tracker */}
-          <DailySpendingCard
-            transactions={transactions}
-            income={income}
-            budgetNoun={budgetNoun}
-            period={current}
-            periodDays={streak?.periodDays ?? []}
-            todayBudget={streak?.today?.budget ?? 0}
-          />
+          <div data-tour="tracker.calendar">
+            <DailySpendingCard
+              transactions={transactions}
+              income={income}
+              budgetNoun={budgetNoun}
+              period={current}
+              periodDays={streak?.periodDays ?? []}
+              todayBudget={streak?.today?.budget ?? 0}
+            />
+          </div>
 
           {/* Spending by Category */}
           <motion.div variants={fadeUp} initial="initial" animate="animate">
@@ -462,7 +469,7 @@ export function SavedVsSpentCard({
               />
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <span className="num text-[22px] font-medium leading-none">
-                  <AnimatedNumber value={ringPercent} suffix="%" />
+                  <AnimatedNumber value={ringPercent} suffix="%" memoryKey="tracker.ring" />
                 </span>
                 <span className="mt-1 text-[9px] font-medium uppercase tracking-[0.07em] text-ink-3">
                   {ringLabel}
@@ -492,7 +499,12 @@ export function SavedVsSpentCard({
                     <span className="truncate text-[12px] text-ink-2">{label}</span>
                   </dt>
                   <dd className="num shrink-0 text-right text-[16px] font-medium text-ink">
-                    <AnimatedNumber value={value} prefix="$" decimals={2} />
+                    <AnimatedNumber
+                      value={value}
+                      prefix="$"
+                      decimals={2}
+                      memoryKey={`tracker.legend.${label}`}
+                    />
                   </dd>
                 </Fragment>
               ))}
@@ -528,7 +540,12 @@ export function SavedVsSpentCard({
                     </span>
                   </dt>
                   <dd className="num shrink-0 text-right text-[13px] font-medium text-ink-2">
-                    <AnimatedNumber value={total} prefix="$" decimals={2} />
+                    <AnimatedNumber
+                      value={total}
+                      prefix="$"
+                      decimals={2}
+                      memoryKey="tracker.total"
+                    />
                   </dd>
                 </>
               )}
@@ -594,7 +611,12 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
                     same card and do show cents, so "$110" read as disagreeing
                     with the $70.60 + $38.90 next to it. */}
                 <span className="num text-[18px] font-medium leading-none">
-                  <AnimatedNumber value={spent} prefix="$" decimals={2} />
+                  <AnimatedNumber
+                    value={spent}
+                    prefix="$"
+                    decimals={2}
+                    memoryKey="tracker.categorySpent"
+                  />
                 </span>
                 <span className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.07em] text-ink-3">
                   Spent

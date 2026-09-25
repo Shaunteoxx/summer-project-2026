@@ -344,8 +344,25 @@ describe("with nothing logged yet", () => {
 
   it("counts the steps in month mode, where there is no window to start", async () => {
     await showEmpty();
-    expect(screen.getByText("Set Up in Two Steps")).toBeInTheDocument();
+    expect(screen.getByText("Set Up in Three Steps")).toBeInTheDocument();
     expect(screen.getByText(/Log the money coming in this month/)).toBeInTheDocument();
+  });
+
+  // Setting a budget up is two steps; using it is the third. The first spend
+  // is the thing you'll do every day after, so it's the one worth doing once
+  // with the list beside you.
+  it("ends on the first spend, which opens the sheet on an expense", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    await showEmpty();
+    await user.click(screen.getByRole("button", { name: /Log your first spend/ }));
+    expect(navigate).toHaveBeenCalledWith("/transactions", {
+      state: { openAdd: "expense" },
+    });
+  });
+
+  it("offers to skip savings, the one step that's fine to leave out", async () => {
+    await showEmpty();
+    expect(screen.getAllByRole("button", { name: "Skip" })).toHaveLength(1);
   });
 
   // A new account is always in month mode (User.budgetMode defaults to it), and
@@ -418,7 +435,7 @@ describe("setting up an account that has no window yet", () => {
         <HomePage />
       </MemoryRouter>
     );
-    await screen.findByText("Set Up in Three Steps");
+    await screen.findByText("Set Up in Four Steps");
   };
 
   it("asks a days-mode first-timer to start a period, not to log income", async () => {
@@ -674,5 +691,157 @@ describe("naming the window", () => {
     mockPeriod = { current: null, noun: "month", status: "none" };
     await show({ period: null });
     expect(screen.queryByText(/Monthly ·/)).not.toBeInTheDocument();
+  });
+});
+
+// Guided setup. What's done is read off the account — income in the window, a
+// spend, a target — so a step done the long way round still ticks. What the
+// tour provider holds is only what the figures can't say: that this account
+// began setup here, a $0 target, a skipped step, a dismissed list.
+describe("guided setup", () => {
+  const fakeTour = ({ marks = [], ...overrides } = {}) => {
+    const saved = new Set(marks);
+    return {
+      available: true,
+      off: false,
+      running: null,
+      isDone: () => false,
+      has: (id) => saved.has(id),
+      mark: vi.fn(),
+      request: vi.fn(),
+      release: vi.fn(),
+      start: vi.fn(),
+      replay: vi.fn(),
+      setOff: vi.fn(),
+      registerQuest: () => () => {},
+      ...overrides,
+    };
+  };
+
+  const income = {
+    _id: "t0",
+    date: "2026-08-01T00:00:00.000Z",
+    type: "income",
+    amount: 1240,
+    category: "Allowance",
+    description: "Allowance",
+  };
+
+  const showWith = async (tour, overrides = {}, transactions = [entry, income]) => {
+    const { TourContext } = await import("@/tour/TourProvider");
+    fetchHomeStats.mockResolvedValue({ ...stats, periodSavings: 0, ...overrides });
+    fetchTransactions.mockResolvedValue(transactions);
+    render(
+      <TourContext.Provider value={tour}>
+        <MemoryRouter>
+          <HomePage />
+        </MemoryRouter>
+      </TourContext.Provider>
+    );
+    await screen.findByText(/Welcome/);
+  };
+
+  it("stays on Home after the first entries, for an account that began it here", async () => {
+    await showWith(fakeTour({ marks: ["setup.begun"] }));
+    expect(screen.getByText("Set Up in Three Steps")).toBeInTheDocument();
+    // Income is in and a spend is logged; only the target is left.
+    expect(screen.getByText("2 of 3")).toBeInTheDocument();
+    expect(screen.getAllByText(/— done/)).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: /Set what you want to keep/ })
+    ).toBeInTheDocument();
+  });
+
+  it("isn't handed to an account that was already in use", async () => {
+    await showWith(fakeTour());
+    expect(screen.queryByText(/Set Up in/)).not.toBeInTheDocument();
+  });
+
+  it("goes for good once dismissed or finished", async () => {
+    await showWith(fakeTour({ marks: ["setup.begun", "setup.done"] }));
+    expect(screen.queryByText(/Set Up in/)).not.toBeInTheDocument();
+  });
+
+  // $0 is a real answer, and the figures read the same as never having set
+  // one. The mark is what tells them apart.
+  it("counts a $0 target once one has been saved", async () => {
+    await showWith(fakeTour({ marks: ["setup.begun", "setup.savings"] }));
+    expect(screen.getByText("3 of 3")).toBeInTheDocument();
+  });
+
+  it("counts a target that shows in the figures without any mark", async () => {
+    await showWith(fakeTour({ marks: ["setup.begun"] }), { periodSavings: 300 });
+    expect(screen.getByText("3 of 3")).toBeInTheDocument();
+  });
+
+  it("opens a step with the guide beside it when tips are on", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    const tour = fakeTour({ marks: ["setup.begun"] });
+    await showWith(tour);
+    await user.click(screen.getByRole("button", { name: /Set what you want to keep/ }));
+    expect(tour.start).toHaveBeenCalledWith("setup.savings", { label: "Move 2 of 3" });
+    expect(navigate).toHaveBeenCalledWith("/more", { state: { open: "savings" } });
+  });
+
+  // The + button is the lesson, so the guide starts on Home, at the button,
+  // rather than skipping past it into the sheet.
+  it("starts the first spend at the + button instead of opening the sheet", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    const tour = fakeTour({ marks: ["setup.begun"] });
+    await showWith(tour, {}, [income]);
+    await user.click(screen.getByRole("button", { name: /Log your first spend/ }));
+    expect(tour.start).toHaveBeenCalledWith("setup.expense", { label: "Move 3 of 3" });
+    expect(navigate).not.toHaveBeenCalledWith("/transactions", expect.anything());
+  });
+
+  it("opens each step plainly, as before, with tips off", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    const tour = fakeTour({ marks: ["setup.begun"], off: true });
+    await showWith(tour, {}, [income]);
+    await user.click(screen.getByRole("button", { name: /Log your first spend/ }));
+    expect(tour.start).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith("/transactions", {
+      state: { openAdd: "expense" },
+    });
+  });
+
+  it("saves skipping savings, and hiding the list", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    const tour = fakeTour({ marks: ["setup.begun"] });
+    await showWith(tour);
+    await user.click(screen.getByRole("button", { name: "Skip" }));
+    expect(tour.mark).toHaveBeenCalledWith(["setup.savings-skipped"]);
+    await user.click(screen.getByRole("button", { name: "Hide setup" }));
+    expect(tour.mark).toHaveBeenCalledWith(["setup.done"]);
+  });
+
+  it("welcomes an empty account that hasn't begun, and nobody else", async () => {
+    const fresh = fakeTour();
+    fetchHomeStats.mockResolvedValue({ ...stats, leftToSpend: 0, periodIncome: 0, periodExpenses: 0, periodSavings: 0 });
+    fetchTransactions.mockResolvedValue([]);
+    const { TourContext } = await import("@/tour/TourProvider");
+    render(
+      <TourContext.Provider value={fresh}>
+        <MemoryRouter>
+          <HomePage />
+        </MemoryRouter>
+      </TourContext.Provider>
+    );
+    await screen.findByText("Nothing Logged Yet");
+    expect(fresh.request).toHaveBeenCalledWith("setup.welcome");
+    expect(fresh.request).not.toHaveBeenCalledWith("home");
+  });
+
+  it("holds Home's own tour back until setup is out of the way", async () => {
+    const midway = fakeTour({ marks: ["setup.begun"] });
+    await showWith(midway);
+    expect(midway.request).not.toHaveBeenCalledWith("home");
+    expect(midway.request).not.toHaveBeenCalledWith("setup.welcome");
+  });
+
+  it("asks for Home's tour once there's something on the page to explain", async () => {
+    const settled = fakeTour();
+    await showWith(settled);
+    expect(settled.request).toHaveBeenCalledWith("home");
   });
 });

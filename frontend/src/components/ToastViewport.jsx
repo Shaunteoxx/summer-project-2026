@@ -1,10 +1,13 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, XCircle, Info, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, XCircle, Info, X } from "lucide-react";
 
 // Green still means money kept and red still means something went wrong; an
-// informational toast takes ink rather than a third status colour.
+// informational toast takes ink rather than a third status colour. Warning is
+// for something that worked but wants your attention — an entry saved that
+// took today over its budget.
 const VARIANTS = {
   success: { icon: CheckCircle2, accent: "text-positive" },
+  warning: { icon: AlertTriangle, accent: "text-warning" },
   error: { icon: XCircle, accent: "text-negative" },
   info: { icon: Info, accent: "text-ink-2" },
 };
@@ -22,6 +25,7 @@ export default function ToastViewport({ toasts, onDismiss }) {
     <div
       className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4"
       style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+      data-toast-viewport=""
     >
       <div className="w-full max-w-app space-y-2">
         <AnimatePresence initial={false}>
@@ -61,7 +65,7 @@ export default function ToastViewport({ toasts, onDismiss }) {
                       t.action.onClick();
                       onDismiss(t.id);
                     }}
-                    className="-my-1 shrink-0 rounded-sm px-2.5 py-1.5 text-[13px] font-semibold text-ink transition-colors duration-base ease-out hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="-my-1 shrink-0 rounded-sm px-2.5 py-1.5 text-[13px] font-semibold text-ink transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {t.action.label}
                   </button>
@@ -69,7 +73,7 @@ export default function ToastViewport({ toasts, onDismiss }) {
                   <button
                     onClick={() => onDismiss(t.id)}
                     aria-label="Dismiss notification"
-                    className="-my-1 -mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="-my-1 -mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <X className="h-4 w-4" />
                   </button>

@@ -161,7 +161,7 @@ export default function BottomSheet({
                   type="button"
                   onClick={onClose}
                   aria-label={closeLabel}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-2 transition-colors duration-base ease-out hover:bg-surface-3 active:bg-hairline-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-5 w-5" />
                 </button>

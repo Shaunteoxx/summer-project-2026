@@ -1,5 +1,8 @@
 import { NavLink } from "react-router-dom";
+import { motion } from "framer-motion";
 import { Home, Receipt, PieChart, MoreHorizontal } from "lucide-react";
+
+import { EASE } from "@/animations/variants";
 
 // Four destinations, not five. Plan came off the bar: it's an occasional
 // what-if tool on the same numbers as Home, so it reads better as a link from
@@ -25,6 +28,11 @@ const tabs = [
  * Adding a transaction is deliberately NOT a sixth tab or a centre "+": a tab
  * bar is a set of places, and a button that opens a modal can never hold an
  * active state. That job belongs to AddFab.
+ *
+ * Motion is on the icon only, for the same reason there's no pill: the icon
+ * dips while pressed and gives one small pop when its tab becomes the active
+ * one. That's the acknowledgement a tap needs without a moving indicator to
+ * compete with the page transition happening at the same moment.
  */
 export default function BottomNav() {
   return (
@@ -46,12 +54,23 @@ export default function BottomNav() {
             >
               {({ isActive }) => (
                 <>
-                  <Icon
-                    className={`h-[21px] w-[21px] transition-colors duration-base ease-out ${
-                      isActive ? "text-ink" : "text-ink-3 group-hover:text-ink-2"
-                    }`}
-                    strokeWidth={isActive ? 2.15 : 1.9}
-                  />
+                  {/* The pop lives on a wrapper: framer writes an inline
+                      transform, which would override the CSS press scale if
+                      both sat on the icon. initial={false} so a cold load
+                      doesn't pop whichever tab it lands on. */}
+                  <motion.span
+                    initial={false}
+                    animate={isActive ? { scale: [1, 1.14, 1] } : { scale: 1 }}
+                    transition={{ duration: 0.32, ease: EASE }}
+                    className="flex"
+                  >
+                    <Icon
+                      className={`h-[21px] w-[21px] transition-[color,transform] duration-base ease-out group-active:scale-[0.86] ${
+                        isActive ? "text-ink" : "text-ink-3 group-hover:text-ink-2"
+                      }`}
+                      strokeWidth={isActive ? 2.15 : 1.9}
+                    />
+                  </motion.span>
                   <span
                     className={`text-[10.5px] leading-none transition-colors duration-base ease-out ${
                       isActive ? "font-semibold text-ink" : "font-medium text-ink-3"

@@ -98,14 +98,14 @@ export default function Navbar() {
                 <button
                   onClick={() => loadSample()}
                   disabled={loadingSample}
-                  className="font-semibold text-ink underline-offset-2 hover:underline disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                  className="font-semibold text-ink underline-offset-2 hover:underline active:opacity-60 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                 >
                   {loadingSample && replacing === null ? "Loading…" : "Load Sample Data"}
                 </button>
               )}
               <button
                 onClick={logout}
-                className="font-semibold text-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                className="font-semibold text-ink underline-offset-2 hover:underline active:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
               >
                 Sign In
               </button>
