@@ -138,9 +138,9 @@ export default function PlanPage() {
              one their first would be wrong. It's income that's missing.
 
            Whichever it is, the button now *opens the sheet* rather than
-           dropping the reader on the ledger with nothing open — which matters
-           more here than anywhere else, because the + button is deliberately
-           hidden on Plan (see AddFab), so this is the only way in.
+           dropping the reader on the ledger with nothing open. It opens it on
+           Income, too, which is what this page is missing and what the dock's
+           + (which starts on Expense) wouldn't.
 
            `periodExpenses` is the only evidence this page holds about the
            ledger. Someone whose entries are all in an earlier period is

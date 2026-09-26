@@ -41,13 +41,13 @@ function padded(rect, pad) {
 }
 
 /**
- * Scroll the element into the part of the screen the app bar, the tab bar and
- * the add button leave clear — unless it's already there, so a tour of a page
- * that fits the screen never moves it.
+ * Scroll the element into the part of the screen the app bar and the dock
+ * leave clear — unless it's already there, so a tour of a page that fits the
+ * screen never moves it.
  */
 function reveal({ els, rect }, { reduce, safe }) {
   const top = 64 + safe.top;
-  const bottom = window.innerHeight - 150 - safe.bottom;
+  const bottom = window.innerHeight - safe.dock;
   if (rect.top >= top && rect.bottom <= bottom) return;
   const tall = rect.height > (bottom - top) * 0.8;
   els[0].scrollIntoView?.({

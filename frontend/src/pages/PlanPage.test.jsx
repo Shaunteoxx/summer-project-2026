@@ -1,11 +1,10 @@
 // The Plan page's empty state, which three different situations reach through
 // the same `income <= 0` door.
 //
-// It matters more here than on any other screen: the + button is deliberately
-// hidden on Plan (see AddFab), so the button in this empty state is the only
-// way to add anything. It used to navigate to /transactions with no state,
-// which dropped the reader on the ledger with nothing open — a dead end
-// dressed as an action.
+// The button in this empty state is the way in to what the page is missing:
+// it opens the add sheet on Income, where the dock's + starts on Expense. It
+// used to navigate to /transactions with no state, which dropped the reader
+// on the ledger with nothing open — a dead end dressed as an action.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

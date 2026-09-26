@@ -17,14 +17,14 @@ const SWIPE_OFFSET = 80; // px
 const SWIPE_VELOCITY = 500; // px/s
 
 /**
- * Renders the toast stack bottom-center, sitting just above the tab bar
+ * Renders the toast stack bottom-center, sitting just above the dock
  * (the standard mobile snackbar position). Newest toast appears at the bottom.
  */
 export default function ToastViewport({ toasts, onDismiss }) {
   return (
     <div
       className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4"
-      style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+      style={{ bottom: "calc(var(--dock-top) + 10px)" }}
       data-toast-viewport=""
     >
       <div className="w-full max-w-app space-y-2">

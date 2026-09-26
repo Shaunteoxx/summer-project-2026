@@ -89,6 +89,49 @@
     --shadow-float: 0 16px 40px -12px hsl(210 11% 7% / 0.20),
                     0 2px 8px hsl(210 11% 7% / 0.06);
 
+    /* ── Glass — the dock's material ───────────────────────────────────────
+       Liquid Glass, as far as WebKit takes it. Apple keeps the material to
+       the controls that float over content and off the content itself, the
+       same line this system draws by keeping cards flat, so only the dock
+       (tab bar + add button) wears it.
+
+       The lensing can't come across: bending the page at the glass's edge
+       takes SVG filters inside backdrop-filter, which only Chromium runs, and
+       every iPhone browser is WebKit. What's left is what renders there:
+       frost, a lit top rim, a faint darker edge (iOS 27's), and a sheen.
+
+       How clear it can be is set by the worst thing that can pass underneath.
+       The tab labels are ink-2 (ink-3 fails at any clarity worth having), and
+       with a solid ink button scrolled right under them they still hold 4.6:1
+       at 80%. Safari never tells a page that Reduce Transparency is on, so
+       the glass has to be legible on its own.                             */
+    --glass-tint: var(--surface);
+    --glass-alpha: 0.8;
+    --glass-rim: inset 0 1px 0 hsl(0 0% 100% / 0.9),
+                 inset 0 -1px 0 hsl(0 0% 100% / 0.35);
+    --glass-edge: 0 0 0 0.5px hsl(220 6% 10% / 0.1);
+    --glass-shadow: 0 12px 32px -12px hsl(210 11% 7% / 0.24),
+                    0 2px 6px hsl(210 11% 7% / 0.05);
+    --glass-sheen: hsl(0 0% 100% / 0.5);
+    /* The add button is glass stained with ink: the one tinted control, which
+       is how Apple marks a primary action. The + on it reads 11.7:1. */
+    --glass-ink-alpha: 0.86;
+    --glass-ink-rim: inset 0 1px 0 hsl(0 0% 100% / 0.26),
+                     inset 0 -1px 0 hsl(0 0% 100% / 0.06);
+    --glass-ink-sheen: hsl(0 0% 100% / 0.16);
+
+    /* ── Dock geometry ─────────────────────────────────────────────────────
+       The dock floats, set in from the column's edges and down into the
+       home indicator's strip the way iOS 26's own tab bar sits, but never
+       nearer the screen edge than 12px (phones without the strip report 0).
+       --dock-clear is what anything scrolling has to stay out of: pages'
+       bottom padding, scroll margins and the tour all read it, so they move
+       together instead of each carrying its own copy of the dock's height. */
+    --dock-h: 60px;
+    --dock-bottom: max(12px, calc(env(safe-area-inset-bottom) - 12px));
+    --dock-top: calc(var(--dock-bottom) + var(--dock-h));
+    --dock-clear: calc(var(--dock-top) + 20px);
+
     /* ── shadcn aliases ─────────────────────────────────────────────────── */
     --background: var(--canvas);
     --foreground: var(--ink);
@@ -167,6 +210,23 @@
     --shadow-float: 0 20px 48px -12px hsl(0 0% 0% / 0.7),
                     0 2px 8px hsl(0 0% 0% / 0.4);
 
+    /* Surface-2, a step above the cards, so the dock reads as lifted rather
+       than as one more card. 88% for the same worst case turned round: a
+       light button under the ink-2 labels leaves them 4.8:1. A darker edge
+       would vanish on a dark page, so a faint light one stands in for it. */
+    --glass-tint: var(--surface-2);
+    --glass-alpha: 0.88;
+    --glass-rim: inset 0 1px 0 hsl(0 0% 100% / 0.12),
+                 inset 0 -1px 0 hsl(0 0% 100% / 0.04);
+    --glass-edge: 0 0 0 0.5px hsl(0 0% 100% / 0.08);
+    --glass-shadow: 0 14px 36px -12px hsl(0 0% 0% / 0.7),
+                    0 2px 8px hsl(0 0% 0% / 0.35);
+    --glass-sheen: hsl(0 0% 100% / 0.06);
+    /* Ink is near-white here, so the + (surface on ink) reads 11.1:1. */
+    --glass-ink-rim: inset 0 1px 0 hsl(0 0% 100% / 0.9),
+                     inset 0 -1px 0 hsl(0 0% 0% / 0.08);
+    --glass-ink-sheen: hsl(0 0% 100% / 0.4);
+
     --success-foreground: 160 60% 6%;
     /* Dark mode's negative is a lighter red than light mode's, so white text on
        a filled destructive button drops to 3.3:1. A near-black red on it reads
@@ -174,6 +234,34 @@
        (6.1:1 on its darker red), so only this dark override is needed. */
     --destructive-foreground: 4 62% 8%;
     --primary-foreground: var(--surface);
+  }
+
+  /* The glass goes solid wherever the page can tell it would get in the way.
+     More contrast is a setting Safari does report. Reduced transparency is
+     Chromium's only: WebKit doesn't expose it, which is why the clarity above
+     is chosen to be legible without it. And without backdrop-filter at all,
+     a see-through dock would show the page sharp behind its labels. */
+  @media (prefers-contrast: more) {
+    :root,
+    .dark {
+      --glass-alpha: 1;
+      --glass-ink-alpha: 1;
+      --glass-edge: 0 0 0 1px hsl(var(--hairline-strong));
+    }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    :root,
+    .dark {
+      --glass-alpha: 1;
+      --glass-ink-alpha: 1;
+    }
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    :root,
+    .dark {
+      --glass-alpha: 1;
+      --glass-ink-alpha: 1;
+    }
   }
 }
 
@@ -219,14 +307,14 @@
   }
 
   /* Anything a tour can point at scrolls clear of the app bar above and the
-     tab bar and add button below, rather than under them. */
+     dock below, rather than under them. */
   [data-tour] {
     scroll-margin-top: 76px;
-    scroll-margin-bottom: calc(150px + env(safe-area-inset-bottom));
+    scroll-margin-bottom: var(--dock-clear);
   }
 
-  /* Toasts sit over the add button's corner. While a tour card is up they'd
-     cover the very thing it's pointing at — and whatever they say, the card
+  /* Toasts sit just above the dock. While a tour card is up they'd cover
+     whatever it's pointing at down there — and whatever they say, the card
      is saying already — so they wait underneath until it's gone. */
   body[data-touring] [data-toast-viewport] {
     visibility: hidden;
@@ -267,6 +355,41 @@
     background: hsl(var(--surface) / 0.92);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  /* The dock's glass; the tokens say why it's built the way it is. `.glass`
+     is the clear kind, `.glass-ink` the stained kind for the add button.
+
+     The sheen is a pseudo-element under the content. backdrop-filter already
+     makes each piece its own stacking context (isolation says so outright),
+     so z-index -1 paints it above the fill and below the labels. */
+  .glass,
+  .glass-ink {
+    position: relative;
+    isolation: isolate;
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    backdrop-filter: blur(18px) saturate(180%);
+  }
+  .glass {
+    background: hsl(var(--glass-tint) / var(--glass-alpha));
+    box-shadow: var(--glass-rim), var(--glass-edge), var(--glass-shadow);
+  }
+  .glass-ink {
+    background: hsl(var(--ink) / var(--glass-ink-alpha));
+    box-shadow: var(--glass-ink-rim), var(--glass-shadow);
+  }
+  .glass::before,
+  .glass-ink::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(to bottom, var(--glass-sheen), transparent 55%);
+  }
+  .glass-ink::before {
+    background: linear-gradient(to bottom, var(--glass-ink-sheen), transparent 55%);
   }
 
   /* Negative tracking scales with size, so $48.60 and $4,820.50 keep the same

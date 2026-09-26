@@ -282,10 +282,11 @@ export const TOURS = {
         route: "/",
         target: "fab",
         interactive: true,
-        radius: 22,
+        // A circle: the 60px disc plus the ring's 6px padding either side.
+        radius: 36,
         title: "Tap + to Log a Spend",
         body: "This is the button you'll use every day.",
-        // It's fixed in the corner; there's nothing to scroll to.
+        // It's fixed in the dock; there's nothing to scroll to.
         noScroll: true,
         // The button takes you to the ledger with the sheet open, so arriving
         // there is the tap.

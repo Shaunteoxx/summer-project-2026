@@ -55,19 +55,24 @@ export function moved(a, b) {
 }
 
 /**
- * The notch and home-indicator insets, in px. CSS knows them and JS doesn't,
- * so a hidden probe reads them back once.
+ * The notch and home-indicator insets, and the strip of screen the dock keeps
+ * (--dock-clear), in px. CSS knows them and JS doesn't, so a hidden probe
+ * reads them back once.
  */
 export function readSafeArea() {
   const probe = document.createElement("div");
   probe.style.cssText =
     "position:fixed;visibility:hidden;pointer-events:none;" +
-    "padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)";
+    "padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);" +
+    "margin-bottom:var(--dock-clear)";
   document.body.appendChild(probe);
   const style = getComputedStyle(probe);
   const insets = {
     top: parseFloat(style.paddingTop) || 0,
     bottom: parseFloat(style.paddingBottom) || 0,
+    // 92px is the dock's clearance on a phone with no home indicator, for a
+    // DOM that doesn't resolve custom properties (the tests').
+    dock: parseFloat(style.marginBottom) || 92,
   };
   probe.remove();
   return insets;

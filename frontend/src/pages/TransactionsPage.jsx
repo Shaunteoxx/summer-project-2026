@@ -491,10 +491,10 @@ export default function TransactionsPage() {
 
       {/* No Income/Expense buttons here any more. The sheet carries its own
           Expense/Income toggle, so the choice happens where the form is rather
-          than before you've seen it — and the FAB in the app shell is a
-          persistent 54px target that doesn't scroll away. Moving money between
-          accounts lives in the Account activity card above, next to the
-          accounts it moves between. */}
+          than before you've seen it — and the + in the dock is a persistent
+          target that doesn't scroll away. Moving money between accounts lives
+          in the Account activity card above, next to the accounts it moves
+          between. */}
 
       <AddTransactionSheet
         type={formType}
@@ -777,9 +777,9 @@ export default function TransactionsPage() {
                             exit: (swiped) => (swiped === t._id ? SWIPE_EXIT : BUTTON_EXIT),
                           }}
                           exit="exit"
-                          // Margins clear the sticky header above and the tab
-                          // bar plus add button below when this is scrolled to.
-                          className="relative overflow-hidden scroll-mt-[72px] scroll-mb-[calc(148px+env(safe-area-inset-bottom))]"
+                          // Margins clear the sticky header above and the dock
+                          // below when this is scrolled to.
+                          className="relative overflow-hidden scroll-mt-[72px] scroll-mb-[var(--dock-clear)]"
                         >
                           <SwipeToDelete
                             onDelete={() => handleDelete(t._id, { swiped: true })}
