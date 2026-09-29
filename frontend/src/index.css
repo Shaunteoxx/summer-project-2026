@@ -119,19 +119,25 @@
     --glass-ink-rim: inset 0 1px 0 hsl(0 0% 100% / 0.26),
                      inset 0 -1px 0 hsl(0 0% 100% / 0.06);
     --glass-ink-sheen: hsl(0 0% 100% / 0.16);
-    /* The switch knob: solid white at rest like any iOS switch, and a lens
-       of clear glass while it's held or on its way across (.switch-knob).
-       Both shadows list the same four layers, insets first, so one can
-       animate into the other; lists that don't line up snap halfway. */
+    /* The lens: what a switch knob or a segmented control's pill turns into
+       while it's held or on its way across (.switch-knob, .segment-glass).
+       Solid at rest like any iOS control. Every shadow here lists the same
+       four layers, insets first, so the resting one can animate into the
+       lens's; lists that don't line up snap halfway. */
     --glass-lens-alpha: 0.3;
+    --lens-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.9),
+                   inset 0 -1px 0 hsl(0 0% 100% / 0.35),
+                   0 0 0 0.5px hsl(210 11% 7% / 0.12),
+                   0 4px 12px -2px hsl(210 11% 7% / 0.22);
     --switch-knob-shadow: inset 0 1px 0 hsl(0 0% 100% / 0),
                           inset 0 -1px 0 hsl(0 0% 100% / 0),
                           0 0 0 0.5px hsl(210 11% 7% / 0.06),
                           0 1px 3px hsl(210 11% 7% / 0.18);
-    --switch-lens-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.9),
-                          inset 0 -1px 0 hsl(0 0% 100% / 0.35),
-                          0 0 0 0.5px hsl(210 11% 7% / 0.12),
-                          0 4px 12px -2px hsl(210 11% 7% / 0.22);
+    /* shadow-card, in the lens's four layers. */
+    --segment-shadow: inset 0 1px 0 hsl(0 0% 100% / 0),
+                      inset 0 -1px 0 hsl(0 0% 100% / 0),
+                      0 0 0 0.5px hsl(210 11% 7% / 0),
+                      0 1px 2px hsl(210 11% 7% / 0.04);
 
     /* ── Dock geometry ─────────────────────────────────────────────────────
        The dock floats, set in from the column's edges and down into the
@@ -239,14 +245,19 @@
     --glass-ink-rim: inset 0 1px 0 hsl(0 0% 100% / 0.9),
                      inset 0 -1px 0 hsl(0 0% 0% / 0.08);
     --glass-ink-sheen: hsl(0 0% 100% / 0.4);
+    --lens-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.7),
+                   inset 0 -1px 0 hsl(0 0% 100% / 0.2),
+                   0 0 0 0.5px hsl(0 0% 100% / 0.16),
+                   0 4px 12px -2px hsl(0 0% 0% / 0.6);
     --switch-knob-shadow: inset 0 1px 0 hsl(0 0% 100% / 0),
                           inset 0 -1px 0 hsl(0 0% 100% / 0),
                           0 0 0 0.5px hsl(0 0% 0% / 0.2),
                           0 1px 3px hsl(0 0% 0% / 0.5);
-    --switch-lens-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.7),
-                          inset 0 -1px 0 hsl(0 0% 100% / 0.2),
-                          0 0 0 0.5px hsl(0 0% 100% / 0.16),
-                          0 4px 12px -2px hsl(0 0% 0% / 0.6);
+    /* shadow-card is none in dark mode; so is this, in four layers. */
+    --segment-shadow: inset 0 1px 0 hsl(0 0% 100% / 0),
+                      inset 0 -1px 0 hsl(0 0% 100% / 0),
+                      0 0 0 0.5px hsl(0 0% 100% / 0),
+                      0 1px 2px hsl(0 0% 0% / 0);
 
     --success-foreground: 160 60% 6%;
     /* Dark mode's negative is a lighter red than light mode's, so white text on
@@ -433,7 +444,23 @@
   .group:active:not(:disabled) .switch-knob {
     transform: scale(1.3, 1.4);
     background: hsl(0 0% 100% / var(--glass-lens-alpha));
-    box-shadow: var(--switch-lens-shadow);
+    box-shadow: var(--lens-shadow);
+  }
+
+  /* A segmented control's pill, the same way (SegmentPill's `glass`): held,
+     it swells into a lens that spills a little past the control; moved, it
+     crosses as glass and lands solid (the segment-lens keyframes). It grows
+     less than a knob does, being several times wider. */
+  .segment-glass {
+    box-shadow: var(--segment-shadow);
+    transition-property: transform, background-color, box-shadow;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .group:active .segment-glass {
+    transform: scale(1.12, 1.35);
+    background: hsl(0 0% 100% / var(--glass-lens-alpha));
+    box-shadow: var(--lens-shadow);
   }
 
   /* Negative tracking scales with size, so $48.60 and $4,820.50 keep the same

@@ -11,12 +11,23 @@ const switchLens = {
   "0%, 30%": {
     transform: "scale(1.3, 1.4)",
     backgroundColor: "hsl(0 0% 100% / var(--glass-lens-alpha))",
-    boxShadow: "var(--switch-lens-shadow)",
+    boxShadow: "var(--lens-shadow)",
   },
   "100%": {
     transform: "scale(1)",
     backgroundColor: "hsl(0 0% 100%)",
     boxShadow: "var(--switch-knob-shadow)",
+  },
+};
+
+// A segmented control's pill, the same trip (SegmentPill's `glass`). No end
+// frame: an animation without one ends on the element's own values, which
+// is how the pill lands on whichever surface its theme gives it.
+const segmentLens = {
+  "0%, 30%": {
+    transform: "scale(1.12, 1.35)",
+    backgroundColor: "hsl(0 0% 100% / var(--glass-lens-alpha))",
+    boxShadow: "var(--lens-shadow)",
   },
 };
 
@@ -191,6 +202,8 @@ export default {
            its name changes, so each flip swaps to the other one. */
         "switch-lens-on": switchLens,
         "switch-lens-off": switchLens,
+        "segment-lens-a": segmentLens,
+        "segment-lens-b": segmentLens,
       },
       animation: {
         "fade-in": "fade-in 180ms cubic-bezier(0.32,0.72,0,1)",
@@ -205,6 +218,8 @@ export default {
         "tour-pulse": "tour-pulse 1.6s cubic-bezier(0.65,0,0.35,1) infinite",
         "switch-on": "switch-lens-on 460ms cubic-bezier(0.32,0.72,0,1)",
         "switch-off": "switch-lens-off 460ms cubic-bezier(0.32,0.72,0,1)",
+        "segment-a": "segment-lens-a 460ms cubic-bezier(0.32,0.72,0,1)",
+        "segment-b": "segment-lens-b 460ms cubic-bezier(0.32,0.72,0,1)",
       },
     },
   },

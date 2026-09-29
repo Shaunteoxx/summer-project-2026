@@ -1921,14 +1921,26 @@ export function RowValue({ children, strong }) {
  * Segmented control. Replaces the theme toggle switch: a switch implies
  * on/off, but light and dark are two peers — and the labels say which is
  * which without the user having to work out what "on" meant.
+ *
+ * The selected side is iOS 26's glass pill (SegmentPill's `glass`): it slides
+ * rather than jumping, swells into clear glass while the control is held
+ * (hence `group`), and crosses as glass when it moves.
+ *
+ * The pill needs equal segments, so they're grid columns, each at least
+ * 64px. The floor matters: the chosen label is set semibold, and columns
+ * sized to the widest label would shrink by a few px each time the bold side
+ * swapped, nudging the whole row.
  */
 export function Segmented({ label, options, value, onChange, className }) {
+  const index = options.findIndex((o) => o.value === value);
   return (
     <div
       role="group"
       aria-label={label}
-      className={cn("flex shrink-0 gap-0.5 rounded-md bg-surface-2 p-[3px]", className)}
+      className={cn("group relative grid shrink-0 gap-0.5 rounded-md bg-surface-2 p-[3px]", className)}
+      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(64px, 1fr))` }}
     >
+      <SegmentPill index={index} count={options.length} glass />
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -1938,11 +1950,9 @@ export function Segmented({ label, options, value, onChange, className }) {
             aria-pressed={on}
             onClick={() => onChange(o.value)}
             className={cn(
-              "rounded-[9px] px-3.5 py-1.5 text-[13px] transition-colors duration-base ease-out",
+              "relative rounded-[9px] px-3.5 py-1.5 text-[13px] transition-colors duration-base ease-out",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              on
-                ? "bg-surface font-semibold text-ink shadow-card dark:bg-surface-3"
-                : "font-medium text-ink-3"
+              on ? "font-semibold text-ink" : "font-medium text-ink-3"
             )}
           >
             {o.label}
