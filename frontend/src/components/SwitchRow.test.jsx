@@ -60,3 +60,29 @@ describe("SwitchRow", () => {
     expect(control).not.toHaveAttribute("aria-describedby");
   });
 });
+
+// The knob crosses as glass when it flips. What jsdom can check is when that
+// plays: never on first paint, where a switch that arrives already on would
+// swell for nothing, and afresh on every flip after.
+describe("the knob", () => {
+  const knob = () => document.querySelector(".switch-knob");
+  const row = (checked) => (
+    <SwitchRow checked={checked} onChange={() => {}} label="Repeat Every Month" />
+  );
+
+  it("stays solid on first paint, even when it arrives on", () => {
+    render(row(true));
+    expect(knob().className).not.toMatch(/animate-switch/);
+  });
+
+  it("crosses as glass on each flip", () => {
+    const { rerender } = render(row(false));
+    rerender(row(true));
+    expect(knob()).toHaveClass("animate-switch-on");
+    // A different name each way, so the animation replays rather than being
+    // skipped as already run.
+    rerender(row(false));
+    expect(knob()).toHaveClass("animate-switch-off");
+    expect(knob()).not.toHaveClass("animate-switch-on");
+  });
+});

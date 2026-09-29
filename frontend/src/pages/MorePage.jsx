@@ -1864,8 +1864,10 @@ export function Row({ icon: Icon, title, meta, value, onClick, chevron = true, .
       {...rest}
       className={cn(
         "flex w-full items-center gap-3 px-4 py-[13px] text-left",
+        // `group` lets a SwitchTrack in `value` turn to glass while the row
+        // is held; nothing else in a row keys off it.
         onClick &&
-          "transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          "group transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       )}
     >
       <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-sm bg-surface-2 text-ink-2">

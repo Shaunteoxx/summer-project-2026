@@ -119,6 +119,19 @@
     --glass-ink-rim: inset 0 1px 0 hsl(0 0% 100% / 0.26),
                      inset 0 -1px 0 hsl(0 0% 100% / 0.06);
     --glass-ink-sheen: hsl(0 0% 100% / 0.16);
+    /* The switch knob: solid white at rest like any iOS switch, and a lens
+       of clear glass while it's held or on its way across (.switch-knob).
+       Both shadows list the same four layers, insets first, so one can
+       animate into the other; lists that don't line up snap halfway. */
+    --glass-lens-alpha: 0.3;
+    --switch-knob-shadow: inset 0 1px 0 hsl(0 0% 100% / 0),
+                          inset 0 -1px 0 hsl(0 0% 100% / 0),
+                          0 0 0 0.5px hsl(210 11% 7% / 0.06),
+                          0 1px 3px hsl(210 11% 7% / 0.18);
+    --switch-lens-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.9),
+                          inset 0 -1px 0 hsl(0 0% 100% / 0.35),
+                          0 0 0 0.5px hsl(210 11% 7% / 0.12),
+                          0 4px 12px -2px hsl(210 11% 7% / 0.22);
 
     /* ── Dock geometry ─────────────────────────────────────────────────────
        The dock floats, set in from the column's edges and down into the
@@ -226,6 +239,14 @@
     --glass-ink-rim: inset 0 1px 0 hsl(0 0% 100% / 0.9),
                      inset 0 -1px 0 hsl(0 0% 0% / 0.08);
     --glass-ink-sheen: hsl(0 0% 100% / 0.4);
+    --switch-knob-shadow: inset 0 1px 0 hsl(0 0% 100% / 0),
+                          inset 0 -1px 0 hsl(0 0% 100% / 0),
+                          0 0 0 0.5px hsl(0 0% 0% / 0.2),
+                          0 1px 3px hsl(0 0% 0% / 0.5);
+    --switch-lens-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.7),
+                          inset 0 -1px 0 hsl(0 0% 100% / 0.2),
+                          0 0 0 0.5px hsl(0 0% 100% / 0.16),
+                          0 4px 12px -2px hsl(0 0% 0% / 0.6);
 
     --success-foreground: 160 60% 6%;
     /* Dark mode's negative is a lighter red than light mode's, so white text on
@@ -246,6 +267,7 @@
     .dark {
       --glass-alpha: 1;
       --glass-ink-alpha: 1;
+      --glass-lens-alpha: 1;
       --glass-edge: 0 0 0 1px hsl(var(--hairline-strong));
     }
   }
@@ -254,6 +276,7 @@
     .dark {
       --glass-alpha: 1;
       --glass-ink-alpha: 1;
+      --glass-lens-alpha: 1;
     }
   }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -261,6 +284,7 @@
     .dark {
       --glass-alpha: 1;
       --glass-ink-alpha: 1;
+      --glass-lens-alpha: 1;
     }
   }
 }
@@ -390,6 +414,26 @@
   }
   .glass-ink::before {
     background: linear-gradient(to bottom, var(--glass-ink-sheen), transparent 55%);
+  }
+
+  /* The switch knob (SwitchTrack). Solid at rest, and a lens of clear glass
+     while its row is held: the one place Apple lets glass into content is a
+     control, and only while it's being used. It scales from its centre and
+     grows past the track, as the iPhone's does. There's nothing to refract
+     under it but its own flat track, so the lensing WebKit can't draw is no
+     loss here. The trip across, leaving as glass and landing solid, is the
+     switch-lens keyframes in tailwind.config.js. */
+  .switch-knob {
+    background: hsl(0 0% 100%);
+    box-shadow: var(--switch-knob-shadow);
+    transition-property: transform, background-color, box-shadow;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .group:active:not(:disabled) .switch-knob {
+    transform: scale(1.3, 1.4);
+    background: hsl(0 0% 100% / var(--glass-lens-alpha));
+    box-shadow: var(--switch-lens-shadow);
   }
 
   /* Negative tracking scales with size, so $48.60 and $4,820.50 keep the same

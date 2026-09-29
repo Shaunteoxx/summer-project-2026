@@ -4,6 +4,22 @@
 // defined there for both themes.
 const token = (name) => `hsl(var(--${name}) / <alpha-value>)`;
 
+// A switch knob's trip across: it leaves as a lens of clear glass and lands
+// solid, the way an iOS 26 switch does. The first frames match the held look
+// in index.css (.switch-knob), so letting go carries straight on from it.
+const switchLens = {
+  "0%, 30%": {
+    transform: "scale(1.3, 1.4)",
+    backgroundColor: "hsl(0 0% 100% / var(--glass-lens-alpha))",
+    boxShadow: "var(--switch-lens-shadow)",
+  },
+  "100%": {
+    transform: "scale(1)",
+    backgroundColor: "hsl(0 0% 100%)",
+    boxShadow: "var(--switch-knob-shadow)",
+  },
+};
+
 export default {
   darkMode: ["class"],
   // hover: only where a real hover exists. On a phone a tap fires :hover and
@@ -171,6 +187,10 @@ export default {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.35" },
         },
+        /* The same frames under two names: an animation only replays when
+           its name changes, so each flip swaps to the other one. */
+        "switch-lens-on": switchLens,
+        "switch-lens-off": switchLens,
       },
       animation: {
         "fade-in": "fade-in 180ms cubic-bezier(0.32,0.72,0,1)",
@@ -183,6 +203,8 @@ export default {
           "track-slide 1.15s cubic-bezier(0.65,0,0.35,1) infinite",
         "fade-in-delayed": "fade-in-delayed 700ms ease-out forwards",
         "tour-pulse": "tour-pulse 1.6s cubic-bezier(0.65,0,0.35,1) infinite",
+        "switch-on": "switch-lens-on 460ms cubic-bezier(0.32,0.72,0,1)",
+        "switch-off": "switch-lens-off 460ms cubic-bezier(0.32,0.72,0,1)",
       },
     },
   },
