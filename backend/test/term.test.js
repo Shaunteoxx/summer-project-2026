@@ -1,8 +1,8 @@
 // Term cycles — a lump sum sliced into the calendar months it has to cover.
 // Pure functions, so no database here. The cases that matter are the clipped
 // stub cycles a mid-month start produces, month-length clamping, and that the
-// rebalance is actually calibrated: spending exactly what a cycle was given has
-// to leave every later cycle untouched.
+// rebalance is actually calibrated: spending exactly a cycle's budget has to
+// leave every later cycle untouched, and its savings target has to stay saved.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
@@ -15,6 +15,9 @@ import {
   monthPeriodOf,
   periodEnd,
   periodStatus,
+  priceCycles,
+  setAsideFor,
+  settleCycles,
   termEnd,
 } from "../lib/period.js";
 
@@ -216,6 +219,92 @@ describe("funding a cycle", () => {
   it("stays safe on a cycle it was never given" , () => {
     assert.equal(fundingFor(null, 6000), 0);
     assert.equal(fundingFor({ weight: 1 }, 6000), 0);
+  });
+});
+
+// A savings target is reserved out of each month's share. Once the month ends
+// it has to leave the pot, the way month mode assumes it went to savings — left
+// in, it reads as an underspend and the next month is handed it back to spend.
+describe("savings in a term", () => {
+  // $300 a month on a January–March term (0-based savingsByMonth keys).
+  const targets = { "2026-0": 300, "2026-1": 300, "2026-2": 300 };
+
+  /**
+   * Walk a term the way it's lived: price the month with what has happened so
+   * far, then spend `spend(funding, cycle)` in it.
+   */
+  const live = (t, lump, savingsByMonth, spend) => {
+    const cycles = cyclesOfTerm(t, savingsByMonth);
+    const incomeByCycle = new Map([[cycles[0].key, lump]]);
+    const expenseByCycle = new Map();
+    return cycles.map((cycle) => {
+      const funding = priceCycles(cycles, { incomeByCycle, expenseByCycle }).get(cycle.key);
+      expenseByCycle.set(cycle.key, spend(funding, cycle));
+      return funding;
+    });
+  };
+
+  it("keeps every month's target, not just the last one's", () => {
+    // Spend exactly the budget — share minus target — every month.
+    const onBudget = (funding, cycle) => funding - cycle.savings;
+    const shares = live(term("2026-01-01", 3), 3000, targets, onBudget);
+
+    // Each month is still offered $1,000 and spends $700. Before the target left
+    // the pot this read $1,000, $1,150, $1,450: $2,700 spent and $300 saved
+    // against $900 of targets.
+    assert.deepEqual(shares, [1000, 1000, 1000]);
+    const spent = shares.reduce((n, share) => n + share - 300, 0);
+    assert.equal(3000 - spent, 900);
+  });
+
+  it("is calibrated against the budget: staying on it leaves later months alone", () => {
+    const onBudget = (funding, cycle) => funding - cycle.savings;
+    assert.deepEqual(
+      live(term("2026-01-01", 3), 3000, targets, onBudget),
+      live(term("2026-01-01", 3), 3000, {}, (funding) => funding)
+    );
+  });
+
+  it("still takes the target out of a month that spent into it", () => {
+    // January spends its whole $1,000, target and all. The target is taken to
+    // have gone to savings regardless, so February shares $3,000 − $1,300.
+    const [jan, feb] = live(term("2026-01-01", 3), 3000, targets, (funding) => funding);
+    assert.equal(jan, 1000);
+    assert.equal(feb, 850);
+  });
+
+  it("only takes out targets that were actually set", () => {
+    // February has no target, so only January's leaves the pot before March.
+    const onBudget = (funding, cycle) => funding - cycle.savings;
+    const shares = live(term("2026-01-01", 3), 3000, { "2026-0": 300 }, onBudget);
+    assert.deepEqual(shares, [1000, 1000, 1000]);
+  });
+
+  it("never sets aside more than the allowance still holds", () => {
+    const [cycle] = cyclesOfTerm(term("2026-01-01", 3), targets);
+    assert.equal(setAsideFor(cycle, 1000), 300);
+    assert.equal(setAsideFor(cycle, 200), 200);
+    // Nothing left once the month's spending is out, so nothing to put away.
+    assert.equal(setAsideFor(cycle, 0), 0);
+    assert.equal(setAsideFor(cycle, -500), 0);
+    assert.equal(setAsideFor({}, 1000), 0);
+  });
+
+  it("doesn't dock a top-up for a target an empty pot couldn't meet", () => {
+    // The whole $3,000 goes in January, so its $300 target had nothing to move
+    // and February gets nothing. March's $600 top-up then arrives whole, rather
+    // than $300 short for a transfer that couldn't have happened.
+    const cycles = cyclesOfTerm(term("2026-01-01", 3), targets);
+    const settled = settleCycles(cycles, {
+      incomeByCycle: new Map([
+        [cycles[0].key, 3000],
+        [cycles[2].key, 600],
+      ]),
+      expenseByCycle: new Map([[cycles[0].key, 3000]]),
+    });
+    assert.deepEqual(settled.get(cycles[0].key), { funding: 1000, setAside: 0 });
+    assert.equal(settled.get(cycles[1].key).funding, 0);
+    assert.equal(settled.get(cycles[2].key).funding, 600);
   });
 });
 

@@ -678,15 +678,20 @@ export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
 export function TermCard({ term, current, cycles = [] }) {
   const income = term.income ?? 0;
   const spent = term.spent ?? 0;
+  // Finished months' savings targets, taken out of the allowance when each
+  // month ended. `left` already excludes them, so the bar counts them as gone
+  // too — otherwise it would stop short of what the headline says is left.
+  const saved = term.saved ?? 0;
   const left = term.left ?? 0;
-  const pct = income > 0 ? Math.min((spent / income) * 100, 100) : 0;
+  const pct = income > 0 ? Math.min(((spent + saved) / income) * 100, 100) : 0;
   const monthsLeft = current.cycles - current.cycle;
 
   // What each month of the allowance gets. The server prices every cycle up to
   // this one; the ones after it can't be priced, because their share depends on
   // what still gets spent this month. They're shown at this month's rate, which
-  // is what they'd actually be if it's spent in full — the split is calibrated
-  // so that spending exactly your share leaves the next month's share alone.
+  // is what they'd actually be if the month lands on budget — the split is
+  // calibrated so that spending exactly your share less its savings target
+  // leaves the next month's share alone.
   const crossesYear = term.start.slice(0, 4) !== term.end.slice(0, 4);
   const months = [...cycles]
     .sort((a, b) => (a.start < b.start ? -1 : 1))
@@ -756,7 +761,15 @@ export function TermCard({ term, current, cycles = [] }) {
           data-measure="term-caption"
           className="mt-2.5 text-[11.5px] leading-relaxed text-ink-3"
         >
-          {formatMoney(spent)} spent since it started.
+          {/* With savings in it the sentence runs long, and "since it
+              started" is what wraps it at 320px; "so far" says the same. */}
+          {saved > 0 ? (
+            <>
+              {formatMoney(spent)} spent and {formatMoney(saved)} saved so far.
+            </>
+          ) : (
+            <>{formatMoney(spent)} spent since it started.</>
+          )}
         </p>
 
         {months.length > 0 && (

@@ -13,7 +13,7 @@ import {
   toPeriod,
 } from "../lib/period.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
-import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
+import { ensureCurrentMonthSavings, monthKeyOf } from "../lib/savingsCarry.js";
 import { ensureRecurringDue } from "../lib/recurring.js";
 import {
   MAX_YEAR,
@@ -266,6 +266,8 @@ function presentTerm(term, totals) {
     // carries nulls rather than a figure nobody asked the database for.
     income: totals?.income ?? null,
     spent: totals?.spent ?? null,
+    // Savings targets of the months that have ended, taken out of the pot.
+    saved: totals?.saved ?? null,
     left: totals?.left ?? null,
   };
 }
@@ -324,10 +326,21 @@ export async function createTerm(req, res) {
   });
 
   // Setting one up is how term mode gets switched on for a first-timer.
-  if (req.user.budgetMode !== "term") {
-    req.user.budgetMode = "term";
-    await req.user.save();
+  if (req.user.budgetMode !== "term") req.user.budgetMode = "term";
+  // A lump sum split over months almost always wants the same target every
+  // month, and repeat is off by default — so a target set once would only hold
+  // for the month it was set in. Only switched on here, never off, and the
+  // savings sheet's toggle still turns it off for anyone who'd rather not.
+  if (!req.user.repeatSavings) {
+    req.user.repeatSavings = true;
+    // Pin this month as it stands (an unset month is a zero target). Otherwise
+    // the carry would reach back for the last month that had a target — however
+    // long ago — and drop it on this month's budget unasked. The sheet does the
+    // same when repeat is turned on there, since saving it writes this month.
+    const key = monthKeyOf(ymd(utcToday()));
+    if (!req.user.savingsByMonth.has(key)) req.user.savingsByMonth.set(key, 0);
   }
+  if (req.user.isModified()) await req.user.save();
 
   res.status(201).json(presentTerm(created));
 }

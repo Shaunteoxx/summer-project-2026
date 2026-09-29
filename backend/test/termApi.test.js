@@ -58,6 +58,12 @@ const monthStart = (back = 0) => {
     .slice(0, 10);
 };
 
+/** savingsByMonth's "YYYY-M" key (0-based month) for `n` months back from today. */
+const monthKey = (back = 0) => {
+  const d = new Date(`${monthStart(back)}T00:00:00.000Z`);
+  return `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+};
+
 before(async () => {
   mongo = await MongoMemoryServer.create();
   Object.assign(process.env, {
@@ -137,6 +143,53 @@ describe("setting up a term", () => {
 
     const fresh = await User.findById(user._id);
     assert.equal(fresh.budgetMode, "term");
+  });
+
+  it("turns repeating savings on, starting from this month's target", async () => {
+    // A target from months back that was never repeated. Switching repeat on
+    // must not carry it into this month on the next load.
+    const user = await makeUser();
+    const token = signToken(user);
+    await call("/api/auth/savings", token, "PUT", { key: monthKey(3), amount: 250 });
+
+    await call("/api/period/term", token, "POST", { start: monthStart(0), months: 6 });
+    await call(`/api/period?today=${todayYmd()}`, token);
+
+    const fresh = await User.findById(user._id);
+    assert.equal(fresh.repeatSavings, true);
+    assert.equal(fresh.savingsByMonth.get(monthKey(0)), 0);
+  });
+
+  it("keeps a target already set for this month", async () => {
+    const user = await makeUser();
+    const token = signToken(user);
+    await call("/api/auth/savings", token, "PUT", { key: monthKey(0), amount: 150 });
+
+    await call("/api/period/term", token, "POST", { start: monthStart(0), months: 6 });
+
+    const fresh = await User.findById(user._id);
+    assert.equal(fresh.repeatSavings, true);
+    assert.equal(fresh.savingsByMonth.get(monthKey(0)), 150);
+  });
+
+  it("leaves repeat off once it has been turned off", async () => {
+    const user = await makeUser();
+    const token = signToken(user);
+    const { body: term } = await call("/api/period/term", token, "POST", {
+      start: monthStart(0),
+      months: 6,
+    });
+    await call("/api/auth/savings", token, "PUT", {
+      key: monthKey(0),
+      amount: 100,
+      repeat: false,
+    });
+
+    // Only setting a term up switches it on; editing one doesn't.
+    await call(`/api/period/term/${term.id}`, token, "PATCH", { months: 4 });
+
+    const fresh = await User.findById(user._id);
+    assert.equal(fresh.repeatSavings, false);
   });
 
   it("derives the end date from the month count", async () => {
@@ -539,5 +592,80 @@ describe("what each cycle was given", () => {
     const settled = body.history.filter((c) => c.funding !== null);
     assert.equal(settled.length, 3);
     assert.ok(settled.every((c) => c.funding === 1000));
+  });
+});
+
+// A savings target is reserved out of each month's share, and once the month is
+// over it's taken to have gone to savings — the assumption month mode makes. The
+// bug this guards: the target never left the pot, so it read as an underspend
+// and the next month was handed it back to spend. Only the last month's target
+// ever survived the term.
+describe("a savings target in a term", () => {
+  /** Mid-term, $200 a month, with both finished months spent exactly on budget. */
+  async function onBudget() {
+    const setup = await midTerm({ lump: 6000, months: 6, back: 2 });
+    for (const back of [2, 1, 0]) {
+      await call("/api/auth/savings", setup.token, "PUT", {
+        key: monthKey(back),
+        amount: 200,
+      });
+    }
+    // Each month's budget is its $1,000 share less the $200 target.
+    await addTxn(setup.user._id, monthStart(2), "expense", 800);
+    await addTxn(setup.user._id, monthStart(1), "expense", 800);
+    return setup;
+  }
+
+  it("keeps each finished month's target out of the months after it", async () => {
+    const { token } = await onBudget();
+    const { body } = await call(`/api/period?today=${todayYmd()}`, token);
+    const by = Object.fromEntries(body.history.map((c) => [c.start, c.funding]));
+
+    // Staying on budget leaves the split where it started. With the targets
+    // left in the pot this read $1,000, $1,040, $1,100 — the $200s coming back.
+    assert.equal(by[monthStart(2)], 1000);
+    assert.equal(by[monthStart(1)], 1000);
+    assert.equal(body.current.funding, 1000);
+  });
+
+  it("counts the finished months' targets as saved, not as left", async () => {
+    const { token } = await onBudget();
+    const { body } = await call(`/api/period?today=${todayYmd()}`, token);
+
+    // This month's $200 is still reserved inside its budget, so only the two
+    // finished months have saved anything yet.
+    assert.equal(body.term.spent, 1600);
+    assert.equal(body.term.saved, 400);
+    assert.equal(body.term.left, 4000);
+  });
+
+  it("prices the month the same on every screen", async () => {
+    // The streak costs cycles from its own scan of the ledger; the other three
+    // go through the period context. They have to agree to the cent.
+    const { token } = await onBudget();
+    const [period, streak, home, accounts] = await Promise.all(
+      ["/api/period", "/api/streak", "/api/auth/home", "/api/accounts"].map((path) =>
+        call(`${path}?today=${todayYmd()}`, token)
+      )
+    );
+
+    assert.equal(period.body.current.funding, 1000);
+    assert.equal(streak.body.period.funding, 1000);
+    assert.equal(home.body.periodFunding, 1000);
+    assert.equal(home.body.leftToSpend, 800);
+    assert.equal(accounts.body.totals.funding, 1000);
+    assert.equal(accounts.body.totals.leftToSpend, 800);
+  });
+
+  it("still takes the target out of a month that spent into it", async () => {
+    // Last month spends its whole $1,000, target included. The target is taken
+    // to have gone to savings anyway, so the five months left share
+    // $6,000 − $1,200 = $4,800 rather than $5,000.
+    const { user, token } = await midTerm({ lump: 6000, months: 6, back: 1 });
+    await call("/api/auth/savings", token, "PUT", { key: monthKey(1), amount: 200 });
+    await addTxn(user._id, monthStart(1), "expense", 1000);
+
+    const { body } = await call(`/api/period?today=${todayYmd()}`, token);
+    assert.equal(body.current.funding, 960);
   });
 });

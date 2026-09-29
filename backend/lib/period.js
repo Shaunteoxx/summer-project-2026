@@ -174,10 +174,11 @@ export function cyclesOfTerm(term, savingsByMonth = {}) {
  * What a cycle gets to spend: its share of whatever the term has left.
  *
  * `pot` is the term's income up to the end of this cycle minus everything spent
- * before it began, so the split rebalances on its own — overspend one month and
- * the pot is smaller when the next one asks, underspend and it's larger. Whole
- * months weigh the same as each other, so the answer reads "$1,000 a month"
- * rather than drifting with month length; only a clipped stub takes less.
+ * or set aside before it began, so the split rebalances on its own — overspend
+ * one month and the pot is smaller when the next one asks, underspend and it's
+ * larger. Whole months weigh the same as each other, so the answer reads
+ * "$1,000 a month" rather than drifting with month length; only a clipped stub
+ * takes less.
  */
 export function fundingFor(cycle, pot = 0) {
   if (!cycle?.remainingWeight) return 0;
@@ -185,26 +186,54 @@ export function fundingFor(cycle, pot = 0) {
 }
 
 /**
- * Walk a term's cycles in order, pricing each one: `key -> funding`.
+ * What a cycle hands to savings once it's over: its target, taken to have been
+ * moved out of the allowance — the same assumption month mode makes when a month
+ * ends. Without this the target never leaves the pot, so it looks like money
+ * left unspent and the next month is handed it back to spend, and only the last
+ * month's target survives the term.
+ *
+ * Never more than the allowance still `held` once the month's spending is out:
+ * a month that ran the pot dry had nothing left to put away, and a top-up later
+ * in the term shouldn't be docked for a transfer that couldn't have happened.
+ */
+export function setAsideFor(cycle, held = 0) {
+  return roundMoney(Math.min(Math.max(0, cycle?.savings || 0), Math.max(0, held)));
+}
+
+/**
+ * Walk a term's cycles in order, settling each one:
+ * `key -> { funding, setAside }`.
  *
  * Order is what makes it cheap: income counts up to the end of the cycle being
- * priced and spending only up to the end of the one before, so both running
- * totals move forwards and nothing has to be re-summed.
+ * priced, and spending and savings only up to the end of the one before, so the
+ * running totals move forwards and nothing has to be re-summed.
+ *
+ * Calibrated against the *budget*, not the funding: spend exactly a cycle's
+ * funding minus its savings target and every later cycle is offered what it
+ * would have been anyway.
  *
  * Every cycle gets a figure, but only those at or before today's are *settled*.
  * A later one is priced as though the current cycle stopped spending now, which
  * it won't — the caller decides which entries it can honestly show.
  */
-export function priceCycles(cycles = [], { incomeByCycle, expenseByCycle } = {}) {
-  const funding = new Map();
+export function settleCycles(cycles = [], { incomeByCycle, expenseByCycle } = {}) {
+  const settled = new Map();
   let incomeThrough = 0;
-  let spentBefore = 0;
+  let goneBefore = 0;
   for (const cycle of cycles) {
     incomeThrough += incomeByCycle?.get(cycle.key) || 0;
-    funding.set(cycle.key, fundingFor(cycle, incomeThrough - spentBefore));
-    spentBefore += expenseByCycle?.get(cycle.key) || 0;
+    const pot = incomeThrough - goneBefore;
+    const spent = expenseByCycle?.get(cycle.key) || 0;
+    const setAside = setAsideFor(cycle, pot - spent);
+    settled.set(cycle.key, { funding: fundingFor(cycle, pot), setAside });
+    goneBefore += spent + setAside;
   }
-  return funding;
+  return settled;
+}
+
+/** Just the funding from settleCycles(): `key -> funding`. */
+export function priceCycles(cycles = [], sides = {}) {
+  return new Map([...settleCycles(cycles, sides)].map(([key, c]) => [key, c.funding]));
 }
 
 /**

@@ -1005,8 +1005,22 @@ export default function MorePage() {
               <FieldError id="monthly-savings-error">{savingsError}</FieldError>
             ) : (
               <p className="text-[12px] leading-relaxed text-ink-3">
-                Reserved from this {isDays ? "period" : "month"}'s income first —
-                your daily budget is what's left, spread over the days remaining.
+                {/* A term month has no income of its own — the lump sum landed
+                    months ago — and its target leaves the allowance when the
+                    month ends rather than being shared out again. */}
+                {isTerm ? (
+                  <>
+                    Reserved from this month&apos;s share of your allowance first —
+                    your daily budget is what&apos;s left. When the month ends it
+                    counts as saved, so later months don&apos;t get it back.
+                  </>
+                ) : (
+                  <>
+                    Reserved from this {isDays ? "period" : "month"}&apos;s income
+                    first — your daily budget is what&apos;s left, spread over the
+                    days remaining.
+                  </>
+                )}
               </p>
             )}
           </motion.div>

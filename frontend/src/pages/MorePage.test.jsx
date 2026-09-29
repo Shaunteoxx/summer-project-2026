@@ -143,6 +143,31 @@ describe("switching budget mode", () => {
   });
 });
 
+describe("the savings target sheet", () => {
+  const openSavings = async () => {
+    const user = userEvent.setup();
+    renderAt("/more");
+    await user.click(screen.getByRole("button", { name: /Savings Target/ }));
+    return screen.findByRole("dialog");
+  };
+
+  it("says a term month's target leaves the allowance when the month ends", async () => {
+    mockPeriod = { ...monthPeriod(), mode: "term" };
+    const sheet = await openSavings();
+    // A term month has no income of its own to reserve from, and its target
+    // isn't shared out again once the month is over.
+    expect(sheet).toHaveTextContent(/share of your allowance first/);
+    expect(sheet).toHaveTextContent(/later months don.t get it back/);
+    expect(sheet).not.toHaveTextContent(/income first/);
+  });
+
+  it("keeps reserving from income in month mode", async () => {
+    const sheet = await openSavings();
+    expect(sheet).toHaveTextContent(/Reserved from this month.s income first/);
+    expect(sheet).not.toHaveTextContent(/allowance/);
+  });
+});
+
 describe("deep-linked sheets", () => {
   it("opens the sheet named in navigation state and consumes the state", async () => {
     renderAt({ pathname: "/more", state: { open: "period" } });

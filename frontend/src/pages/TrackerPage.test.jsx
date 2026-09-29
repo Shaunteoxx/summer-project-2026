@@ -259,6 +259,19 @@ describe("a term cycle", () => {
     expect(screen.queryByText(/months to go/)).not.toBeInTheDocument();
   });
 
+  it("takes finished months' savings out of what's left", async () => {
+    // July and August set $300 aside each. It left the allowance when those
+    // months ended, so it isn't left to spend — and the caption says where it
+    // went rather than letting $600 go missing between the two figures.
+    mockPeriod = termPeriod();
+    mockPeriod.term = { ...mockPeriod.term, saved: 600, left: 4379.49 };
+    await show();
+    expect(screen.getByText("$4,379.49")).toBeInTheDocument();
+    expect(
+      screen.getByText("$2,005.84 spent and $600.00 saved so far.")
+    ).toBeInTheDocument();
+  });
+
   it("marks the last month on the chip the months-to-go line used to", async () => {
     mockPeriod = { ...termPeriod() };
     mockPeriod.current = { ...termPeriod().current, cycle: 6, cycles: 6 };

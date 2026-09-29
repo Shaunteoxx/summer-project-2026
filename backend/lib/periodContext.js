@@ -7,8 +7,8 @@ import {
   cyclesOfTerm,
   dayFromYmd,
   latestPeriodBefore,
-  priceCycles,
   periodStatus,
+  settleCycles,
 } from "./period.js";
 import { SPENT_AMOUNT } from "./entryFields.js";
 
@@ -69,18 +69,33 @@ async function costTerm(userId, term, cycle, cycles) {
   const income = roundMoney(sum(byCycle.income));
   const spent = roundMoney(sum(byCycle.expense));
 
-  const funding = priceCycles(cycles, {
-    incomeByCycle: byCycle.income,
-    expenseByCycle: byCycle.expense,
-  });
+  const settled = [
+    ...settleCycles(cycles, {
+      incomeByCycle: byCycle.income,
+      expenseByCycle: byCycle.expense,
+    }),
+  ];
+
+  // Only months that have ended have saved anything. The running one's target
+  // is still reserved inside its budget, so it's still in the allowance.
+  const saved = roundMoney(
+    settled
+      .filter(([key]) => key < cycle.key)
+      .reduce((n, [, c]) => n + c.setAside, 0)
+  );
 
   return {
     // Only cycles up to and including the running one are settled. A later one
     // was priced as though this month stopped spending now, which it won't, so
     // it is dropped rather than published as a figure someone might rely on.
-    funding: new Map([...funding].filter(([key]) => key <= cycle.start)),
+    funding: new Map(
+      settled.filter(([key]) => key <= cycle.start).map(([key, c]) => [key, c.funding])
+    ),
     pot: 0,
-    totals: { income, spent, left: roundMoney(income - spent) },
+    // `left` is what the pot still holds, so it has to lose what went to
+    // savings as well as what was spent — the same pot the next month's share
+    // is cut from.
+    totals: { income, spent, saved, left: roundMoney(income - spent - saved) },
   };
 }
 

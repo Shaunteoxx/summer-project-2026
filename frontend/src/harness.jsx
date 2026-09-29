@@ -1115,7 +1115,15 @@ function HeroView() {
 function TermView() {
   const colors = useChartColors();
   const funded = params.get("funded") === "1";
-  const term = { start: "2026-07-01", end: "2026-12-31", income: 6985.33, spent: 2005.84, left: 4979.49 };
+  // With savings set aside in the finished months: the longest the caption gets.
+  const term = {
+    start: "2026-07-01",
+    end: "2026-12-31",
+    income: 6985.33,
+    spent: 2005.84,
+    saved: 600,
+    left: 4379.49,
+  };
   const current = { start: "2026-09-01", cycle: Number(params.get("cycle") || 3), cycles: 6, funding: 1272.25 };
   const cycles = [
     { start: "2026-07-01", funding: 797.56 },
