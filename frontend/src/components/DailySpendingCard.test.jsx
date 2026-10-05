@@ -163,3 +163,62 @@ describe("period boundaries", () => {
     expect(dayButtons()).toHaveLength(30);
   });
 });
+
+describe("income", () => {
+  // A month with an allowance on the 1st, lunch the same day, and a refund
+  // on the 3rd with no spending.
+  const period = makePeriod("2026-09-01", 30);
+  const transactions = [
+    { _id: "a", type: "income", amount: 1200, date: "2026-09-01T00:00:00.000Z", description: "Allowance", category: "Pocket money" },
+    { _id: "b", type: "expense", amount: 8.5, date: "2026-09-01T00:00:00.000Z", description: "Lunch", category: "Food" },
+    { _id: "c", type: "income", amount: 30, date: "2026-09-03T00:00:00.000Z", description: "Refund", category: "Other" },
+  ];
+
+  // Stats' shape: no budgets, so day amounts come from the transactions.
+  const renderStats = () =>
+    render(<DailySpendingCard transactions={transactions} period={period} />);
+
+  it("stays out of the spending totals", () => {
+    renderStats();
+    // Header total and the day's own figure are the $8.50 lunch only.
+    expect(screen.getAllByText("$8.50").length).toBeGreaterThan(0);
+    expect(screen.queryByText("$1,208.50")).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText("1 Sep: spent $8.50, income $1,200.00")
+    ).toBeInTheDocument();
+  });
+
+  it("adds a legend entry for the marker in calendar view only", async () => {
+    renderStats();
+    expect(screen.getByText("Income Logged")).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText("Chart view"));
+    expect(screen.queryByText("Income Logged")).not.toBeInTheDocument();
+  });
+
+  it("lists the day's income under the spending in its sheet", async () => {
+    renderStats();
+    await userEvent.click(screen.getByLabelText(/^1 Sep:/));
+
+    const sheet = screen.getByRole("dialog");
+    expect(within(sheet).getByText("Lunch")).toBeInTheDocument();
+    expect(within(sheet).getByText("Income")).toBeInTheDocument();
+    expect(within(sheet).getByText("Allowance")).toBeInTheDocument();
+    expect(within(sheet).getByText("+$1,200.00")).toHaveClass("text-positive");
+    // The Spent figure at the top is still spending only.
+    expect(within(sheet).getByText("Spent").nextSibling).toHaveTextContent("$8.50");
+  });
+
+  it("opens an income-only day with no spending and its income listed", async () => {
+    renderStats();
+    await userEvent.click(screen.getByLabelText("3 Sep: spent $0.00, income $30.00"));
+
+    const sheet = screen.getByRole("dialog");
+    expect(within(sheet).getByText("No spending logged this day.")).toBeInTheDocument();
+    expect(within(sheet).getByText("+$30.00")).toBeInTheDocument();
+  });
+
+  it("doesn't mark a day without income", () => {
+    renderStats();
+    expect(screen.getByLabelText("2 Sep: spent $0.00")).toBeInTheDocument();
+  });
+});

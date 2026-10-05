@@ -855,6 +855,12 @@ function DailyView() {
       : [{ _id: `t${i}`, type: "expense", amount: v, date: `${ymd(i)}T00:00:00.000Z`,
            category: "F & B", description: "Lunch" }]
   );
+  // Income on a within day, an over day and a no-spend day, so the marker
+  // shows on each tint.
+  for (const [i, amount, description] of [[0, 1240, "Allowance"], [5, 40, "Tutoring"], [8, 15, "Refund"]]) {
+    transactions.push({ _id: `i${i}`, type: "income", amount, date: `${ymd(i)}T00:00:00.000Z`,
+                        category: "Income", description });
+  }
 
   localStorage.setItem("spendingView", params.get("chart") === "1" ? "chart" : "calendar");
 

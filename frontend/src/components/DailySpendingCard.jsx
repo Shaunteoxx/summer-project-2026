@@ -91,17 +91,21 @@ export default function DailySpendingCard({
 
   const todayYmd = localToday();
 
-  // Expenses grouped by UTC calendar day — transaction dates are stored at UTC
-  // midnight, so the ISO prefix matches the streak's day keys exactly.
-  const txnsByDay = useMemo(() => {
-    const map = new Map();
+  // Entries grouped by UTC calendar day — transaction dates are stored at UTC
+  // midnight, so the ISO prefix matches the streak's day keys exactly. Income
+  // is kept apart: it never counts toward a day's spending or its verdict, it
+  // only marks the day and gets listed in the day's sheet.
+  const [txnsByDay, incomeByDay] = useMemo(() => {
+    const expenses = new Map();
+    const income = new Map();
     for (const t of transactions) {
-      if (t.type !== "expense") continue;
+      const map = t.type === "expense" ? expenses : t.type === "income" ? income : null;
+      if (!map) continue;
       const key = String(t.date).slice(0, 10);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(t);
     }
-    return map;
+    return [expenses, income];
   }, [transactions]);
 
   const budgetByDay = new Map(periodDays.map((d) => [d.date, d]));
@@ -113,6 +117,7 @@ export default function DailySpendingCard({
   periodDayList(period).forEach((key, index) => {
     const entry = budgetByDay.get(key);
     const txns = txnsByDay.get(key) ?? [];
+    const incomeTxns = incomeByDay.get(key) ?? [];
     const amount = entry
       ? entry.spent
       : txns.reduce((sum, t) => sum + countedAmount(t), 0);
@@ -137,11 +142,15 @@ export default function DailySpendingCard({
       isToday: key === todayYmd,
       isFuture,
       txns,
+      incomeTxns,
+      earned: incomeTxns.reduce((sum, t) => sum + t.amount, 0),
     });
   });
   const avgPerDay = elapsed > 0 ? totalSpent / elapsed : 0;
   const hasSpending = totalSpent > 0;
   const anyOver = days.some((d) => d.over);
+  // Future days can't be opened, so the calendar doesn't mark them either.
+  const anyIncome = days.some((d) => d.earned > 0 && !d.isFuture);
 
   // Calendar paging. `page` stays null until the user moves, so the view
   // follows today by default and survives the period changing underneath it.
@@ -278,6 +287,12 @@ export default function DailySpendingCard({
                     Over That Day's Budget
                   </span>
                 )}
+                {view === "calendar" && anyIncome && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-[5px] w-[5px] rounded-full bg-ink-2" />
+                    Income Logged
+                  </span>
+                )}
               </div>
               {budgetsAvailable && (
                 <p className="mt-2.5 text-[12px] leading-relaxed text-ink-3">
@@ -334,40 +349,56 @@ export default function DailySpendingCard({
 
             <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
               {selected.txns.length > 0 ? (
-                selected.txns.map((t) => {
-                  const cat = getCategory(t.category);
-                  return (
-                    <div
-                      key={t._id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-hairline p-3"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <CategoryIcon category={cat} />
-                        <div className="min-w-0">
-                          <p className="truncate text-[15px] font-medium tracking-[-0.01em]">
-                            {t.description}
-                          </p>
-                          <p className="mt-0.5 text-meta text-ink-3">
-                            {t.category}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="num shrink-0 text-[15px] font-medium text-ink">
-                        −{formatMoney(countedAmount(t))}
-                      </span>
-                    </div>
-                  );
-                })
+                selected.txns.map((t) => (
+                  <DayEntry key={t._id} entry={t} category={getCategory(t.category)} />
+                ))
               ) : (
                 <p className="py-2 text-center text-[13px] text-ink-3">
                   No spending logged this day.
                 </p>
+              )}
+              {/* Below the spending and under its own heading, so it never
+                  reads as part of the Spent figure above. */}
+              {selected.incomeTxns.length > 0 && (
+                <>
+                  <p className="pt-2 text-[12px] font-medium text-ink-3">Income</p>
+                  {selected.incomeTxns.map((t) => (
+                    <DayEntry key={t._id} entry={t} category={getCategory(t.category)} />
+                  ))}
+                </>
               )}
             </div>
           </div>
         )}
       </BottomSheet>
     </motion.div>
+  );
+}
+
+/** One entry in the day sheet. Income is signed and green, as everywhere else. */
+function DayEntry({ entry, category }) {
+  const income = entry.type === "income";
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-hairline p-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <CategoryIcon category={category} />
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-medium tracking-[-0.01em]">
+            {entry.description}
+          </p>
+          <p className="mt-0.5 text-meta text-ink-3">{entry.category}</p>
+        </div>
+      </div>
+      <span
+        className={cn(
+          "num shrink-0 text-[15px] font-medium",
+          income ? "text-positive" : "text-ink"
+        )}
+      >
+        {income ? "+" : "−"}
+        {formatMoney(countedAmount(entry))}
+      </span>
+    </div>
   );
 }
 

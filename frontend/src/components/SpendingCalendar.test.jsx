@@ -141,3 +141,42 @@ describe("day cells", () => {
     expect(grid()).toBe(31);
   });
 });
+
+describe("income marker", () => {
+  const dots = (container) => container.querySelectorAll("[data-income-dot]");
+
+  it("dots a day with income and names it for screen readers", () => {
+    const days = makeDays("2026-08-01", 3, {
+      "2026-08-01": { amount: 5, earned: 1200 },
+    });
+    const { container } = render(
+      <SpendingCalendar days={days} budgetsAvailable onSelectDay={() => {}} />
+    );
+
+    expect(dots(container)).toHaveLength(1);
+    const cell = screen.getByLabelText(
+      "1 Aug: spent $5.00, within budget, income $1,200.00"
+    );
+    expect(cell.querySelector("[data-income-dot]")).not.toBeNull();
+    // A marker only: the cell's figure is still the day's spending.
+    expect(cell).not.toHaveTextContent("1,200");
+  });
+
+  it("leaves days without income unmarked", () => {
+    const { container } = render(
+      <SpendingCalendar days={makeDays("2026-08-01", 3)} budgetsAvailable onSelectDay={() => {}} />
+    );
+    expect(dots(container)).toHaveLength(0);
+  });
+
+  it("doesn't mark a future day, which can't be opened", () => {
+    const days = makeDays("2026-08-01", 2, {
+      "2026-08-02": { isFuture: true, earned: 500 },
+    });
+    const { container } = render(
+      <SpendingCalendar days={days} budgetsAvailable onSelectDay={() => {}} />
+    );
+    expect(dots(container)).toHaveLength(0);
+    expect(screen.getByLabelText("2 Aug")).toBeInTheDocument();
+  });
+});

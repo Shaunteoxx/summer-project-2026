@@ -15,6 +15,11 @@ const SHORT_MONTHS = [
  * rather than fills, since there's no verdict to show yet. Tap a day to open its
  * transactions.
  *
+ * A day with income logged gets a dot in its corner. It's a marker, not an
+ * amount: an allowance with cents doesn't fit a 42px cell, and income has no
+ * bearing on the day's verdict. The dot takes the cell's own text colour, so it
+ * reads on every tint, including today's solid cell.
+ *
  * A period is any length and may straddle a month boundary, so the grid is
  * aligned to the weekday of its first day rather than to the 1st of a month.
  * `showMonthTags` labels the first cell of each new month — wanted when the
@@ -47,12 +52,13 @@ export default function SpendingCalendar({
 
         {days.map((d) => {
           const spentSomething = d.amount > 0;
+          const hasIncome = d.earned > 0 && !d.isFuture;
           const dateLabel = formatDay(d.ymd);
           const label = d.isFuture
             ? dateLabel
             : `${dateLabel}: spent ${formatMoney(d.amount)}${
                 d.budget !== null ? (d.over ? ", over budget" : ", within budget") : ""
-              }`;
+              }${hasIncome ? `, income ${formatMoney(d.earned)}` : ""}`;
           // The first day of a new month carries its month name, so day numbers
           // restarting mid-period never read as the same month.
           const showMonth = showMonthTags && (d.startsMonth || d.index === 0);
@@ -64,7 +70,7 @@ export default function SpendingCalendar({
               onClick={() => onSelectDay(d)}
               aria-label={label}
               className={cn(
-                "flex aspect-square flex-col items-center justify-center rounded-[8px] transition-colors duration-base ease-out",
+                "relative flex aspect-square flex-col items-center justify-center rounded-[8px] transition-colors duration-base ease-out",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 !d.isFuture && !d.isToday && "hover:brightness-[0.97] active:brightness-[0.93]",
                 // Future days in the period are an outline, not a fill: nothing
@@ -93,6 +99,13 @@ export default function SpendingCalendar({
                           : "bg-surface-2 text-ink-3"
               )}
             >
+              {hasIncome && (
+                <span
+                  data-income-dot=""
+                  aria-hidden="true"
+                  className="absolute right-[3px] top-[3px] h-[5px] w-[5px] rounded-full bg-current"
+                />
+              )}
               {showMonth && (
                 <span className="text-[8px] font-semibold uppercase leading-none opacity-70">
                   {SHORT_MONTHS[d.monthIdx]}
