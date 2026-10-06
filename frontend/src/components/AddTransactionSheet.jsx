@@ -357,8 +357,8 @@ export default function AddTransactionSheet({
     if (!form.date || Number.isNaN(new Date(`${form.date}T00:00:00`).getTime())) {
       nextErrors.date = "Choose a valid date.";
     }
-    if (paidBackNumber > 0 && !nextErrors.amount && paidBackNumber >= amount) {
-      nextErrors.paidBack = "Paid back has to be less than the amount.";
+    if (paidBackNumber > 0 && !nextErrors.amount && paidBackNumber > amount) {
+      nextErrors.paidBack = "Paid back can't be more than the amount.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -767,15 +767,19 @@ export default function AddTransactionSheet({
               <FieldError id="tx-paid-back-error">{errors.paidBack}</FieldError>
             ) : (
               paidBackNumber > 0 &&
-              Number(form.amount) > paidBackNumber && (
+              Number(form.amount) >= paidBackNumber && (
                 <p className="flex items-center justify-between gap-3 text-[12px] leading-relaxed text-ink-3">
-                  <span>
-                    Your share is{" "}
-                    <b className="num font-medium text-ink-2">
-                      {formatMoney(countedAmount({ amount: Number(form.amount), paidBack: paidBackNumber }))}
-                    </b>
-                    , and that&apos;s what your budget counts.
-                  </span>
+                  {Number(form.amount) === paidBackNumber ? (
+                    <span>Paid back in full, so your budget doesn&apos;t count it.</span>
+                  ) : (
+                    <span>
+                      Your share is{" "}
+                      <b className="num font-medium text-ink-2">
+                        {formatMoney(countedAmount({ amount: Number(form.amount), paidBack: paidBackNumber }))}
+                      </b>
+                      , and that&apos;s what your budget counts.
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => {

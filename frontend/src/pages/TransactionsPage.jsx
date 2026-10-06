@@ -814,12 +814,15 @@ export default function TransactionsPage() {
                                     it was a share of. */}
                                 <span className="mt-0.5 block truncate text-meta text-ink-3">
                                   {t.category}
-                                  {t.paidBack > 0 && (
-                                    <>
-                                      {" "}· {formatMoney(t.paidBack)} of {formatMoney(t.amount)} paid
-                                      back
-                                    </>
-                                  )}
+                                  {t.paidBack > 0 &&
+                                    (t.paidBack >= t.amount ? (
+                                      <> · {formatMoney(t.amount)} paid back in full</>
+                                    ) : (
+                                      <>
+                                        {" "}· {formatMoney(t.paidBack)} of {formatMoney(t.amount)} paid
+                                        back
+                                      </>
+                                    ))}
                                   {account && <> · {account.name}</>}
                                   {/* Only if the save is slow enough to notice:
                                       the fade holds back ~0.4s, so a normal

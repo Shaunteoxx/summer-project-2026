@@ -1201,6 +1201,16 @@ describe("money paid back on a shared bill", () => {
     expect(row).toHaveTextContent("$5.90 of $12.80 paid back");
   });
 
+  it("says when a bill came back in full", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [{ ...dinner, paidBack: 12.8 }];
+    renderPage();
+
+    const row = await screen.findByRole("button", { name: "Edit Group dinner" });
+    expect(row).toHaveTextContent("−$0.00");
+    expect(row).toHaveTextContent("$12.80 paid back in full");
+  });
+
   it("sends the repayment and where it went with a new expense", async () => {
     mockAccounts = twoAccounts;
     const user = userEvent.setup();
@@ -1237,7 +1247,7 @@ describe("money paid back on a shared bill", () => {
     expect(submitted()).not.toHaveProperty("paidBack");
   });
 
-  it("won't take a repayment as big as the bill", async () => {
+  it("takes a repayment of the whole bill", async () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
@@ -1245,9 +1255,23 @@ describe("money paid back on a shared bill", () => {
     await enterAmount(user, sheet, "10");
     await enterPaidBack(user, within(screen.getByRole("dialog")), "10");
     const form = within(screen.getByRole("dialog"));
+    expect(form.getByText(/Paid back in full/)).toBeInTheDocument();
     await user.click(form.getByRole("button", { name: "Add Expense" }));
 
-    expect(form.getByText("Paid back has to be less than the amount.")).toBeInTheDocument();
+    expect(submitted()).toMatchObject({ amount: 10, paidBack: 10 });
+  });
+
+  it("won't take a repayment bigger than the bill", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet();
+
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
+    await enterAmount(user, sheet, "10");
+    await enterPaidBack(user, within(screen.getByRole("dialog")), "12");
+    const form = within(screen.getByRole("dialog"));
+    await user.click(form.getByRole("button", { name: "Add Expense" }));
+
+    expect(form.getByText("Paid back can't be more than the amount.")).toBeInTheDocument();
     expect(addTransaction).not.toHaveBeenCalled();
   });
 

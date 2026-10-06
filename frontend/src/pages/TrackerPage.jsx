@@ -118,7 +118,10 @@ export default function TrackerPage() {
       if (t.type !== "expense") continue;
       map.set(t.category, (map.get(t.category) ?? 0) + countedAmount(t));
     }
+    // A category whose bills were all paid back in full cost nothing, so it
+    // has no slice and no "$0.00" row.
     let arr = [...map.entries()]
+      .filter(([, value]) => value > 0)
       .map(([name, value]) => ({ name, value, color: getCategory(name).color }))
       .sort((a, b) => b.value - a.value);
     if (arr.length > 6) {

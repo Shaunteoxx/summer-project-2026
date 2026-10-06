@@ -136,9 +136,13 @@ describe("recording it", () => {
     assert.equal(res.body.paidBackAccountId, null);
   });
 
-  it("only takes less than the bill", async () => {
+  it("takes up to the whole bill, never more", async () => {
     const token = signToken(await makeUser());
-    for (const paidBack of [12.8, 20, -1, "lots"]) {
+    const whole = await call("/api/transactions", token, "POST", dinner({ paidBack: 12.8 }));
+    assert.equal(whole.status, 201, JSON.stringify(whole.body));
+    assert.equal(whole.body.paidBack, 12.8);
+
+    for (const paidBack of [12.81, 20, -1, "lots"]) {
       const res = await call("/api/transactions", token, "POST", dinner({ paidBack }));
       assert.equal(res.status, 400, `paidBack ${paidBack}`);
     }
@@ -182,12 +186,15 @@ describe("adding it later", () => {
     assert.equal(String(res.body.paidBackAccountId), dbs);
   });
 
-  it("won't let the bill drop to or below what was paid back", async () => {
+  it("won't let the bill drop below what was paid back", async () => {
     const { token, meal } = await setUp();
-    const res = await call(`/api/transactions/${meal._id}`, token, "PATCH", { amount: 5.9 });
+    const res = await call(`/api/transactions/${meal._id}`, token, "PATCH", { amount: 5.89 });
     assert.equal(res.status, 400);
     const row = await Transaction.findById(meal._id).lean();
     assert.equal(row.amount, 12.8);
+
+    const same = await call(`/api/transactions/${meal._id}`, token, "PATCH", { amount: 5.9 });
+    assert.equal(same.status, 200, JSON.stringify(same.body));
   });
 
   it("keeps it through an unrelated edit, even into an account since archived", async () => {
@@ -226,6 +233,13 @@ describe("what the budget sees", () => {
     assert.equal(body.leftToSpend, 493.1);
   });
 
+  it("counts nothing for a bill paid back in full", async () => {
+    const { token } = await setUp({ paidBack: 12.8 });
+    const { body } = await call(`/api/streak?today=${todayYmd()}`, token);
+    const today = body.periodDays.find((d) => d.date === todayYmd());
+    assert.equal(today.spent, 0);
+  });
+
   it("uses the same figure in the monthly summaries", async () => {
     const { token } = await setUp();
     const now = new Date();
@@ -254,6 +268,19 @@ describe("what the accounts see", () => {
     const netSum = body.accounts.reduce((n, a) => n + a.net, 0);
     assert.equal(Math.round(netSum * 100) / 100, body.totals.net);
     assert.equal(body.totals.net, 493.1);
+  });
+
+  // You covered the whole bill from one wallet and got it all back into
+  // another: the budget counts nothing, the banks still saw both moves.
+  it("moves a bill paid back in full from one account to the other", async () => {
+    const { token, trust, dbs } = await setUp({ paidBack: 12.8 });
+    const { body } = await call(`/api/accounts?today=${todayYmd()}`, token);
+    const byId = Object.fromEntries(body.accounts.map((a) => [a.id, a]));
+
+    assert.equal(byId[trust].net, -12.8);
+    assert.equal(byId[dbs].net, 512.8);
+    assert.equal(body.totals.spent, 0);
+    assert.equal(body.totals.net, 500);
   });
 
   it("files a repayment with no account under Not Assigned, and still ties out", async () => {

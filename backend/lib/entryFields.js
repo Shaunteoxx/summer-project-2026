@@ -134,10 +134,11 @@ export function checkPaidBack(user, { type, amount, rawPaidBack, rawAccountId, k
   if (type !== "expense") return { message: "Only an expense can be paid back" };
 
   const rounded = roundMoney(paidBack);
-  // Less than, not up to: an entry that was paid back in full wasn't your
-  // spending, and a zero-cost expense would sit in the ledger as noise.
-  if (rounded >= amount) {
-    return { message: "Paid back must be less than the amount" };
+  // Up to the whole bill: covering a friend's meal and getting all of it back
+  // costs the budget nothing, but the row still has to exist — the bill left
+  // one account and the money came back into another.
+  if (rounded > amount) {
+    return { message: "Paid back can't be more than the amount" };
   }
 
   if (rawAccountId === undefined) {
