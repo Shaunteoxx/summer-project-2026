@@ -47,7 +47,7 @@ import {
   PaceForecastCard,
   GoalDailyCard,
 } from "./pages/PlanPage.jsx";
-import { Section, Row, RowValue, Segmented } from "./pages/MorePage.jsx";
+import { Section, Row, RowValue, Segmented } from "./components/SettingsList.jsx";
 import Avatar from "./components/Avatar.jsx";
 import {
   BarChart3 as _bar,
