@@ -46,6 +46,9 @@ export default function FriendsPage() {
   useEffect(() => {
     loadRequests();
     loadComparison();
+    // Once, on arrival. Both loaders are recreated each render but do the
+    // same thing, so re-running on them would only refetch in a loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = async (e) => {

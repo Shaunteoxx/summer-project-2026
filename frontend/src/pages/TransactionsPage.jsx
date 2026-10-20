@@ -20,7 +20,6 @@ import AddTransactionSheet from "@/components/AddTransactionSheet";
 import BottomSheet from "@/components/BottomSheet";
 import EmptyState from "@/components/EmptyState";
 import TransferSheet from "@/components/TransferSheet";
-import AnimatedNumber from "@/components/AnimatedNumber";
 import CategoryIcon from "@/components/CategoryIcon";
 import RepeatBadge, { ruleFor } from "@/components/RepeatBadge";
 import SegmentPill from "@/components/SegmentPill";
@@ -35,10 +34,9 @@ import {
   fetchTransfers,
   removeTransfer,
 } from "@/api/endpoints";
-import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { cn, countedAmount, extraPaidBack, formatMoney, localToday, rowAmount } from "@/lib/utils";
+import { cn, formatMoney, localToday, rowAmount } from "@/lib/utils";
 import { addDaysYmd, formatDay, formatPeriodLabel } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
@@ -94,7 +92,6 @@ const FILTERS = [
 export default function TransactionsPage() {
   const toast = useToast();
   const guard = useDemoGuard();
-  const { user } = useAuth();
   const { getCategory } = useCategories();
   const { active: accounts, hasAccounts, getAccount } = useAccounts();
   const { rules } = useRecurring();
@@ -270,29 +267,6 @@ export default function TransactionsPage() {
     );
     if (inView) land(rowKey(updated));
   };
-
-  const totals = transactions.reduce(
-    (acc, t) => {
-      if (t.type === "income") acc.income += t.amount;
-      else {
-        acc.expenses += countedAmount(t);
-        acc.income += extraPaidBack(t);
-      }
-      return acc;
-    },
-    { income: 0, expenses: 0 }
-  );
-  // In days mode the target lives on the period; in month mode it's still the
-  // savingsByMonth entry for the calendar month the period covers.
-  const savingsTarget = current
-    ? budgetPeriod.mode === "days"
-      ? current.savings
-      : Math.max(
-          0,
-          Number(user?.savingsByMonth?.[`${now.getFullYear()}-${now.getMonth()}`]) || 0
-        )
-    : 0;
-  const balance = totals.income - totals.expenses - savingsTarget;
 
   // Transfers share the ledger with transactions so a move between your own
   // accounts leaves a record, but they are not income or spending — they only

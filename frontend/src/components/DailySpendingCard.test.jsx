@@ -47,7 +47,6 @@ const renderCard = (period, spendByDay = {}) =>
     />
   );
 
-const pager = () => screen.queryByLabelText("Previous month")?.closest("div")?.parentElement;
 const pageLabel = () => screen.getByLabelText("Previous month").parentElement.querySelector("p").textContent;
 const pageMeta = () =>
   screen.getByLabelText("Previous month").parentElement.querySelectorAll("p")[1].textContent;

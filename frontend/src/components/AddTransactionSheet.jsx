@@ -283,6 +283,9 @@ export default function AddTransactionSheet({
   // showing, since the keypad covers all three.
   const [openTip, setOpenTip] = useState(null);
   const wasOpen = useRef(false);
+  // No dependency list on purpose: it runs after every render and acts only
+  // when the sheet goes from closed to open, which the ref detects.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const open = type !== null;
     if (open === wasOpen.current) return;

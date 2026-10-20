@@ -386,6 +386,8 @@ function KeyboardView() {
       get: () => window.innerHeight - px,
     });
     vv.dispatchEvent(new Event("resize"));
+    // Once, on mount: px comes from the URL and never changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -608,7 +610,6 @@ function TrackerView() {
       <CategoryCard
         byCategory={empty ? [] : byCategory}
         spent={empty ? 0 : spent}
-        colors={colors}
         emptyNoun="month"
       />
     </div>
@@ -1050,10 +1051,8 @@ function HeroView() {
   const fm = (n) => `$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const spentPct = Math.min((spent / budget) * 100, 100);
   const elapsedPct = ((totalDays - daysLeft) / totalDays) * 100;
-  const dayOfPeriod = totalDays - daysLeft + 1;
   const d = budget * (elapsedPct / 100) - spent;
   const onPace = Math.abs(d) < 0.5;
-  const anchor = (pct) => (pct < 50 ? { left: `${pct}%` } : { right: `${100 - pct}%` });
   // The gap in money, not "Ahead of pace" / "Behind pace": that inverted
   // against the bar below it, where fill past the tick is the trouble case.
   const verdict = over

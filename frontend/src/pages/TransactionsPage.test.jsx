@@ -525,7 +525,6 @@ describe("tagging entries with an account", () => {
   };
 
   it("shows no account UI at all before you make one", async () => {
-    const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
     expect(sheet.queryByRole("button", { name: /^Paid from:/ })).not.toBeInTheDocument();

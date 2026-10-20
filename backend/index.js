@@ -89,7 +89,9 @@ app.use("/api/push", pushRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 
-app.use((err, req, res, next) => {
+// Express only treats a handler as an error handler when it takes four
+// arguments, so `_next` stays even though it's never called.
+app.use((err, req, res, _next) => {
   if (err.name === "CastError") return res.status(400).json({ message: "Invalid id" });
   if (err.type === "entity.parse.failed") {
     return res.status(400).json({ message: "Invalid JSON body" });

@@ -351,7 +351,6 @@ export default function TrackerPage() {
             <CategoryCard
               byCategory={byCategory}
               spent={spent}
-              colors={colors}
               emptyNoun={budgetPeriod.noun}
             />
           </motion.div>
@@ -595,7 +594,7 @@ export function SavedVsSpentCard({
  *
  * Exported for the design harness, as above.
  */
-export function CategoryCard({ byCategory, spent, colors, emptyNoun }) {
+export function CategoryCard({ byCategory, spent, emptyNoun }) {
   return (
     <Card>
       <CardContent className="px-[18px] py-5">
