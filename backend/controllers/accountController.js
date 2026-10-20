@@ -1,6 +1,6 @@
 import Transaction from "../models/Transaction.js";
 import Transfer from "../models/Transfer.js";
-import { resolveClientToday, roundMoney, ymd } from "../lib/validation.js";
+import { HEX_COLOR, resolveClientToday, roundMoney, ymd } from "../lib/validation.js";
 import { dayFromYmd } from "../lib/period.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
 import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
@@ -201,3 +201,130 @@ const zeroTotals = () => ({
   reserved: 0,
   leftToSpend: 0,
 });
+
+/** Shape sent to the client; the id is what transactions store. */
+export const presentAccount = (a) => ({
+  id: a._id,
+  name: a.name,
+  color: a.color,
+  archived: !!a.archived,
+});
+
+// Enough for the accounts a person actually spends from, and few enough that
+// the picker in the add sheet stays a chip row rather than a scrolling list.
+const MAX_ACCOUNTS = 8;
+
+/** POST /api/auth/accounts { name, color } -> create a bank account. */
+export async function addAccount(req, res) {
+  const user = req.user;
+  const name = String(req.body.name || "").trim();
+  const { color } = req.body;
+
+  if (!name || !color) {
+    return res.status(400).json({ message: "name and color are required" });
+  }
+  if (name.length > 24) {
+    return res.status(400).json({ message: "Name too long (max 24 characters)" });
+  }
+  if (!HEX_COLOR.test(color)) {
+    return res.status(400).json({ message: "Invalid color" });
+  }
+
+  const lc = name.toLowerCase();
+  if (user.accounts.some((a) => a.name.toLowerCase() === lc)) {
+    return res.status(409).json({ message: "That account already exists" });
+  }
+  // Archived accounts keep their history but shouldn't count against the limit.
+  if (user.accounts.filter((a) => !a.archived).length >= MAX_ACCOUNTS) {
+    return res.status(400).json({ message: "Account limit reached" });
+  }
+
+  user.accounts.push({ name, color });
+  await user.save();
+  res.status(201).json(presentAccount(user.accounts[user.accounts.length - 1]));
+}
+
+/** PATCH /api/auth/accounts/:id { name?, color?, archived? } */
+export async function updateAccount(req, res) {
+  const user = req.user;
+  const account = user.accounts.id(req.params.id);
+  if (!account) return res.status(404).json({ message: "Account not found" });
+
+  const { name, color, archived } = req.body;
+
+  if (name !== undefined) {
+    const next = String(name).trim();
+    if (!next) return res.status(400).json({ message: "name is required" });
+    if (next.length > 24) {
+      return res.status(400).json({ message: "Name too long (max 24 characters)" });
+    }
+    const lc = next.toLowerCase();
+    const clash = user.accounts.some(
+      (a) => String(a._id) !== String(account._id) && a.name.toLowerCase() === lc
+    );
+    if (clash) return res.status(409).json({ message: "That account already exists" });
+    account.name = next;
+  }
+
+  if (color !== undefined) {
+    if (!HEX_COLOR.test(color)) {
+      return res.status(400).json({ message: "Invalid color" });
+    }
+    account.color = color;
+  }
+
+  if (archived !== undefined) {
+    if (typeof archived !== "boolean") {
+      return res.status(400).json({ message: "Invalid archived flag" });
+    }
+    // Un-archiving has to respect the limit too, or it becomes a way past it.
+    if (!archived && user.accounts.filter((a) => !a.archived).length >= MAX_ACCOUNTS) {
+      return res.status(400).json({ message: "Account limit reached" });
+    }
+    account.archived = archived;
+  }
+
+  await user.save();
+  res.json(presentAccount(account));
+}
+
+/**
+ * DELETE /api/auth/accounts/:id
+ *
+ * Only for accounts with nothing behind them. Deleting one that has history
+ * would orphan its transactions — they would keep an accountId pointing at
+ * nothing, and quietly drop out of the per-account totals while still counting
+ * towards the budget. Archiving is the answer for those.
+ */
+export async function removeAccount(req, res) {
+  const user = req.user;
+  const account = user.accounts.id(req.params.id);
+  if (!account) return res.status(404).json({ message: "Account not found" });
+
+  const [txns, transfers] = await Promise.all([
+    Transaction.countDocuments({ userId: user._id, accountId: account._id }),
+    Transfer.countDocuments({
+      userId: user._id,
+      $or: [{ from: account._id }, { to: account._id }],
+    }),
+  ]);
+  if (txns + transfers > 0) {
+    return res.status(409).json({
+      message: "This account has history. Archive it instead of deleting it.",
+      inUse: true,
+    });
+  }
+  // A repeating entry pointing at a deleted account would keep producing
+  // transactions tagged to nothing — invisible in the per-account totals while
+  // still counting against the budget.
+  if ((user.recurring || []).some((r) => String(r.accountId) === String(account._id))) {
+    return res.status(409).json({
+      message: "A repeating entry uses this account. Archive it instead.",
+      inUse: true,
+    });
+  }
+
+  user.accounts.pull(req.params.id);
+  await user.save();
+  res.json({ message: "Deleted", id: req.params.id });
+}

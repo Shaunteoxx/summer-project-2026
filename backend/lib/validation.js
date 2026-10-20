@@ -45,3 +45,6 @@ export function parseMonthYear(query) {
 }
 
 export const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+
+/** A colour as the pickers send it: #RRGGBB. */
+export const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;

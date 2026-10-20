@@ -11,21 +11,19 @@ import {
   refreshSession,
   logout,
   getMe,
-  getHomeStats,
-  addAccount,
-  addCategory,
-  addRecurring,
-  removeAccount,
-  removeCategory,
-  removeRecurring,
-  updateAccount,
-  updateRecurring,
   updateProfile,
   deleteAccount,
-  setSavings,
-  markTours,
-  forgetTours,
 } from "../controllers/authController.js";
+import { getHomeStats } from "../controllers/homeController.js";
+import { addCategory, removeCategory } from "../controllers/categoryController.js";
+import { addAccount, removeAccount, updateAccount } from "../controllers/accountController.js";
+import {
+  addRecurring,
+  removeRecurring,
+  updateRecurring,
+} from "../controllers/recurringController.js";
+import { setSavings } from "../controllers/savingsController.js";
+import { markTours, forgetTours } from "../controllers/tourController.js";
 
 const router = express.Router();
 const stateCookie = "bnm_oauth_state";
