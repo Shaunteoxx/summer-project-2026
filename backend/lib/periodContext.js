@@ -10,7 +10,7 @@ import {
   periodStatus,
   settleCycles,
 } from "./period.js";
-import { SPENT_AMOUNT } from "./entryFields.js";
+import { INCOME_AMOUNT, SPENT_AMOUNT } from "./entryFields.js";
 
 /**
  * Everything a term needs costed, in one pass: the pot its active cycle draws
@@ -37,13 +37,15 @@ async function costTerm(userId, term, cycle, cycles) {
     {
       $group: {
         _id: {
-          type: "$type",
           y: { $year: "$date" },
           m: { $month: "$date" },
         },
+        // Both sides from every row: a bill friends paid back more than can
+        // bring money in as well as costing nothing.
+        income: { $sum: INCOME_AMOUNT },
         // Expenses net of what friends paid back, as everywhere else.
-        total: {
-          $sum: { $cond: [{ $eq: ["$type", "expense"] }, SPENT_AMOUNT, "$amount"] },
+        expense: {
+          $sum: { $cond: [{ $eq: ["$type", "expense"] }, SPENT_AMOUNT, 0] },
         },
       },
     },
@@ -61,8 +63,9 @@ async function costTerm(userId, term, cycle, cycles) {
   for (const row of rows) {
     const key = keyFor(row._id.y, row._id.m);
     if (!key) continue;
-    const side = byCycle[row._id.type];
-    if (side) side.set(key, (side.get(key) || 0) + row.total);
+    for (const side of ["income", "expense"]) {
+      byCycle[side].set(key, (byCycle[side].get(key) || 0) + row[side]);
+    }
   }
 
   const sum = (map) => [...map.values()].reduce((n, v) => n + v, 0);

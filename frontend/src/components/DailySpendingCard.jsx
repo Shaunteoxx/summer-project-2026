@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Shield } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import BottomSheet from "@/components/BottomSheet";
@@ -8,7 +8,7 @@ import SpendingCalendar from "@/components/SpendingCalendar";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useCategories } from "@/hooks/useCategories";
 import CategoryIcon from "@/components/CategoryIcon";
-import { cn, countedAmount, formatMoney, localToday } from "@/lib/utils";
+import { cn, countedAmount, formatMoney, localToday, rowAmount } from "@/lib/utils";
 import {
   formatDay,
   formatMonthLabel,
@@ -139,6 +139,9 @@ export default function DailySpendingCard({
       amount,
       budget,
       over: budget !== null && amount > budget + 1e-9,
+      // Restores live in the streak, not in the ledger. Without this a
+      // restored day stayed red here while Home showed it repaired.
+      restored: budget !== null && entry.status === "saved",
       isToday: key === todayYmd,
       isFuture,
       txns,
@@ -148,7 +151,8 @@ export default function DailySpendingCard({
   });
   const avgPerDay = elapsed > 0 ? totalSpent / elapsed : 0;
   const hasSpending = totalSpent > 0;
-  const anyOver = days.some((d) => d.over);
+  const anyOver = days.some((d) => d.over && !d.restored);
+  const anyRestored = days.some((d) => d.restored);
   // Future days can't be opened, so the calendar doesn't mark them either.
   const anyIncome = days.some((d) => d.earned > 0 && !d.isFuture);
 
@@ -284,7 +288,13 @@ export default function DailySpendingCard({
                 {anyOver && (
                   <span className="flex items-center gap-1.5">
                     <span className="h-[9px] w-[9px] rounded-[3px] border border-negative bg-negative/20" />
-                    Over That Day's Budget
+                    Over Budget
+                  </span>
+                )}
+                {view === "calendar" && anyRestored && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="hatch-restored h-[9px] w-[9px] rounded-[3px] border border-positive bg-positive/20" />
+                    Restored
                   </span>
                 )}
                 {view === "calendar" && anyIncome && (
@@ -337,13 +347,19 @@ export default function DailySpendingCard({
             {selected.budget !== null && (
               <p
                 className={cn(
-                  "mt-2.5 text-[13px] font-medium",
-                  selected.over ? "text-negative" : "text-positive"
+                  "mt-2.5 flex items-center gap-1.5 text-[13px] font-medium",
+                  selected.over && !selected.restored ? "text-negative" : "text-positive"
                 )}
               >
-                {selected.over
-                  ? `${formatMoney(selected.amount - selected.budget)} over budget`
-                  : "Within Budget"}
+                {/* A restored day still went over, so it keeps the figure — the
+                    restore changed the streak, not what was spent. The shield is
+                    the one Home's week strip uses for the same day. */}
+                {selected.restored && <Shield className="h-3.5 w-3.5" aria-hidden="true" />}
+                {selected.restored
+                  ? `Restored · ${formatMoney(selected.amount - selected.budget)} Over Budget`
+                  : selected.over
+                    ? `${formatMoney(selected.amount - selected.budget)} Over Budget`
+                    : "Within Budget"}
               </p>
             )}
 
@@ -377,7 +393,7 @@ export default function DailySpendingCard({
 
 /** One entry in the day sheet. Income is signed and green, as everywhere else. */
 function DayEntry({ entry, category }) {
-  const income = entry.type === "income";
+  const shown = rowAmount(entry);
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-hairline p-3">
       <div className="flex min-w-0 items-center gap-3">
@@ -392,11 +408,11 @@ function DayEntry({ entry, category }) {
       <span
         className={cn(
           "num shrink-0 text-[15px] font-medium",
-          income ? "text-positive" : "text-ink"
+          shown.gain ? "text-positive" : "text-ink"
         )}
       >
-        {income ? "+" : "−"}
-        {formatMoney(countedAmount(entry))}
+        {shown.gain ? "+" : "−"}
+        {formatMoney(shown.value)}
       </span>
     </div>
   );

@@ -110,7 +110,10 @@ export default function DailySpendingChart({
               fill={
                 d.amount === 0
                   ? "transparent"
-                  : d.over
+                  : // A restored day is a normal bar. It still stands above the
+                    // budget line, which shows the overspend; red here means a
+                    // day that broke the streak, and this one didn't.
+                    d.over && !d.restored
                     ? colors.over
                     : colors.spent
               }

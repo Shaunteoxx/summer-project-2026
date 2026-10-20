@@ -38,7 +38,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { cn, countedAmount, formatMoney, localToday } from "@/lib/utils";
+import { cn, countedAmount, extraPaidBack, formatMoney, localToday, rowAmount } from "@/lib/utils";
 import { addDaysYmd, formatDay, formatPeriodLabel } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
@@ -274,7 +274,10 @@ export default function TransactionsPage() {
   const totals = transactions.reduce(
     (acc, t) => {
       if (t.type === "income") acc.income += t.amount;
-      else acc.expenses += countedAmount(t);
+      else {
+        acc.expenses += countedAmount(t);
+        acc.income += extraPaidBack(t);
+      }
       return acc;
     },
     { income: 0, expenses: 0 }
@@ -359,7 +362,10 @@ export default function TransactionsPage() {
     return [...map.entries()].map(([key, entries]) => {
       const counted = entries.filter((e) => e.kind === "txn");
       const net = counted.reduce(
-        (sum, e) => sum + (e.row.type === "income" ? e.row.amount : -countedAmount(e.row)),
+        (sum, e) => {
+          const { gain, value } = rowAmount(e.row);
+          return sum + (gain ? value : -value);
+        },
         0
       );
       const date = formatDay(key);
@@ -755,7 +761,7 @@ export default function TransactionsPage() {
                       const t = entry.row;
                       const cat = getCategory(t.category);
                       const account = getAccount(t.accountId);
-                      const isIncome = t.type === "income";
+                      const shown = rowAmount(t);
                       // No entrance animation, and no `layout`. A row you just
                       // added has to be readable the instant it lands — it
                       // mounted mid-fade often enough that the ledger showed a
@@ -815,7 +821,12 @@ export default function TransactionsPage() {
                                 <span className="mt-0.5 block truncate text-meta text-ink-3">
                                   {t.category}
                                   {t.paidBack > 0 &&
-                                    (t.paidBack >= t.amount ? (
+                                    (t.paidBack > t.amount ? (
+                                      <>
+                                        {" "}· {formatMoney(t.paidBack)} back on{" "}
+                                        {formatMoney(t.amount)}
+                                      </>
+                                    ) : t.paidBack === t.amount ? (
                                       <> · {formatMoney(t.amount)} paid back in full</>
                                     ) : (
                                       <>
@@ -834,14 +845,16 @@ export default function TransactionsPage() {
                                   )}
                                 </span>
                               </span>
+                              {/* A bill friends paid back more than reads as
+                                  what it brought in: the extra, in green. */}
                               <span
                                 className={cn(
                                   "num shrink-0 text-[15px] font-medium",
-                                  isIncome ? "text-positive" : "text-ink"
+                                  shown.gain ? "text-positive" : "text-ink"
                                 )}
                               >
-                                {isIncome ? "+" : "−"}
-                                {formatMoney(countedAmount(t))}
+                                {shown.gain ? "+" : "−"}
+                                {formatMoney(shown.value)}
                               </span>
                             </button>
                             <button

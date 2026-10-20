@@ -13,7 +13,7 @@ import {
   savesForPeriod,
   ymdOf as ymd,
 } from "../lib/period.js";
-import { spentAmount } from "../lib/entryFields.js";
+import { incomeAmount, spentAmount } from "../lib/entryFields.js";
 
 const MAX_STREAK_DAYS = 3660;
 
@@ -87,8 +87,11 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
       if (period) {
         expenseByPeriod.set(period.key, (expenseByPeriod.get(period.key) || 0) + spent);
       }
-    } else if (period) {
-      incomeByPeriod.set(period.key, (incomeByPeriod.get(period.key) || 0) + t.amount);
+    }
+    // An income row, or whatever friends paid back past an expense's bill.
+    const earned = incomeAmount(t);
+    if (earned > 0 && period) {
+      incomeByPeriod.set(period.key, (incomeByPeriod.get(period.key) || 0) + earned);
     }
   }
 

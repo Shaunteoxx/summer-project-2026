@@ -1073,7 +1073,7 @@ function HeroView() {
       <p className="mt-1 text-[13px] text-ink-3">13 August 2026 · 20 days left</p>
       <div className="mt-[34px]">
         <div className="text-center">
-          <p className="text-overline text-ink-3">{over ? "Over budget" : "Left to spend this month"}</p>
+          <p className="text-overline text-ink-3">{over ? "Over Budget" : "Left to Spend This Month"}</p>
           <p className={`num-display mt-2 text-display ${over ? "text-negative" : "text-ink"}`}>
             {over ? "−" : ""}{fm(leftToSpend)}
           </p>

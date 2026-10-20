@@ -5,7 +5,7 @@ import { dayFromYmd } from "../lib/period.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
 import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
 import { ensureRecurringDue } from "../lib/recurring.js";
-import { SPENT_AMOUNT } from "../lib/entryFields.js";
+import { INCOME_AMOUNT, SPENT_AMOUNT } from "../lib/entryFields.js";
 
 /**
  * GET /api/accounts?today=YYYY-MM-DD
@@ -66,6 +66,11 @@ export async function getAccountTotals(req, res) {
           spent: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] } },
           // What the budget counts: the same bills, less what came back.
           counted: { $sum: { $cond: [{ $eq: ["$type", "expense"] }, SPENT_AMOUNT, 0] } },
+          // Whatever came back past a bill. Already In for the account it
+          // landed in (paidBackIn below); counted here for the budget.
+          extra: {
+            $sum: { $cond: [{ $eq: ["$type", "expense"] }, INCOME_AMOUNT, 0] },
+          },
         },
       },
     ]),
@@ -93,6 +98,7 @@ export async function getAccountTotals(req, res) {
   // rather than the difference silently going missing.
   const unassigned = { income: 0, spent: 0, paidBackIn: 0, net: 0 };
   let counted = 0;
+  let extra = 0;
 
   for (const row of txnRows) {
     const target = row._id ? byId.get(String(row._id)) : unassigned;
@@ -102,6 +108,7 @@ export async function getAccountTotals(req, res) {
     target.income += row.income;
     target.spent += row.spent;
     counted += row.counted;
+    extra += row.extra;
   }
 
   for (const row of paidBackRows) {
@@ -132,17 +139,21 @@ export async function getAccountTotals(req, res) {
   unassigned.paidBackIn = roundMoney(unassigned.paidBackIn);
   unassigned.net = roundMoney(unassigned.income - unassigned.spent + unassigned.paidBackIn);
 
+  // Money paid back past a bill is income to the budget, the same as a gift.
   const income = roundMoney(
-    accounts.reduce((sum, a) => sum + a.income, 0) + unassigned.income
+    accounts.reduce((sum, a) => sum + a.income, 0) + unassigned.income + extra
   );
   const spent = roundMoney(counted);
   const reserved = roundMoney(period.savings || 0);
   // A term cycle's money came from the lump sum, which arrived in an earlier
   // cycle and belongs to no account any more. Null outside term mode.
   const funding = period.funding ?? null;
+  const term =
+    funding !== null ? context.terms.find((t) => String(t._id) === period.termId) : null;
+  const fundedBy = term ? await incomeCategories(req.user._id, term.start, period.end) : [];
 
   res.json({
-    period: { start: period.start, end: period.end, savings: reserved, funding },
+    period: { start: period.start, end: period.end, savings: reserved, funding, fundedBy },
     accounts,
     // Omitted entirely once everything is tagged, so the client doesn't have to
     // decide whether a row of zeroes is worth showing.
@@ -159,6 +170,28 @@ export async function getAccountTotals(req, res) {
       leftToSpend: roundMoney((funding ?? income) - spent - reserved),
     },
   });
+}
+
+/**
+ * The income categories a term cycle's money came from, largest first, so the
+ * card can say "$652.40 in from Allowance".
+ *
+ * Over the same window the cycle's share is cut from: income from the start of
+ * the term to the end of this cycle. Usually that's the one lump sum.
+ */
+async function incomeCategories(userId, start, end) {
+  const rows = await Transaction.aggregate([
+    {
+      $match: {
+        userId,
+        type: "income",
+        date: { $gte: dayFromYmd(start), $lte: dayFromYmd(end) },
+      },
+    },
+    { $group: { _id: "$category", amount: { $sum: "$amount" } } },
+    { $sort: { amount: -1, _id: 1 } },
+  ]);
+  return rows.map((r) => r._id);
 }
 
 const zeroTotals = () => ({

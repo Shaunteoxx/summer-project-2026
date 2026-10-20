@@ -222,7 +222,10 @@ describe("account activity", () => {
 // is already sitting in an account, and a row would total it twice.
 describe("a funded term cycle", () => {
   const funded = (over = {}) => ({
-    period: { start: "2026-08-01", end: "2026-08-31", savings: 200, funding: 1000 },
+    period: {
+      start: "2026-08-01", end: "2026-08-31", savings: 200, funding: 1000,
+      fundedBy: ["Allowance"],
+    },
     accounts: [
       account({ id: "a1", name: "Trust", spent: 448 }),
       account({ id: "a2", name: "DBS", color: "#1290CC" }),
@@ -231,14 +234,38 @@ describe("a funded term cycle", () => {
     ...over,
   });
 
-  it("explains where the money came from", async () => {
+  it("says where the money came from", async () => {
     fetchAccountTotals.mockResolvedValue(funded());
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
 
-    expect(screen.getByText(/of your allowance is this month's/)).toBeInTheDocument();
     expect(screen.getByText("$1,000.00")).toBeInTheDocument();
-    expect(screen.getByText(/isn't in the In column/)).toBeInTheDocument();
+    expect(screen.getByText(/in from Allowance\. Minus/)).toBeInTheDocument();
+  });
+
+  it("names two sources, and counts the rest past that", async () => {
+    const withSources = (fundedBy) =>
+      funded({ period: { ...funded().period, fundedBy } });
+
+    fetchAccountTotals.mockResolvedValue(withSources(["Allowance", "Gifts"]));
+    const { unmount } = render(<AccountsCard />);
+    expect(await screen.findByText(/in from Allowance and Gifts\./)).toBeInTheDocument();
+    unmount();
+
+    // A third name would push the sentence onto a third line at phone width.
+    fetchAccountTotals.mockResolvedValue(withSources(["Allowance", "Gifts", "Job"]));
+    render(<AccountsCard />);
+    expect(await screen.findByText(/in from Allowance and 2 others\./)).toBeInTheDocument();
+  });
+
+  it("leaves the source off when nothing came in", async () => {
+    fetchAccountTotals.mockResolvedValue(
+      funded({ period: { ...funded().period, funding: 0, fundedBy: [] } })
+    );
+    render(<AccountsCard />);
+    await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
+
+    expect(screen.getByText(/^in\. Minus/)).toBeInTheDocument();
   });
 
   it("states the whole subtraction, not two thirds of it", async () => {
@@ -246,15 +273,15 @@ describe("a funded term cycle", () => {
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
 
-    // It used to narrate $1,000 less $200 and then announce $352, leaving the
+    // It used to narrate $1,000 minus $200 and then announce $352, leaving the
     // reader to find the missing $448 in the Out column above.
     expect(
-      screen.getByText(/Less \$200\.00 reserved and \$448\.00 spent/)
+      screen.getByText(/Minus \$200\.00 reserved and \$448\.00 spent/)
     ).toBeInTheDocument();
     expect(screen.getByText("$352.00")).toBeInTheDocument();
   });
 
-  it("says how far past you are when the cycle is overspent", async () => {
+  it("says how far over budget you are when the cycle is overspent", async () => {
     fetchAccountTotals.mockResolvedValue(
       funded({
         accounts: [
@@ -274,7 +301,7 @@ describe("a funded term cycle", () => {
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
 
-    expect(screen.getByText(/past this month's budget/)).toBeInTheDocument();
+    expect(screen.getByText(/that's\s+over budget\./)).toBeInTheDocument();
     expect(screen.getByText("$100.00")).toBeInTheDocument();
   });
 
@@ -328,10 +355,9 @@ describe("a funded term cycle", () => {
     expect(cellsFor("Total")).toEqual(["$6,000.00", "$448.00"]);
   });
 
-  it("doesn't claim the money arrived earlier in the month it arrived", async () => {
-    // Cycle one is the exception: the lump sum is right there in the In
-    // column, so "it isn't in the In column" would be a lie about a figure
-    // the reader can see three rows above.
+  it("reads the same in the month the money arrives", async () => {
+    // Cycle one: the lump sum is in the In column above. The sentence used to
+    // need a second version for this month; naming the source works for both.
     fetchAccountTotals.mockResolvedValue(
       funded({
         accounts: [
@@ -348,21 +374,16 @@ describe("a funded term cycle", () => {
     await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
 
     expect(
-      screen.getByText(/of what came in is this month's share of your allowance/)
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/it arrived earlier/)).not.toBeInTheDocument();
-    // The subtraction is the same either way.
-    expect(
-      screen.getByText(/Less \$200\.00 reserved and \$448\.00 spent/)
+      screen.getByText(/in from Allowance\. Minus \$200\.00 reserved and \$448\.00 spent/)
     ).toBeInTheDocument();
   });
 
-  it("says nothing about an allowance outside term mode", async () => {
+  it("adds no sentence outside term mode", async () => {
     fetchAccountTotals.mockResolvedValue(payload());
     render(<AccountsCard />);
     await waitFor(() => expect(screen.getByText("Trust")).toBeInTheDocument());
 
-    expect(screen.queryByText(/allowance/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/reserved and/)).not.toBeInTheDocument();
   });
 });
 

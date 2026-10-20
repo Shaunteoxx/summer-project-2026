@@ -107,15 +107,42 @@ export function checkAccountId(user, raw) {
  * timing difference in monthly bank checks for one number to edit.
  */
 
-/** What an entry costs the budget: the bill, less what came back. */
-export const spentAmount = (t) => t.amount - (t.paidBack || 0);
+/*
+ * Friends sometimes send back more than the bill — a tip, or a little extra
+ * from family. Up to the bill, a repayment cancels it. Past the bill it's new
+ * money, so it counts as income on the bill's date, in the account it came
+ * into, the way any other gift would. Letting it run on as negative spending
+ * instead would put "−$5.00" days in the calendar and a negative slice in the
+ * category breakdown.
+ */
 
-/** The same thing as a Mongo expression, for the aggregations. */
-export const SPENT_AMOUNT = { $subtract: ["$amount", { $ifNull: ["$paidBack", 0] }] };
+/** What an entry costs the budget: the bill, less what came back, never below 0. */
+export const spentAmount = (t) => Math.max(t.amount - (t.paidBack || 0), 0);
+
+/** Whatever was paid back beyond the bill. Income, not a smaller expense. */
+export const extraPaidBack = (t) =>
+  t.type === "expense" ? Math.max((t.paidBack || 0) - t.amount, 0) : 0;
+
+/** What an entry brings in: an income row's amount, or an expense's extra. */
+export const incomeAmount = (t) => (t.type === "income" ? t.amount : extraPaidBack(t));
+
+const PAID_BACK = { $ifNull: ["$paidBack", 0] };
+
+/** spentAmount as a Mongo expression, for the aggregations. */
+export const SPENT_AMOUNT = { $max: [{ $subtract: ["$amount", PAID_BACK] }, 0] };
+
+/** incomeAmount as a Mongo expression. Use it for every income sum. */
+export const INCOME_AMOUNT = {
+  $cond: [
+    { $eq: ["$type", "income"] },
+    "$amount",
+    { $cond: [{ $eq: ["$type", "expense"] }, { $max: [{ $subtract: [PAID_BACK, "$amount"] }, 0] }, 0] },
+  ],
+};
 
 /**
  * Check a paid-back amount and the account it went into, against the
- * expense's own type and amount.
+ * entry's type.
  *
  * Returns { value: { paidBack, paidBackAccountId } } or { message }. Nothing
  * back, in any form, clears both, so a stale account can't outlive its amount.
@@ -123,7 +150,7 @@ export const SPENT_AMOUNT = { $subtract: ["$amount", { $ifNull: ["$paidBack", 0]
  * mention the account mustn't have to resend one the user may since have
  * archived.
  */
-export function checkPaidBack(user, { type, amount, rawPaidBack, rawAccountId, keepAccountId = null }) {
+export function checkPaidBack(user, { type, rawPaidBack, rawAccountId, keepAccountId = null }) {
   const paidBack = rawPaidBack === undefined || rawPaidBack === null || rawPaidBack === ""
     ? 0
     : Number(rawPaidBack);
@@ -133,13 +160,9 @@ export function checkPaidBack(user, { type, amount, rawPaidBack, rawAccountId, k
   if (paidBack === 0) return { value: { paidBack: 0, paidBackAccountId: null } };
   if (type !== "expense") return { message: "Only an expense can be paid back" };
 
+  // No cap at the bill: anything past it is income (see extraPaidBack).
+  if (paidBack > MAX_AMOUNT) return { message: "Paid back is too large" };
   const rounded = roundMoney(paidBack);
-  // Up to the whole bill: covering a friend's meal and getting all of it back
-  // costs the budget nothing, but the row still has to exist — the bill left
-  // one account and the money came back into another.
-  if (rounded > amount) {
-    return { message: "Paid back can't be more than the amount" };
-  }
 
   if (rawAccountId === undefined) {
     return { value: { paidBack: rounded, paidBackAccountId: keepAccountId } };

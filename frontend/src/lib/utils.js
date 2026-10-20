@@ -52,7 +52,27 @@ export function monthName(month) {
  * `amount`, or the list and the budget stop agreeing.
  */
 export function countedAmount(t) {
-  return t.amount - (t.paidBack || 0);
+  return Math.max(t.amount - (t.paidBack || 0), 0);
+}
+
+/**
+ * Whatever friends paid back past the bill — a tip, a little extra. It counts
+ * as income, not as a smaller expense (lib/entryFields.js `extraPaidBack`), so
+ * income totals add it on.
+ */
+export function extraPaidBack(t) {
+  return t.type === "expense" ? Math.max((t.paidBack || 0) - t.amount, 0) : 0;
+}
+
+/**
+ * How an entry reads in a list: a plus in green for income and for a bill
+ * paid back with extra on top, otherwise what it cost.
+ */
+export function rowAmount(t) {
+  if (t.type === "income") return { gain: true, value: t.amount };
+  const extra = extraPaidBack(t);
+  if (extra > 0) return { gain: true, value: extra };
+  return { gain: false, value: countedAmount(t) };
 }
 
 /** 1 -> "1st", 22 -> "22nd". Used wherever a repeating entry names its day. */

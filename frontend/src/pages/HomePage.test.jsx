@@ -324,7 +324,7 @@ describe("with nothing logged yet", () => {
 
     expect(screen.queryByText(/% spent/)).not.toBeInTheDocument();
     expect(screen.queryByText("Recent")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Left to spend/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Left to Spend/)).not.toBeInTheDocument();
   });
 
   it("greets a first-time visitor without welcoming them back", async () => {

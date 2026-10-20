@@ -134,6 +134,20 @@ describe("day cells", () => {
     expect(screen.getByLabelText(/over budget/)).toHaveClass("ring-1");
   });
 
+  it("draws a restored day green with lines over it, not red", () => {
+    const days = makeDays("2026-08-01", 2, {
+      "2026-08-01": { amount: 45, over: true, restored: true },
+      "2026-08-02": { amount: 45, over: true },
+    });
+    render(<SpendingCalendar days={days} budgetsAvailable onSelectDay={() => {}} />);
+
+    const restored = screen.getByLabelText("1 Aug: spent $45.00, over budget, restored");
+    expect(restored).toHaveClass("hatch-restored", "text-positive");
+    expect(restored).not.toHaveClass("ring-1");
+    // A day that broke the streak keeps its red and its ring.
+    expect(screen.getByLabelText("2 Aug: spent $45.00, over budget")).toHaveClass("ring-1");
+  });
+
   it("renders every day of a long month page", () => {
     render(
       <SpendingCalendar days={makeDays("2026-10-01", 31)} budgetsAvailable onSelectDay={() => {}} />

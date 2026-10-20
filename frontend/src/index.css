@@ -481,6 +481,18 @@
     border-radius: 12px;
   }
 
+  /* A restored day in the spending calendar: diagonal lines laid over its
+     green tint. Faint on purpose — the 9px amount sits on top of them, and at
+     a stronger weight the lines started running through it. Takes the text
+     colour's token, so it follows light and dark. */
+  .hatch-restored {
+    background-image: repeating-linear-gradient(
+      45deg,
+      hsl(var(--positive) / 0.22) 0 1px,
+      transparent 1px 5px
+    );
+  }
+
   /* Section label. 11px caps, ink-3. */
   .overline {
     font-size: 11px;

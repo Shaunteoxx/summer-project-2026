@@ -1261,7 +1261,7 @@ describe("money paid back on a shared bill", () => {
     expect(submitted()).toMatchObject({ amount: 10, paidBack: 10 });
   });
 
-  it("won't take a repayment bigger than the bill", async () => {
+  it("takes a repayment bigger than the bill, and counts the extra as income", async () => {
     const user = userEvent.setup();
     const sheet = await openExpenseSheet();
 
@@ -1269,10 +1269,22 @@ describe("money paid back on a shared bill", () => {
     await enterAmount(user, sheet, "10");
     await enterPaidBack(user, within(screen.getByRole("dialog")), "12");
     const form = within(screen.getByRole("dialog"));
+    expect(form.getByText(/the extra/)).toHaveTextContent(
+      "Your budget doesn't count it, and the extra $2.00 counts as income."
+    );
     await user.click(form.getByRole("button", { name: "Add Expense" }));
 
-    expect(form.getByText("Paid back can't be more than the amount.")).toBeInTheDocument();
-    expect(addTransaction).not.toHaveBeenCalled();
+    expect(submitted()).toMatchObject({ amount: 10, paidBack: 12 });
+  });
+
+  it("lists a bill paid back with extra as what it brought in", async () => {
+    mockAccounts = twoAccounts;
+    mockTransactions = [{ ...dinner, paidBack: 20 }];
+    renderPage();
+
+    const row = await screen.findByRole("button", { name: "Edit Group dinner" });
+    expect(row).toHaveTextContent("+$7.20");
+    expect(row).toHaveTextContent("$20.00 back on $12.80");
   });
 
   it("isn't offered on income", async () => {

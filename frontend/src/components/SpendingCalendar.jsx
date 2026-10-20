@@ -15,6 +15,13 @@ const SHORT_MONTHS = [
  * rather than fills, since there's no verdict to show yet. Tap a day to open its
  * transactions.
  *
+ * A day that went over but was restored is green with diagonal lines over it.
+ * Green because the streak came through it intact; the lines because it got
+ * there by a restore, not by staying within budget. A shield in the corner was
+ * tried first, and at 8px in a 42px cell it was easy to miss, especially in
+ * dark mode. Lines change the whole cell, which is what you see when scanning
+ * a grid, and they mean colour isn't the only thing telling it apart.
+ *
  * A day with income logged gets a dot in its corner. It's a marker, not an
  * amount: an allowance with cents doesn't fit a 42px cell, and income has no
  * bearing on the day's verdict. The dot takes the cell's own text colour, so it
@@ -57,7 +64,13 @@ export default function SpendingCalendar({
           const label = d.isFuture
             ? dateLabel
             : `${dateLabel}: spent ${formatMoney(d.amount)}${
-                d.budget !== null ? (d.over ? ", over budget" : ", within budget") : ""
+                d.budget !== null
+                  ? d.restored
+                    ? ", over budget, restored"
+                    : d.over
+                      ? ", over budget"
+                      : ", within budget"
+                  : ""
               }${hasIncome ? `, income ${formatMoney(d.earned)}` : ""}`;
           // The first day of a new month carries its month name, so day numbers
           // restarting mid-period never read as the same month.
@@ -88,15 +101,18 @@ export default function SpendingCalendar({
                         // readable (white is 3.3:1 there). White in light mode.
                         "bg-negative text-destructive-foreground"
                       : "bg-ink text-surface"
-                    : d.over
-                      ? // The ring is deliberate: over-budget must not be
-                        // signalled by colour alone.
-                        "bg-negative/[0.12] text-negative ring-1 ring-negative/40"
-                      : budgetsAvailable
-                        ? "bg-positive/[0.12] text-positive"
-                        : spentSomething
-                          ? "bg-surface-2 text-ink"
-                          : "bg-surface-2 text-ink-3"
+                    : d.restored
+                      ? // Over, but a restore carried the streak through it.
+                        "hatch-restored bg-positive/[0.12] text-positive"
+                      : d.over
+                        ? // The ring is deliberate: over-budget must not be
+                          // signalled by colour alone.
+                          "bg-negative/[0.12] text-negative ring-1 ring-negative/40"
+                        : budgetsAvailable
+                          ? "bg-positive/[0.12] text-positive"
+                          : spentSomething
+                            ? "bg-surface-2 text-ink"
+                            : "bg-surface-2 text-ink-3"
               )}
             >
               {hasIncome && (
@@ -123,7 +139,7 @@ export default function SpendingCalendar({
                 <span
                   className={cn(
                     "num mt-0.5 whitespace-nowrap text-[9px] leading-none",
-                    d.over && !d.isToday && "font-semibold"
+                    d.over && !d.restored && !d.isToday && "font-semibold"
                   )}
                 >
                   {formatMoney(d.amount)}

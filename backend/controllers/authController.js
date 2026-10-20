@@ -21,6 +21,7 @@ import {
   checkCategory,
   checkDescription,
   checkType,
+  incomeAmount,
   spentAmount,
 } from "../lib/entryFields.js";
 import { signToken, sessionExhausted } from "../middleware/auth.js";
@@ -752,8 +753,8 @@ export async function getHomeStats(req, res) {
   let income = 0;
   let expenses = 0;
   for (const t of periodTransactions) {
-    if (t.type === "income") income += t.amount;
-    else expenses += spentAmount(t);
+    income += incomeAmount(t);
+    if (t.type === "expense") expenses += spentAmount(t);
   }
 
   income = roundMoney(income);

@@ -93,7 +93,6 @@ export async function createTransaction(req, res) {
 
   const back = checkPaidBack(req.user, {
     type,
-    amount: value.value,
     rawPaidBack: paidBack,
     rawAccountId: paidBackAccountId ?? null,
   });
@@ -182,14 +181,12 @@ export async function updateTransaction(req, res) {
     transaction.accountId = account.value;
   }
 
-  // Re-checked whenever either side of it moves: lowering the amount below
-  // what was already paid back has to be refused just as much as paying back
-  // too much. Friends usually pay a few days after the meal, so this is mostly
-  // how paid back gets set in the first place.
-  if (amount !== undefined || "paidBack" in body || "paidBackAccountId" in body) {
+  // Friends usually pay a few days after the meal, so this is mostly how paid
+  // back gets set in the first place. There's no cap against the amount to
+  // re-check: whatever comes back past the bill counts as income.
+  if ("paidBack" in body || "paidBackAccountId" in body) {
     const back = checkPaidBack(req.user, {
       type: transaction.type,
-      amount: transaction.amount,
       rawPaidBack: "paidBack" in body ? body.paidBack : transaction.paidBack,
       rawAccountId: "paidBackAccountId" in body ? body.paidBackAccountId : undefined,
       keepAccountId: transaction.paidBackAccountId,

@@ -104,14 +104,14 @@ beforeEach(async () => {
   ]);
 });
 
-const addTxn = (userId, ymd, type, amount) => {
+const addTxn = (userId, ymd, type, amount, category = type === "income" ? "Allowance" : "F & B") => {
   const date = new Date(`${ymd}T00:00:00.000Z`);
   return Transaction.create({
     userId,
     description: `${type} ${ymd}`,
     amount,
     type,
-    category: type === "income" ? "Allowance" : "F & B",
+    category,
     date,
     month: date.getUTCMonth(),
     year: date.getUTCFullYear(),
@@ -388,6 +388,22 @@ describe("the money a cycle has", () => {
     const after = await call(`/api/auth/home?today=${todayYmd()}`, token);
     assert.ok(after.body.periodFunding > before.body.periodFunding);
   });
+
+  it("counts money paid back past a bill into the pot, like a top-up", async () => {
+    // Two identical terms, last month: one gets a $400 gift, the other a $100
+    // dinner that friends paid back $500 for. Both leave $400 more in the pot.
+    const gifted = await midTerm({ lump: 6000, months: 6, back: 2 });
+    await addTxn(gifted.user._id, monthStart(1), "income", 400, "Gifts");
+
+    const tipped = await midTerm({ lump: 6000, months: 6, back: 2 });
+    const dinner = await addTxn(tipped.user._id, monthStart(1), "expense", 100);
+    await Transaction.updateOne({ _id: dinner._id }, { paidBack: 500 });
+
+    const [a, b] = await Promise.all(
+      [gifted, tipped].map(({ token }) => call(`/api/auth/home?today=${todayYmd()}`, token))
+    );
+    assert.equal(b.body.periodFunding, a.body.periodFunding);
+  });
 });
 
 describe("term mode and the accounts card", () => {
@@ -406,6 +422,24 @@ describe("term mode and the accounts card", () => {
     const summed =
       body.accounts.reduce((n, a) => n + a.net, 0) + (body.unassigned?.net ?? 0);
     assert.equal(summed, body.totals.net);
+  });
+
+  it("names where the money came from, largest first", async () => {
+    const { user, token } = await midTerm({ lump: 6000, months: 6, back: 2 });
+    // A gift last month, and a job next month that isn't in this cycle's pot.
+    await addTxn(user._id, monthStart(1), "income", 50, "Gifts");
+    await addTxn(user._id, shift(40), "income", 900, "Job");
+
+    const { body } = await call(`/api/accounts?today=${todayYmd()}`, token);
+    assert.deepEqual(body.period.fundedBy, ["Allowance", "Gifts"]);
+  });
+
+  it("names nothing outside term mode", async () => {
+    const user = await makeUser();
+    await addTxn(user._id, todayYmd(), "income", 500);
+    const { body } = await call(`/api/accounts?today=${todayYmd()}`, signToken(user));
+    assert.equal(body.period.funding, null);
+    assert.deepEqual(body.period.fundedBy, []);
   });
 });
 

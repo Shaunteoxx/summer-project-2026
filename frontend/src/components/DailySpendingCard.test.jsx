@@ -222,3 +222,56 @@ describe("income", () => {
     expect(screen.getByLabelText("2 Sep: spent $0.00")).toBeInTheDocument();
   });
 });
+
+describe("restored days", () => {
+  // 1-15 Sep elapsed. The 3rd went over and was restored; the 5th went over
+  // and wasn't.
+  const period = makePeriod("2026-09-01", 30);
+  const periodDays = makePeriodDays(period, { "2026-09-03": 45, "2026-09-05": 30 }).map(
+    (d) =>
+      d.date === "2026-09-03"
+        ? { ...d, status: "saved" }
+        : d.date === "2026-09-05"
+          ? { ...d, status: "break" }
+          : d
+  );
+  const renderRestored = () =>
+    render(
+      <DailySpendingCard
+        transactions={[]}
+        income={3000}
+        period={period}
+        periodDays={periodDays}
+        todayBudget={20}
+      />
+    );
+
+  it("takes the restore from the streak, so the day stops being red", () => {
+    renderRestored();
+    expect(
+      screen.getByLabelText("3 Sep: spent $45.00, over budget, restored")
+    ).toHaveClass("hatch-restored");
+    expect(screen.getByLabelText("5 Sep: spent $30.00, over budget")).toHaveClass("ring-1");
+  });
+
+  it("names it in the legend in calendar view only", async () => {
+    renderRestored();
+    expect(screen.getByText("Restored")).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText("Chart view"));
+    expect(screen.queryByText("Restored")).not.toBeInTheDocument();
+  });
+
+  it("keeps the overspend in the day's sheet", async () => {
+    renderRestored();
+    await userEvent.click(screen.getByLabelText(/^3 Sep:/));
+    const line = within(screen.getByRole("dialog")).getByText("Restored · $25.00 Over Budget");
+    expect(line).toHaveClass("text-positive");
+  });
+
+  it("says Over Budget for a day that wasn't restored", async () => {
+    renderRestored();
+    await userEvent.click(screen.getByLabelText(/^5 Sep:/));
+    const line = within(screen.getByRole("dialog")).getByText("$10.00 Over Budget");
+    expect(line).toHaveClass("text-negative");
+  });
+});

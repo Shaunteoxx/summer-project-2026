@@ -21,7 +21,7 @@ import { fetchHomeStats, fetchTransactions } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
-import { countedAmount, formatMoney, localToday } from "@/lib/utils";
+import { formatMoney, localToday, rowAmount } from "@/lib/utils";
 import { formatDay, formatDayRange, noWindowCopy } from "@/lib/period";
 import { SETUP } from "@/lib/setup";
 import { SetupCard, useSetupQuest } from "@/tour/SetupQuest";
@@ -330,7 +330,9 @@ export default function HomePage() {
                 <Skeleton className="h-[9px] w-[82px]" />
               ) : (
                 <p className="text-overline text-ink-3">
-                  {overspent ? "Over budget" : `Left to spend this ${noun}`}
+                  {overspent
+                    ? "Over Budget"
+                    : `Left to Spend This ${noun === "period" ? "Period" : "Month"}`}
                 </p>
               )}
               {loading ? (
@@ -627,7 +629,7 @@ export default function HomePage() {
         ) : (
           <ul className="-mx-4 border-y border-hairline bg-surface">
             {recent.map((t) => {
-              const income = t.type === "income";
+              const shown = rowAmount(t);
               const category = getCategory(t.category);
               return (
                 <li key={t._id ?? t.id} className="border-t border-hairline first:border-t-0">
@@ -649,11 +651,11 @@ export default function HomePage() {
                         a spending tracker; red has to still mean "over". */}
                     <span
                       className={`num shrink-0 text-[15px] font-medium ${
-                        income ? "text-positive" : "text-ink"
+                        shown.gain ? "text-positive" : "text-ink"
                       }`}
                     >
-                      {income ? "+" : "−"}
-                      {formatMoney(countedAmount(t))}
+                      {shown.gain ? "+" : "−"}
+                      {formatMoney(shown.value)}
                     </span>
                   </button>
                 </li>

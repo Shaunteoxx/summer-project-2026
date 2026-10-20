@@ -98,6 +98,7 @@ export default function AccountsCard({ onTransfer = null, refreshKey = 0 }) {
   // under the Total does the reconciling — which is what it already does for
   // the savings reserve.
   const funding = data.period.funding ?? null;
+  const fundedBy = data.period.fundedBy ?? [];
 
   const shown = [...rows, ...(unassigned ? [unassigned] : [])];
   const totalIn = round(shown.reduce((n, a) => n + a.in, 0));
@@ -191,31 +192,25 @@ export default function AccountsCard({ onTransfer = null, refreshKey = 0 }) {
               rows and never touched the budget. The two agree whenever there
               were no transfers, which is most of the time.
 
-              The first clause has two versions because the term's first cycle
-              is not like the rest: the lump sum lands *in* it, so it really is
-              in the In column above and "it arrived earlier" would be a lie
-              about a figure the reader can see. From the second cycle on
-              nothing comes in, which is the case that needed explaining. */}
+              The first clause names where the money came from rather than
+              explaining the In column. It used to say "of your allowance is
+              this month's — it arrived earlier, so it isn't in the In column",
+              which with the rest made three lines at phone width. Naming the
+              categories answers the same question in a few words, and the
+              categories are capped at two names so it stays at two lines. */}
           {funding != null && (
             <p className="mt-3 border-t border-hairline pt-3 text-[11.5px] leading-relaxed text-ink-3">
-              <b className="font-medium text-ink-2">{formatMoney(funding)}</b>{" "}
-              {totals.income > 0 ? (
-                <>of what came in is this month&apos;s share of your allowance.</>
-              ) : (
-                <>
-                  of your allowance is this month&apos;s — it arrived earlier, so
-                  it isn&apos;t in the In column.
-                </>
-              )}{" "}
-              Less {formatMoney(totals.reserved)} reserved and{" "}
-              {formatMoney(totals.spent)} spent,{" "}
+              <b className="font-medium text-ink-2">{formatMoney(funding)}</b> in
+              {fundedBy.length > 0 && <> from {sourcesLabel(fundedBy)}</>}. Minus{" "}
+              {formatMoney(totals.reserved)} reserved and {formatMoney(totals.spent)}{" "}
+              spent,{" "}
               {overspent ? (
                 <>
-                  you&apos;re{" "}
+                  that&apos;s{" "}
                   <b className="font-semibold text-negative">
                     {formatMoney(Math.abs(totals.leftToSpend))}
                   </b>{" "}
-                  past this month&apos;s budget.
+                  over budget.
                 </>
               ) : (
                 <>
@@ -236,6 +231,13 @@ export default function AccountsCard({ onTransfer = null, refreshKey = 0 }) {
 
 /** Money maths in JS needs rounding at every step or cents drift. */
 const round = (n) => Math.round(n * 100) / 100;
+
+/** "Allowance", "Allowance and Gifts", "Allowance and 2 others". */
+function sourcesLabel([first, ...rest]) {
+  if (rest.length === 0) return first;
+  if (rest.length === 1) return `${first} and ${rest[0]}`;
+  return `${first} and ${rest.length} others`;
+}
 
 function Row({ label, color, inAmt, outAmt }) {
   return (

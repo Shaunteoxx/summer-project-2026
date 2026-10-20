@@ -1,7 +1,7 @@
 import Transaction from "../models/Transaction.js";
 import { roundMoney } from "./validation.js";
 import { addDaysYmd, dayFromYmd } from "./period.js";
-import { SPENT_AMOUNT } from "./entryFields.js";
+import { INCOME_AMOUNT, SPENT_AMOUNT } from "./entryFields.js";
 
 /**
  * All-time savings: what someone has kept, over the windows that have finished.
@@ -88,9 +88,8 @@ export async function lifetimeSavingsFor(entries) {
     {
       $group: {
         _id: "$userId",
-        income: {
-          $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] },
-        },
+        // Including anything friends paid back past the bill.
+        income: { $sum: INCOME_AMOUNT },
         // Expenses net of what friends paid back, as everywhere else.
         expenses: {
           $sum: { $cond: [{ $eq: ["$type", "expense"] }, SPENT_AMOUNT, 0] },
@@ -108,12 +107,11 @@ export async function lifetimeSavingsFor(entries) {
         $match: {
           $or: termed.map((plan) => ({
             userId: plan.userId,
-            type: "income",
             date: { $lt: dayFromYmd(plan.termStart) },
           })),
         },
       },
-      { $group: { _id: "$userId", income: { $sum: "$amount" } } },
+      { $group: { _id: "$userId", income: { $sum: INCOME_AMOUNT } } },
     ]);
     for (const row of termRows) preTerm.set(String(row._id), row.income);
   }

@@ -136,13 +136,15 @@ describe("recording it", () => {
     assert.equal(res.body.paidBackAccountId, null);
   });
 
-  it("takes up to the whole bill, never more", async () => {
+  it("takes the whole bill, or more when friends add a tip", async () => {
     const token = signToken(await makeUser());
-    const whole = await call("/api/transactions", token, "POST", dinner({ paidBack: 12.8 }));
-    assert.equal(whole.status, 201, JSON.stringify(whole.body));
-    assert.equal(whole.body.paidBack, 12.8);
+    for (const paidBack of [12.8, 20]) {
+      const res = await call("/api/transactions", token, "POST", dinner({ paidBack }));
+      assert.equal(res.status, 201, JSON.stringify(res.body));
+      assert.equal(res.body.paidBack, paidBack);
+    }
 
-    for (const paidBack of [12.81, 20, -1, "lots"]) {
+    for (const paidBack of [-1, "lots", 2e9]) {
       const res = await call("/api/transactions", token, "POST", dinner({ paidBack }));
       assert.equal(res.status, 400, `paidBack ${paidBack}`);
     }
@@ -186,15 +188,12 @@ describe("adding it later", () => {
     assert.equal(String(res.body.paidBackAccountId), dbs);
   });
 
-  it("won't let the bill drop below what was paid back", async () => {
+  it("lets the bill drop below what was paid back", async () => {
     const { token, meal } = await setUp();
-    const res = await call(`/api/transactions/${meal._id}`, token, "PATCH", { amount: 5.89 });
-    assert.equal(res.status, 400);
-    const row = await Transaction.findById(meal._id).lean();
-    assert.equal(row.amount, 12.8);
-
-    const same = await call(`/api/transactions/${meal._id}`, token, "PATCH", { amount: 5.9 });
-    assert.equal(same.status, 200, JSON.stringify(same.body));
+    const res = await call(`/api/transactions/${meal._id}`, token, "PATCH", { amount: 5 });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.amount, 5);
+    assert.equal(res.body.paidBack, 5.9);
   });
 
   it("keeps it through an unrelated edit, even into an account since archived", async () => {
@@ -293,5 +292,60 @@ describe("what the accounts see", () => {
     const netSum = body.accounts.reduce((n, a) => n + a.net, 0) + body.unassigned.net;
     assert.equal(Math.round(netSum * 100) / 100, body.totals.net);
     assert.equal(body.totals.spent, 6.9);
+  });
+});
+
+// Friends sometimes send back more than the bill: a tip, or a little extra from
+// family. Up to the bill it cancels the bill; the rest is income.
+describe("paid back more than the bill", () => {
+  // The $12.80 dinner with $20.00 back: $7.20 more than it cost.
+  const over = () => setUp({ paidBack: 20 });
+
+  it("costs the day nothing, rather than a negative amount", async () => {
+    const { token } = await over();
+    const { body } = await call(`/api/streak?today=${todayYmd()}`, token);
+    const today = body.periodDays.find((d) => d.date === todayYmd());
+    assert.equal(today.spent, 0);
+  });
+
+  it("counts the extra as income", async () => {
+    const { token } = await over();
+    const { body } = await call(`/api/auth/home?today=${todayYmd()}`, token);
+    assert.equal(body.periodIncome, 507.2);
+    assert.equal(body.periodExpenses, 0);
+    assert.equal(body.leftToSpend, 507.2);
+  });
+
+  it("gives the streak the same budget as Home", async () => {
+    const { token } = await over();
+    const { body } = await call(`/api/streak?today=${todayYmd()}`, token);
+    assert.equal(body.leftToSpend, 507.2);
+  });
+
+  it("uses the same figures in the monthly summaries", async () => {
+    const { token } = await over();
+    const now = new Date();
+    const { body } = await call(
+      `/api/summary?month=${now.getUTCMonth()}&year=${now.getUTCFullYear()}`,
+      token
+    );
+    assert.equal(body.totalIncome, 507.2);
+    assert.equal(body.totalExpenses, 0);
+  });
+
+  it("puts the whole repayment into its account, and still ties out", async () => {
+    const { token, trust, dbs } = await over();
+    const { body } = await call(`/api/accounts?today=${todayYmd()}`, token);
+    const byId = Object.fromEntries(body.accounts.map((a) => [a.id, a]));
+
+    // The banks saw $12.80 leave Trust and $20.00 arrive in DBS.
+    assert.equal(byId[trust].net, -12.8);
+    assert.equal(byId[dbs].paidBackIn, 20);
+    assert.equal(body.totals.spent, 0);
+    assert.equal(body.totals.income, 507.2);
+    assert.equal(body.totals.leftToSpend, 507.2);
+
+    const netSum = body.accounts.reduce((n, a) => n + a.net, 0);
+    assert.equal(Math.round(netSum * 100) / 100, body.totals.net);
   });
 });

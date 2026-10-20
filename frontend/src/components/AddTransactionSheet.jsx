@@ -25,7 +25,15 @@ import { useRecurring } from "@/hooks/useRecurring";
 import { haptic } from "@/lib/haptics";
 import { emitTour } from "@/tour/signals";
 import { useTour, useTourContext } from "@/tour/TourProvider";
-import { cn, countedAmount, formatMoney, localToday, ordinal } from "@/lib/utils";
+import {
+  cn,
+  countedAmount,
+  extraPaidBack,
+  formatMoney,
+  localToday,
+  ordinal,
+  rowAmount,
+} from "@/lib/utils";
 import { SHAKE } from "@/animations/variants";
 
 const emptyForm = (accountId = "") => ({
@@ -311,8 +319,6 @@ export default function AddTransactionSheet({
     setErrors((prev) => {
       const next = { ...prev };
       for (const key of Object.keys(changes)) delete next[key];
-      // Paid back is judged against the amount, so changing either settles it.
-      if ("amount" in changes) delete next.paidBack;
       return next;
     });
     setFormError("");
@@ -356,9 +362,6 @@ export default function AddTransactionSheet({
     }
     if (!form.date || Number.isNaN(new Date(`${form.date}T00:00:00`).getTime())) {
       nextErrors.date = "Choose a valid date.";
-    }
-    if (paidBackNumber > 0 && !nextErrors.amount && paidBackNumber > amount) {
-      nextErrors.paidBack = "Paid back can't be more than the amount.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -419,7 +422,8 @@ export default function AddTransactionSheet({
     };
     const key = `pending-${++provisionalSeq}`;
     const sign = type === "income" ? "+" : "−";
-    const added = `Added ${sign}${formatMoney(amount - paidBackNumber)}`;
+    const shown = rowAmount({ type, amount, paidBack: paidBackNumber });
+    const added = `Added ${shown.gain ? "+" : "−"}${formatMoney(shown.value)}`;
 
     rememberAccount(form.accountId);
     onAdded({
@@ -766,10 +770,19 @@ export default function AddTransactionSheet({
             {errors.paidBack ? (
               <FieldError id="tx-paid-back-error">{errors.paidBack}</FieldError>
             ) : (
-              paidBackNumber > 0 &&
-              Number(form.amount) >= paidBackNumber && (
+              paidBackNumber > 0 && (
                 <p className="flex items-center justify-between gap-3 text-[12px] leading-relaxed text-ink-3">
-                  {Number(form.amount) === paidBackNumber ? (
+                  {paidBackNumber > Number(form.amount) ? (
+                    // A tip or a little extra on top. Past the bill it's
+                    // income, the way the server counts it.
+                    <span>
+                      Your budget doesn&apos;t count it, and the extra{" "}
+                      <b className="num font-medium text-positive">
+                        {formatMoney(extraPaidBack({ type, amount: Number(form.amount) || 0, paidBack: paidBackNumber }))}
+                      </b>{" "}
+                      counts as income.
+                    </span>
+                  ) : Number(form.amount) === paidBackNumber ? (
                     <span>Paid back in full, so your budget doesn&apos;t count it.</span>
                   ) : (
                     <span>

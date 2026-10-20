@@ -2,7 +2,7 @@ import Transaction from "../models/Transaction.js";
 import { parseMonthYear, resolveClientToday, roundMoney, ymd } from "../lib/validation.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
 import { lifetimeSavings } from "../lib/lifetime.js";
-import { SPENT_AMOUNT } from "../lib/entryFields.js";
+import { INCOME_AMOUNT, SPENT_AMOUNT } from "../lib/entryFields.js";
 
 function toSummary(row, userId, month, year) {
   const totalIncome = roundMoney(row?.totalIncome || 0);
@@ -26,9 +26,7 @@ export async function aggregateSummaries(userId, match = {}) {
     {
       $group: {
         _id: { year: "$year", month: "$month" },
-        totalIncome: {
-          $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] },
-        },
+        totalIncome: { $sum: INCOME_AMOUNT },
         totalExpenses: {
           $sum: { $cond: [{ $eq: ["$type", "expense"] }, SPENT_AMOUNT, 0] },
         },
