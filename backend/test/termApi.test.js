@@ -443,6 +443,17 @@ describe("term mode and the accounts card", () => {
   });
 });
 
+describe("deleting the account", () => {
+  it("takes the term with it", async () => {
+    const { user, token } = await midTerm();
+    assert.equal(await BudgetTerm.countDocuments({ userId: user._id }), 1);
+
+    const res = await call("/api/auth/me", token, "DELETE");
+    assert.equal(res.status, 200);
+    assert.equal(await BudgetTerm.countDocuments({ userId: user._id }), 0);
+  });
+});
+
 describe("switching modes", () => {
   it("keeps all three modes' data through a round trip", async () => {
     const user = await makeUser();

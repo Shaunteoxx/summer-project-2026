@@ -13,6 +13,7 @@ import { isValidTimeZone } from "../lib/localTime.js";
 import { presentAccount } from "./accountController.js";
 import { presentRule } from "./recurringController.js";
 import BudgetPeriod from "../models/BudgetPeriod.js";
+import BudgetTerm from "../models/BudgetTerm.js";
 import MonthlySummary from "../models/MonthlySummary.js";
 import PushSubscription from "../models/PushSubscription.js";
 import Transaction from "../models/Transaction.js";
@@ -238,6 +239,7 @@ export async function deleteAccount(req, res) {
     Transfer.deleteMany({ userId }),
     MonthlySummary.deleteMany({ userId }),
     BudgetPeriod.deleteMany({ userId }),
+    BudgetTerm.deleteMany({ userId }),
     PushSubscription.deleteMany({ userId }),
     // Scrub references to this user from everyone else's friends / requests.
     User.updateMany(
