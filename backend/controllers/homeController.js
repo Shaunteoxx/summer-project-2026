@@ -3,7 +3,7 @@ import { resolveClientToday, roundMoney, ymd } from "../lib/validation.js";
 import { dayFromYmd, daysLeftInPeriod } from "../lib/period.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
 import { ensureRecurringDue } from "../lib/recurring.js";
-import { incomeAmount, spentAmount } from "../lib/entryFields.js";
+import { grossOf, leftToSpendOf, sumEntries } from "../lib/budget.js";
 
 /** GET /api/auth/home -> aggregated homepage stats for the active period. */
 export async function getHomeStats(req, res) {
@@ -25,15 +25,7 @@ export async function getHomeStats(req, res) {
       })
     : [];
 
-  let income = 0;
-  let expenses = 0;
-  for (const t of periodTransactions) {
-    income += incomeAmount(t);
-    if (t.type === "expense") expenses += spentAmount(t);
-  }
-
-  income = roundMoney(income);
-  expenses = roundMoney(expenses);
+  const { income, spent: expenses } = sumEntries(periodTransactions);
 
   // Reserve the period's savings target before working out what's left to
   // spend, so the headline matches the daily-budget model.
@@ -43,11 +35,13 @@ export async function getHomeStats(req, res) {
   // income that happens to have landed inside it — which for every cycle after
   // the first is none. Null everywhere else, so nothing changes there.
   const periodFunding = active?.funding ?? null;
-  const budget = periodFunding ?? income;
-
-  // "Left to spend" = the window's money minus expenses so far minus the
-  // savings set aside. Can go negative if you've overspent your target.
-  const leftToSpend = roundMoney(budget - expenses - periodSavings);
+  const budget = grossOf({ income, funding: periodFunding });
+  const leftToSpend = leftToSpendOf({
+    income,
+    funding: periodFunding,
+    spent: expenses,
+    savings: periodSavings,
+  });
 
   res.json({
     username: req.user.username,

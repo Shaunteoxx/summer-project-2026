@@ -6,6 +6,7 @@ import { loadPeriodContext } from "../lib/periodContext.js";
 import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
 import { ensureRecurringDue } from "../lib/recurring.js";
 import { INCOME_AMOUNT, SPENT_AMOUNT } from "../lib/entryFields.js";
+import { leftToSpendOf } from "../lib/budget.js";
 
 /**
  * GET /api/accounts?today=YYYY-MM-DD
@@ -167,7 +168,7 @@ export async function getAccountTotals(req, res) {
       // is in no account, and putting it in one would be a fabrication.
       net: roundMoney(income - spent),
       reserved,
-      leftToSpend: roundMoney((funding ?? income) - spent - reserved),
+      leftToSpend: leftToSpendOf({ income, funding, spent, savings: reserved }),
     },
   });
 }

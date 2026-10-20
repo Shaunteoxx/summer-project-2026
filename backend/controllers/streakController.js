@@ -1,6 +1,6 @@
 import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
-import { parseYmd, resolveClientToday, roundMoney } from "../lib/validation.js";
+import { parseYmd, resolveClientToday } from "../lib/validation.js";
 import { loadPeriodContext } from "../lib/periodContext.js";
 import { ensureCurrentMonthSavings } from "../lib/savingsCarry.js";
 import { ensureRecurringDue } from "../lib/recurring.js";
@@ -15,6 +15,7 @@ import {
   ymdOf as ymd,
 } from "../lib/period.js";
 import { incomeAmount, spentAmount } from "../lib/entryFields.js";
+import { grossOf, leftToSpendOf } from "../lib/budget.js";
 
 const MAX_STREAK_DAYS = 3660;
 
@@ -96,15 +97,13 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
 
   const fundingByCycle = fundingByCycleFor(config, incomeByPeriod, expenseByPeriod);
 
-  /**
-   * The money a window has to spread across its days, before its savings
-   * target. A term cycle draws its share of the pot; everywhere else it is
-   * simply the income logged inside the window.
-   */
-  const grossFor = (period) => {
-    if (!period) return 0;
-    return fundingByCycle.get(period.key) ?? incomeByPeriod.get(period.key) ?? 0;
-  };
+  /** A window's income and, in term mode, its share of the pot. */
+  const moneyOf = (period) => ({
+    income: incomeByPeriod.get(period.key) ?? 0,
+    funding: fundingByCycle.get(period.key) ?? null,
+  });
+  // What the window has to spread across its days, before its savings target.
+  const grossFor = (period) => (period ? grossOf(moneyOf(period)) : 0);
 
   const savesUsedIn = (period) =>
     period
@@ -135,7 +134,7 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
     hasIncome: grossFor(activePeriod) > 0,
     overspentBy: 0,
     leftToSpend: activePeriod
-      ? roundMoney(grossFor(activePeriod) - activePeriod.savings)
+      ? leftToSpendOf({ ...moneyOf(activePeriod), spent: 0, savings: activePeriod.savings })
       : 0,
     periodSavings: activePeriod?.savings ?? 0,
     period: periodInfo(activePeriod),
@@ -337,7 +336,9 @@ export function computeStreak(transactions, restoredDays, todayStr, config = {})
   // after its savings target, today's spending included. The client divides it
   // by the days after today to get a daily budget that moves as you spend,
   // rather than the fixed one today was handed this morning.
-  const leftToSpend = activePeriod ? roundMoney(spendable - periodSpent) : 0;
+  const leftToSpend = activePeriod
+    ? leftToSpendOf({ ...moneyOf(activePeriod), spent: periodSpent, savings: activePeriod.savings })
+    : 0;
 
   return {
     hasData: true,
