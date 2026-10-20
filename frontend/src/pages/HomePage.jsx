@@ -15,13 +15,14 @@ import EmptyState from "@/components/EmptyState";
 import StreakCard from "@/components/StreakCard";
 import CategoryIcon from "@/components/CategoryIcon";
 import RepeatBadge from "@/components/RepeatBadge";
+import EntryAmount from "@/components/EntryAmount";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchHomeStats, fetchTransactions } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
-import { formatMoney, localToday, rowAmount } from "@/lib/utils";
+import { formatMoney, localToday } from "@/lib/utils";
 import { formatDay, formatDayRange, noWindowCopy } from "@/lib/period";
 import { SETUP } from "@/lib/setup";
 import { SetupCard, useSetupQuest } from "@/tour/SetupQuest";
@@ -629,7 +630,6 @@ export default function HomePage() {
         ) : (
           <ul className="-mx-4 border-y border-hairline bg-surface">
             {recent.map((t) => {
-              const shown = rowAmount(t);
               const category = getCategory(t.category);
               return (
                 <li key={t._id ?? t.id} className="border-t border-hairline first:border-t-0">
@@ -647,16 +647,7 @@ export default function HomePage() {
                         {formatDay(t.date)} · {t.category}
                       </span>
                     </span>
-                    {/* Expenses are ink, not red. Spending is the normal case in
-                        a spending tracker; red has to still mean "over". */}
-                    <span
-                      className={`num shrink-0 text-[15px] font-medium ${
-                        shown.gain ? "text-positive" : "text-ink"
-                      }`}
-                    >
-                      {shown.gain ? "+" : "−"}
-                      {formatMoney(shown.value)}
-                    </span>
+                    <EntryAmount entry={t} />
                   </button>
                 </li>
               );

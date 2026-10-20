@@ -65,6 +65,24 @@ export function extraPaidBack(t) {
 }
 
 /**
+ * Income and counted spending over a list of entries — the same sums the
+ * server's lib/budget.js `sumEntries` makes, money paid back past a bill
+ * included as income.
+ */
+export function sumEntries(entries) {
+  let income = 0;
+  let spent = 0;
+  for (const t of entries) {
+    if (t.type === "income") income += t.amount;
+    else {
+      spent += countedAmount(t);
+      income += extraPaidBack(t);
+    }
+  }
+  return { income, spent };
+}
+
+/**
  * How an entry reads in a list: a plus in green for income and for a bill
  * paid back with extra on top, otherwise what it cost.
  */

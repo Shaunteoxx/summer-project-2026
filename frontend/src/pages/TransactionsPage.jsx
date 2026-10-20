@@ -22,6 +22,7 @@ import EmptyState from "@/components/EmptyState";
 import TransferSheet from "@/components/TransferSheet";
 import CategoryIcon from "@/components/CategoryIcon";
 import RepeatBadge, { ruleFor } from "@/components/RepeatBadge";
+import EntryAmount from "@/components/EntryAmount";
 import SegmentPill from "@/components/SegmentPill";
 import SwipeToDelete from "@/components/SwipeToDelete";
 import { Card, CardContent } from "@/components/ui/card";
@@ -735,7 +736,6 @@ export default function TransactionsPage() {
                       const t = entry.row;
                       const cat = getCategory(t.category);
                       const account = getAccount(t.accountId);
-                      const shown = rowAmount(t);
                       // No entrance animation, and no `layout`. A row you just
                       // added has to be readable the instant it lands — it
                       // mounted mid-fade often enough that the ledger showed a
@@ -819,17 +819,7 @@ export default function TransactionsPage() {
                                   )}
                                 </span>
                               </span>
-                              {/* A bill friends paid back more than reads as
-                                  what it brought in: the extra, in green. */}
-                              <span
-                                className={cn(
-                                  "num shrink-0 text-[15px] font-medium",
-                                  shown.gain ? "text-positive" : "text-ink"
-                                )}
-                              >
-                                {shown.gain ? "+" : "−"}
-                                {formatMoney(shown.value)}
-                              </span>
+                              <EntryAmount entry={t} />
                             </button>
                             <button
                               onClick={() => handleDelete(t._id)}

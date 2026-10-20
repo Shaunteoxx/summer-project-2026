@@ -8,7 +8,8 @@ import SpendingCalendar from "@/components/SpendingCalendar";
 import { useChartColors } from "@/hooks/useChartColors";
 import { useCategories } from "@/hooks/useCategories";
 import CategoryIcon from "@/components/CategoryIcon";
-import { cn, countedAmount, formatMoney, localToday, rowAmount } from "@/lib/utils";
+import EntryAmount from "@/components/EntryAmount";
+import { cn, countedAmount, formatMoney, localToday } from "@/lib/utils";
 import {
   formatDay,
   formatMonthLabel,
@@ -393,7 +394,6 @@ export default function DailySpendingCard({
 
 /** One entry in the day sheet. Income is signed and green, as everywhere else. */
 function DayEntry({ entry, category }) {
-  const shown = rowAmount(entry);
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-hairline p-3">
       <div className="flex min-w-0 items-center gap-3">
@@ -405,15 +405,7 @@ function DayEntry({ entry, category }) {
           <p className="mt-0.5 text-meta text-ink-3">{entry.category}</p>
         </div>
       </div>
-      <span
-        className={cn(
-          "num shrink-0 text-[15px] font-medium",
-          shown.gain ? "text-positive" : "text-ink"
-        )}
-      >
-        {shown.gain ? "+" : "−"}
-        {formatMoney(shown.value)}
-      </span>
+      <EntryAmount entry={entry} />
     </div>
   );
 }

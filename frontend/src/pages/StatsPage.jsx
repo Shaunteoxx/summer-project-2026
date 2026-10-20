@@ -17,6 +17,7 @@ import {
   fetchTransactions,
 } from "@/api/endpoints";
 import { monthName, formatMoney, localToday, LOCALE } from "@/lib/utils";
+import { roundMoney } from "@/lib/calc";
 import { formatDay } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useChartColors } from "@/hooks/useChartColors";
@@ -95,8 +96,6 @@ function fundingByMonth(history = []) {
   }
   return map;
 }
-
-const round = (n) => Math.round(n * 100) / 100;
 
 export default function StatsPage() {
   const navigate = useNavigate();
@@ -179,7 +178,7 @@ export default function StatsPage() {
   const months = summaries.map((s) => {
     const funding = funded.get(monthKey(s)) ?? null;
     const budget = funding ?? s.totalIncome;
-    const saved = round(budget - s.totalExpenses);
+    const saved = roundMoney(budget - s.totalExpenses);
     return {
       ...s,
       funding,

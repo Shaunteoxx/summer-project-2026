@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAccountTotals } from "@/api/endpoints";
 import { useAccounts } from "@/hooks/useAccounts";
 import { formatMoney, localToday } from "@/lib/utils";
+import { roundMoney } from "@/lib/calc";
 import { formatPeriodLabel } from "@/lib/period";
 import { fadeUp } from "@/animations/variants";
 
@@ -77,8 +78,8 @@ export default function AccountsCard({ onTransfer = null, refreshKey = 0 }) {
   // the bank statements show, and Out − In still comes to the budget's figure.
   const toRow = (a) => ({
     ...a,
-    in: round(a.income + (a.transfersIn ?? 0) + (a.paidBackIn ?? 0)),
-    out: round(a.spent + (a.transfersOut ?? 0)),
+    in: roundMoney(a.income + (a.transfersIn ?? 0) + (a.paidBackIn ?? 0)),
+    out: roundMoney(a.spent + (a.transfersOut ?? 0)),
   });
 
   // Archived accounts drop out once they have nothing left in the period.
@@ -101,8 +102,8 @@ export default function AccountsCard({ onTransfer = null, refreshKey = 0 }) {
   const fundedBy = data.period.fundedBy ?? [];
 
   const shown = [...rows, ...(unassigned ? [unassigned] : [])];
-  const totalIn = round(shown.reduce((n, a) => n + a.in, 0));
-  const totalOut = round(shown.reduce((n, a) => n + a.out, 0));
+  const totalIn = roundMoney(shown.reduce((n, a) => n + a.in, 0));
+  const totalOut = roundMoney(shown.reduce((n, a) => n + a.out, 0));
 
   return (
     <motion.div variants={fadeUp} initial="initial" animate="animate">
@@ -228,9 +229,6 @@ export default function AccountsCard({ onTransfer = null, refreshKey = 0 }) {
     </motion.div>
   );
 }
-
-/** Money maths in JS needs rounding at every step or cents drift. */
-const round = (n) => Math.round(n * 100) / 100;
 
 /** "Allowance", "Allowance and Gifts", "Allowance and 2 others". */
 function sourcesLabel([first, ...rest]) {

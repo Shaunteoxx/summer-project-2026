@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchTransactions, fetchStreak } from "@/api/endpoints";
-import { cn, countedAmount, extraPaidBack, formatMoney, localToday, monthName } from "@/lib/utils";
+import { cn, countedAmount, formatMoney, localToday, monthName, sumEntries } from "@/lib/utils";
 import { formatDay, formatPeriodLabel, noWindowCopy } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
@@ -64,18 +64,7 @@ export default function TrackerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, budgetPeriod.loading, current]);
 
-  const totals = transactions.reduce(
-    (acc, t) => {
-      if (t.type === "income") acc.income += t.amount;
-      else {
-        acc.spent += countedAmount(t);
-        // Paid back past the bill: income, as the server counts it.
-        acc.income += extraPaidBack(t);
-      }
-      return acc;
-    },
-    { income: 0, spent: 0 }
-  );
+  const totals = sumEntries(transactions);
   const spent = totals.spent;
   // What this window has to spend. In term mode that's its slice of the
   // allowance, not the income logged inside it — a cycle after the first has
