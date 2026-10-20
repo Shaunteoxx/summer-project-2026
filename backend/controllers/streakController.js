@@ -8,6 +8,7 @@ import {
   addDays,
   createPeriodResolver,
   cyclesOfTerm,
+  dayFromYmd,
   daysLeftInPeriod,
   priceCycles,
   savesForPeriod,
@@ -16,8 +17,6 @@ import {
 import { incomeAmount, spentAmount } from "../lib/entryFields.js";
 
 const MAX_STREAK_DAYS = 3660;
-
-const dayFromYmd = (s) => new Date(`${s}T00:00:00.000Z`);
 
 /**
  * Price every cycle of every term the user has: `key -> funding`.

@@ -34,7 +34,7 @@ export const MAX_TERM_MONTHS = 12;
 const BASE_SAVES = 3;
 const BASE_SAVE_DAYS = 30;
 
-const pad = (n) => String(n).padStart(2, "0");
+export const pad = (n) => String(n).padStart(2, "0");
 
 export const dayFromYmd = (value) => new Date(`${value}T00:00:00.000Z`);
 
@@ -52,7 +52,8 @@ export const daysBetween = (a, b) =>
 /** Last day of a period that starts at `start` and runs for `length` days. */
 export const periodEnd = (start, length) => addDaysYmd(start, length - 1);
 
-const daysInMonth = (year, month) => new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+export const daysInMonth = (year, month) =>
+  new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 
 /**
  * The same day of month `n` months on, clamped to the target month's length so

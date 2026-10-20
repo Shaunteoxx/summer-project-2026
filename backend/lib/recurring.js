@@ -1,5 +1,5 @@
 import Transaction from "../models/Transaction.js";
-import { addDaysYmd, dayFromYmd } from "./period.js";
+import { addDaysYmd, dayFromYmd, daysInMonth, pad } from "./period.js";
 
 /**
  * Turning repeating rules into real transactions.
@@ -32,10 +32,6 @@ import { addDaysYmd, dayFromYmd } from "./period.js";
 // hand-edited rule from writing unboundedly, and the next run continues from
 // where this one stopped.
 const MAX_PER_RUN = 120;
-
-const pad = (n) => String(n).padStart(2, "0");
-
-const daysInMonth = (year, month) => new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 
 /** The later of two YYYY-MM-DD keys; either may be null. */
 const laterKey = (a, b) => (!a ? b : !b ? a : a > b ? a : b);
