@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, useAnimationControls } from "framer-motion";
-import { HandCoins, Repeat, X } from "lucide-react";
+import { Repeat } from "lucide-react";
 
 import AmountCalculator from "@/components/AmountCalculator";
 import BottomSheet from "@/components/BottomSheet";
 import FieldError from "@/components/FieldError";
+import PaidBackField from "@/components/PaidBackField";
 import SwitchRow from "@/components/SwitchRow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,132 +18,15 @@ import {
   useAccountChoice,
   useCategoryPicker,
 } from "@/components/EntryFields";
-import { addTransaction, fetchStreak, updateTransaction } from "@/api/endpoints";
-import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { useAccounts } from "@/hooks/useAccounts";
-import { useRecurring } from "@/hooks/useRecurring";
+import { useEntrySave } from "@/hooks/useEntrySave";
 import { haptic } from "@/lib/haptics";
-import { emitTour } from "@/tour/signals";
 import { useTour, useTourContext } from "@/tour/TourProvider";
-import {
-  cn,
-  countedAmount,
-  extraPaidBack,
-  formatMoney,
-  localToday,
-  ordinal,
-  rowAmount,
-} from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { SHAKE } from "@/animations/variants";
+import { emptyForm, formFrom, pickEntryTip, repeatPlan } from "@/lib/entryDraft";
 
-const emptyForm = (accountId = "") => ({
-  description: "",
-  amount: "",
-  category: "",
-  date: localToday(),
-  accountId,
-  paidBack: "",
-  paidBackAccountId: "",
-});
-
-/**
- * What a "repeat this" rule would do, worked out from the entry being added.
- *
- * The rule starts the day *after* this entry, never on it — the entry being
- * saved is this month's, and a rule that also fired today would post it twice.
- * Because of that the first repeat is always the following month, whatever
- * date the entry carries. Never earlier than today either, since a rule can't
- * reach into days already lived through.
- */
-export function repeatPlan(dateYmd) {
-  const day = Number(String(dateYmd).slice(8, 10));
-  if (!Number.isInteger(day) || day < 1) return null;
-
-  const dayAfter = new Date(`${dateYmd}T00:00:00.000Z`);
-  dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
-  const startKey =
-    dayAfter.toISOString().slice(0, 10) > localToday()
-      ? dayAfter.toISOString().slice(0, 10)
-      : localToday();
-
-  const entry = new Date(`${dateYmd}T00:00:00.000Z`);
-  const nextMonth = new Date(
-    Date.UTC(entry.getUTCFullYear(), entry.getUTCMonth() + 1, 1)
-  );
-  return {
-    dayOfMonth: day,
-    startKey,
-    caption:
-      `Adds this again on the ${ordinal(day)} of each month, from ` +
-      `${nextMonth.toLocaleDateString(undefined, { month: "long", timeZone: "UTC" })}.` +
-      (day > 28 ? " Shorter months use their last day." : ""),
-  };
-}
-
-/** Numbers the provisional ids of entries the server hasn't answered for. */
-let provisionalSeq = 0;
-
-/**
- * The parts of this form that don't explain themselves, in the order they're
- * worth learning. One tip per opening: the first not seen yet.
- */
-const ENTRY_TIPS = ["entry.paid-back", "entry.repeat", "entry.account"];
-
-function pickEntryTip(tour, { type, hasAccounts }) {
-  return (
-    ENTRY_TIPS.find((id) => {
-      if (id === "entry.paid-back" && type !== "expense") return false;
-      if (id === "entry.account" && !hasAccounts) return false;
-      return !tour.isDone(id);
-    }) ?? null
-  );
-}
-
-/**
- * How long the confirmation waits to hear what an entry did to today. The sheet
- * has closed and the row is already in the ledger by then, so this only delays
- * the toast — and past this it goes out without the budget line rather than
- * leaving the save unconfirmed.
- */
-const TODAY_WAIT_MS = 1200;
-
-/**
- * Where today's budget stands now that `created` is in, or null when there's
- * no line worth adding: the entry isn't dated today, no budget period is
- * running, or the period is already overspent (Home says that far better than
- * a toast can).
- *
- * The streak endpoint is the one place today's budget is worked out, so this
- * asks it rather than subtracting on the client.
- */
-async function todayAfter(created) {
-  if (String(created.date).slice(0, 10) !== localToday()) return null;
-  try {
-    const streak = await Promise.race([
-      fetchStreak(localToday()),
-      new Promise((_, reject) => setTimeout(reject, TODAY_WAIT_MS)),
-    ]);
-    if (streak?.periodStatus !== "active" || !streak.hasIncome) return null;
-    if (streak.overspentBy > 0) return null;
-    return streak.today ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/** Seed the form from an existing row, so an edit starts from what's there. */
-const formFrom = (transaction) => ({
-  description: transaction.description,
-  amount: String(transaction.amount),
-  category: transaction.category,
-  // Transaction dates are stored at UTC midnight; slicing the ISO string keeps
-  // the day the user chose, which building a local Date from it would not.
-  date: String(transaction.date).slice(0, 10),
-  accountId: transaction.accountId ? String(transaction.accountId) : "",
-  paidBack: transaction.paidBack ? String(transaction.paidBack) : "",
-  paidBackAccountId: transaction.paidBackAccountId ? String(transaction.paidBackAccountId) : "",
-});
 
 /**
  * The entry sheet: category, description, amount and date for one income or
@@ -211,10 +95,8 @@ export default function AddTransactionSheet({
   useEffect(() => setDraftType(addType), [addType]);
   const type = editing ? editing.type : draftType;
   const isEdit = Boolean(editing);
-  const toast = useToast();
   const guard = useDemoGuard();
-  const { defaultAccountId, rememberAccount, hasAccounts } = useAccounts();
-  const { addRule } = useRecurring();
+  const { defaultAccountId, hasAccounts } = useAccounts();
   const tour = useTourContext();
 
   const [form, setForm] = useState(emptyForm);
@@ -386,188 +268,20 @@ export default function AddTransactionSheet({
     else saveAdd({ description, amount });
   };
 
-  /**
-   * A save that failed after the sheet had already closed on it.
-   *
-   * The page always hears, so it can take the row back out (or put the old one
-   * back). Where it can, it also reopens this sheet on the draft with the
-   * reason. Two cases where it can't: the reader has left the page, or has
-   * already opened the sheet for their next entry — reopening would throw
-   * away what they're typing now. Then a toast is the only place left to say
-   * so, and it says exactly what to redo.
-   */
-  const failed = (err, { key, original, lost }) => {
-    haptic("warning");
-    emitTour("entry:failed");
-    // Inline, so no retry line (COPY_CONVENTIONS): the sheet it appears in is
-    // the retry, with the entry already filled in under it.
-    const message =
-      err?.response?.data?.message ||
-      (original ? "Couldn't save your changes to this entry." : "Couldn't add this entry.");
-    const canReopen = mounted.current && !openNow.current;
-    if (mounted.current) {
-      onFailed({ key, original, retry: canReopen ? { type, form, repeat, message } : null });
-    }
-    if (!canReopen) toast.error(lost);
-  };
-
-  const saveAdd = async ({ description, amount }) => {
-    const payload = {
-      description,
-      amount,
-      type,
-      category: form.category,
-      date: form.date,
-      accountId: form.accountId || undefined,
-      ...(paidBackNumber > 0
-        ? { paidBack: paidBackNumber, paidBackAccountId: form.paidBackAccountId || null }
-        : {}),
-    };
-    const key = `pending-${++provisionalSeq}`;
-    const sign = type === "income" ? "+" : "−";
-    const shown = rowAmount({ type, amount, paidBack: paidBackNumber });
-    const added = `Added ${shown.gain ? "+" : "−"}${formatMoney(shown.value)}`;
-
-    rememberAccount(form.accountId);
-    onAdded({
-      ...payload,
-      _id: key,
-      clientKey: key,
-      // Stored dates are UTC midnight; the row has to key into the same day.
-      date: `${form.date}T00:00:00.000Z`,
-      accountId: form.accountId || null,
-      pending: true,
-    });
-    // Before the sheet closes, so a guide waiting on this tap moves on while
-    // the button it pointed at is still there.
-    emitTour("entry:added", { type });
-    onClose();
-    haptic("success");
-
-    let created;
-    try {
-      created = await addTransaction(payload);
-    } catch (err) {
-      failed(err, {
-        key,
-        original: null,
-        lost: `Couldn't save ${sign}${formatMoney(amount)} · ${form.category}. Please add it again.`,
-      });
-      return;
-    }
-    onSaved({ key, row: created });
-    emitTour("entry:saved", { type });
-
-    // The confirmation says what the entry did, not just that it saved: this
-    // is logged from Transactions, and the figure it moved is on Home, a tab
-    // away. Two figures and nothing else, so it reads in one glance before the
-    // toast goes — the category was just picked, so it's the part that can go
-    // when there's a budget line to make room for.
-    const today = await todayAfter(created);
-    if (today && !today.within) {
-      toast.show({
-        message: `${added} · ${formatMoney(Math.abs(today.remaining))} over today`,
-        variant: "warning",
-      });
-    } else if (today) {
-      toast.success(`${added} · ${formatMoney(Math.max(today.remaining, 0))} left today`);
-    } else {
-      toast.success(`${added} · ${form.category}`);
-    }
-    // After the entry, and never in place of it: the entry is what was asked
-    // for, so a rule that fails to save must not lose it.
-    if (repeat) await createRepeat({ description, amount });
-  };
-
-  /**
-   * Turn the entry just added into a monthly rule.
-   *
-   * Deliberately after the transaction has saved and the sheet has closed: the
-   * entry is what the user asked for and it is already safe. If the rule fails
-   * they are told, and the entry stays — the alternative, one request that
-   * either does both or neither, would throw away a logged expense over a
-   * failed convenience.
-   */
-  const createRepeat = async ({ description, amount }) => {
-    const plan = repeatPlan(form.date);
-    if (!plan) return;
-    try {
-      await addRule({
-        description,
-        amount,
-        type,
-        category: form.category,
-        accountId: form.accountId || null,
-        frequency: "monthly",
-        dayOfMonth: plan.dayOfMonth,
-        startKey: plan.startKey,
-      });
-      toast.success(`Repeating on the ${ordinal(plan.dayOfMonth)} of each month`);
-    } catch (err) {
-      toast.error(
-        err?.response?.data?.message ||
-          "Added the entry, but couldn't set it to repeat."
-      );
-    }
-  };
-
-  /**
-   * Send only what moved. Anything the user didn't touch is left out of the
-   * request entirely, so the server keeps whatever it already had — including
-   * an account that has since been archived, which the picker can't offer and
-   * the API would refuse to be sent.
-   */
-  const saveEdit = async ({ description, amount }) => {
-    const patch = {};
-    if (description !== editing.description) patch.description = description;
-    if (amount !== editing.amount) patch.amount = amount;
-    if (form.category !== editing.category) patch.category = form.category;
-    if (form.date !== String(editing.date).slice(0, 10)) patch.date = form.date;
-
-    const wasAccount = editing.accountId ? String(editing.accountId) : "";
-    // Null, not undefined: clearing the tag has to be said out loud.
-    if (form.accountId !== wasAccount) patch.accountId = form.accountId || null;
-
-    // Zero clears it, and the server clears the account along with it.
-    if (paidBackNumber !== (editing.paidBack || 0)) patch.paidBack = paidBackNumber;
-    const wasPaidBackAccount = editing.paidBackAccountId ? String(editing.paidBackAccountId) : "";
-    if (paidBackNumber > 0 && form.paidBackAccountId !== wasPaidBackAccount) {
-      patch.paidBackAccountId = form.paidBackAccountId || null;
-    }
-
-    if (Object.keys(patch).length === 0) {
-      onClose();
-      return;
-    }
-
-    const original = editing;
-    if (patch.accountId) rememberAccount(patch.accountId);
-    onUpdated({
-      ...original,
-      ...patch,
-      ...(patch.date ? { date: `${patch.date}T00:00:00.000Z` } : {}),
-      // Mirrors the server: clearing paid back clears where it landed.
-      ...(patch.paidBack === 0 ? { paidBackAccountId: null } : {}),
-      pending: true,
-    });
-    onClose();
-    haptic("success");
-
-    let updated;
-    try {
-      updated = await updateTransaction(original._id, patch);
-    } catch (err) {
-      failed(err, {
-        key: original._id,
-        original,
-        lost: `Couldn't save your change to ${original.description}. Please make it again.`,
-      });
-      return;
-    }
-    onSaved({ key: original._id, row: updated });
-    toast.success("Transaction updated");
-  };
-
+  const { saveAdd, saveEdit } = useEntrySave({
+    type,
+    editing,
+    form,
+    repeat,
+    paidBackNumber,
+    mounted,
+    openNow,
+    onClose,
+    onAdded,
+    onUpdated,
+    onSaved,
+    onFailed,
+  });
   return (
   <BottomSheet
     open={type !== null}
@@ -716,101 +430,19 @@ export default function AddTransactionSheet({
             PayNow back), so it asks where. Friends tend to pay a few days
             later, so this is as much for editing an entry as for adding one. */}
         {type === "expense" && (
-          <div className="space-y-2.5" data-tour="entry.paid-back">
-            <motion.div
-              animate={shakeControls.paidBack}
-              className="flex flex-wrap items-start gap-2.5"
-            >
-              <button
-                type="button"
-                id="paid-back"
-                onClick={() => setCalcOpen("paidBack")}
-                aria-label={
-                  paidBackNumber > 0
-                    ? `Paid back by friends, ${paidBackNumber.toFixed(2)} dollars. Opens calculator.`
-                    : "Paid back by friends, none. Opens calculator."
-                }
-                aria-invalid={Boolean(errors.paidBack)}
-                aria-describedby={errors.paidBack ? "tx-paid-back-error" : undefined}
-                className={cn(
-                  "flex h-[46px] w-full min-w-0 flex-1 basis-[9rem] items-center gap-2.5 rounded-md bg-surface-2 px-3.5 text-sm transition-colors duration-base ease-out hover:bg-surface-3 active:bg-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  errors.paidBack && "ring-2 ring-negative"
-                )}
-              >
-                <HandCoins className="h-[15px] w-[15px] shrink-0 text-ink-3" />
-                {paidBackNumber > 0 ? (
-                  <span className="num min-w-0 flex-1 truncate text-left font-medium text-positive">
-                    +{formatMoney(paidBackNumber)} paid back
-                  </span>
-                ) : (
-                  <span className="min-w-0 flex-1 truncate text-left text-ink-3">
-                    Paid back by friends
-                  </span>
-                )}
-              </button>
-
-              {paidBackNumber > 0 && paidBackChoice.available && (
-                <AccountSelect
-                  type="income"
-                  choice={paidBackChoice}
-                  open={paidBackPickerOpen}
-                  onToggle={() => setPaidBackPickerOpen((v) => !v)}
-                  className="flex-1 basis-[9rem]"
-                />
-              )}
-            </motion.div>
-
-            {paidBackPickerOpen && paidBackNumber > 0 && paidBackChoice.available && (
-              <AccountOptions
-                type="income"
-                choice={paidBackChoice}
-                value={form.paidBackAccountId}
-                onChange={(id) => updateForm({ paidBackAccountId: id })}
-                onClose={() => setPaidBackPickerOpen(false)}
-              />
-            )}
-
-            {errors.paidBack ? (
-              <FieldError id="tx-paid-back-error">{errors.paidBack}</FieldError>
-            ) : (
-              paidBackNumber > 0 && (
-                <p className="flex items-center justify-between gap-3 text-[12px] leading-relaxed text-ink-3">
-                  {paidBackNumber > Number(form.amount) ? (
-                    // A tip or a little extra on top. Past the bill it's
-                    // income, the way the server counts it.
-                    <span>
-                      Your budget doesn&apos;t count it, and the extra{" "}
-                      <b className="num font-medium text-positive">
-                        {formatMoney(extraPaidBack({ type, amount: Number(form.amount) || 0, paidBack: paidBackNumber }))}
-                      </b>{" "}
-                      counts as income.
-                    </span>
-                  ) : Number(form.amount) === paidBackNumber ? (
-                    <span>Paid back in full, so your budget doesn&apos;t count it.</span>
-                  ) : (
-                    <span>
-                      Your share is{" "}
-                      <b className="num font-medium text-ink-2">
-                        {formatMoney(countedAmount({ amount: Number(form.amount), paidBack: paidBackNumber }))}
-                      </b>
-                      , and that&apos;s what your budget counts.
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateForm({ paidBack: "", paidBackAccountId: "" });
-                      setPaidBackPickerOpen(false);
-                    }}
-                    className="-my-1 flex shrink-0 items-center gap-1 rounded-sm px-1 py-1 font-medium text-ink-3 hover:text-ink active:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    Remove
-                  </button>
-                </p>
-              )
-            )}
-          </div>
+          <PaidBackField
+            type={type}
+            amount={form.amount}
+            paidBack={paidBackNumber}
+            accountId={form.paidBackAccountId}
+            error={errors.paidBack}
+            shake={shakeControls.paidBack}
+            choice={paidBackChoice}
+            pickerOpen={paidBackPickerOpen}
+            setPickerOpen={setPaidBackPickerOpen}
+            onOpenCalculator={() => setCalcOpen("paidBack")}
+            onChange={updateForm}
+          />
         )}
 
         {/* Rent and subscriptions are realised at the moment you log them, not
