@@ -1,38 +1,33 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
-import { Flame, Trophy, Shield, Check, X, Minus, AlertTriangle } from "lucide-react";
+import { motion } from "framer-motion";
+import { Trophy, Shield, AlertTriangle } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import BottomSheet from "@/components/BottomSheet";
-import StreakBadge from "@/components/StreakBadge";
+import BadgeSlot from "@/components/streak/BadgeSlot";
+import BadgesSheet from "@/components/streak/BadgesSheet";
+import BreakNote from "@/components/streak/BreakNote";
+import DayCell from "@/components/streak/DayCell";
+import RestoreSheet from "@/components/streak/RestoreSheet";
+import RollingNumber from "@/components/streak/RollingNumber";
+import StreakPrompt from "@/components/streak/StreakPrompt";
 import { fetchStreak, restoreStreak } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { haptic } from "@/lib/haptics";
-import {
-  BADGES,
-  badgeAt,
-  badgeFor,
-  nextBadge,
-  progressToNext,
-  tierFor,
-} from "@/lib/streakBadges";
+import { badgeFor, nextBadge } from "@/lib/streakBadges";
 import { streakMoment } from "@/lib/streakMoments";
 import { cn, formatMoney, localToday } from "@/lib/utils";
-import { formatDay, formatPeriodLabel } from "@/lib/period";
+import { formatDay } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useTour } from "@/tour/TourProvider";
-import { EASE, fadeUp } from "@/animations/variants";
+import { fadeUp } from "@/animations/variants";
 
 // Long enough for the card to have faded in, so the rise happens where you're
 // already looking instead of during the arrival.
 const MOMENT_DELAY_MS = 450;
-
-const DOW = ["S", "M", "T", "W", "T", "F", "S"];
-const dowOf = (ymd) => DOW[new Date(`${ymd}T00:00:00Z`).getUTCDay()];
 
 export default function StreakCard() {
   const navigate = useNavigate();
@@ -126,50 +121,28 @@ export default function StreakCard() {
   // window to budget across, so point at the settings rather than the ledger.
   if (data && data.periodStatus === "inactive") {
     return (
-      <motion.div variants={fadeUp} initial="initial" animate="animate">
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
-            <span className="flex h-[52px] w-[52px] items-center justify-center rounded-md bg-surface-2 text-ink-2">
-              <Flame className="h-6 w-6" />
-            </span>
-            <div>
-              <p className="text-[17px] font-semibold tracking-[-0.015em]">No Budget Period Running</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
-                Start your next period to pick your streak back up. Days in
-                between aren't counted for or against you.
-              </p>
-            </div>
-            <Button size="sm" onClick={() => navigate("/more", { state: { open: "period" } })}>
-              Start a Period
-            </Button>
-          </CardContent>
-        </Card>
-      </motion.div>
+      <StreakPrompt
+        title="No Budget Period Running"
+        action="Start a Period"
+        onAction={() => navigate("/more", { state: { open: "period" } })}
+      >
+        Start your next period to pick your streak back up. Days in
+        between aren't counted for or against you.
+      </StreakPrompt>
     );
   }
 
   // Needs income logged this period for a daily budget to exist.
   if (!data || !data.hasIncome) {
     return (
-      <motion.div variants={fadeUp} initial="initial" animate="animate">
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
-            <span className="flex h-[52px] w-[52px] items-center justify-center rounded-md bg-surface-2 text-ink-2">
-              <Flame className="h-6 w-6" />
-            </span>
-            <div>
-              <p className="text-[17px] font-semibold tracking-[-0.015em]">Start a Spending Streak</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
-                Add your income for this {noun} to unlock your daily budget and
-                start a streak.
-              </p>
-            </div>
-            <Button size="sm" onClick={() => navigate("/transactions")}>
-              Add Income
-            </Button>
-          </CardContent>
-        </Card>
-      </motion.div>
+      <StreakPrompt
+        title="Start a Spending Streak"
+        action="Add Income"
+        onAction={() => navigate("/transactions")}
+      >
+        Add your income for this {noun} to unlock your daily budget and
+        start a streak.
+      </StreakPrompt>
     );
   }
 
@@ -433,348 +406,16 @@ export default function StreakCard() {
       />
 
       {/* Restore confirmation */}
-      <BottomSheet
+      <RestoreSheet
         open={confirmOpen}
         onClose={() => !restoring && setConfirmOpen(false)}
-        title="Restore Your Streak?"
-      >
-        <div className="space-y-5">
-          <div className="flex items-start gap-3 rounded-md bg-surface-2 p-4">
-            <Shield className="mt-0.5 h-5 w-5 shrink-0 text-ink-2" />
-            <div className="space-y-2 text-[13px] leading-relaxed text-ink-2">
-              <p>
-                {offer?.date ? formatDay(offer.date) : "That day"} went over its
-                budget. Restoring it uses{" "}
-                {offer?.fromPeriod ? (
-                  // The grace day: the save comes from the period that just
-                  // ended, not the one the card's shields count.
-                  <>
-                    <strong>
-                      {offer.savesLeft === 1
-                        ? "the last restore"
-                        : `1 of the ${offer.savesLeft} restores left`}
-                    </strong>{" "}
-                    from {formatPeriodLabel(offer.fromPeriod, { mode })}, not this{" "}
-                    {noun}&apos;s,
-                  </>
-                ) : (
-                  <>
-                    <strong>
-                      {offer?.savesLeft === 1
-                        ? "your last restore"
-                        : `1 of your ${offer?.savesLeft} restores left`}
-                    </strong>{" "}
-                    this {noun}
-                  </>
-                )}
-                {offer?.streakAfter
-                  ? ` and brings your streak back to ${offer.streakAfter} ${
-                      offer.streakAfter === 1 ? "day" : "days"
-                    }.`
-                  : " and brings your streak back."}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setConfirmOpen(false)}
-              disabled={restoring}
-            >
-              Cancel
-            </Button>
-            <Button className="flex-1" onClick={handleRestore} disabled={restoring}>
-              {restoring ? "Restoring…" : "Use a Restore"}
-            </Button>
-          </div>
-        </div>
-      </BottomSheet>
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={handleRestore}
+        offer={offer}
+        restoring={restoring}
+        noun={noun}
+        mode={mode}
+      />
     </motion.div>
-  );
-}
-
-/**
- * The streak count, rolling like an odometer when it changes: the old figure
- * leaves upward and the new one arrives from below. Used for the overnight
- * rise and a restore alike, so any change to the number reads as movement in
- * the direction it went rather than a swap you might not notice.
- */
-function RollingNumber({ value }) {
-  return (
-    <span className="relative inline-flex overflow-hidden align-top">
-      <AnimatePresence mode="popLayout" initial={false}>
-        <motion.span
-          key={value}
-          initial={{ y: "100%", opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: "-100%", opacity: 0 }}
-          transition={{ duration: 0.36, ease: EASE }}
-        >
-          {value}
-        </motion.span>
-      </AnimatePresence>
-    </span>
-  );
-}
-
-/**
- * The badge beside the count, inside a ring that fills a fifth a day towards
- * the next one — so days one to four of each five visibly count for
- * something, rather than the badge only ever changing on day five.
- *
- * Before the first badge, Bronze sits in the ring locked: what the first five
- * days are for, shown rather than described.
- *
- * Lit for the visit a rise is shown on, with one pop and a ripple. An upgrade
- * swaps the badge — the old one turns away, the new one lands — while the old
- * ring completes and the next one starts filling in the next badge's colour.
- * It, or a new best, adds a burst in the badge's own colour. None of it plays
- * on an ordinary visit: only a rise moves anything, once, on the first look of
- * the day.
- */
-function BadgeSlot({ days, lit, burst }) {
-  const badge = badgeFor(days);
-  const shown = badge ?? badgeAt(1);
-  const next = nextBadge(days);
-  return (
-    <span
-      className="relative flex h-[50px] w-[50px] shrink-0 items-center justify-center"
-      style={{ color: `hsl(var(--badge-${shown.key}))` }}
-    >
-      <ProgressRing
-        progress={progressToNext(days)}
-        tier={next.tier}
-        color={`hsl(var(--badge-${next.key}))`}
-      />
-      {lit && (
-        <motion.span
-          aria-hidden="true"
-          className="absolute inset-[4px] rounded-full bg-current"
-          initial={{ scale: 1, opacity: 0.25 }}
-          animate={{ scale: 1.6, opacity: 0 }}
-          transition={{ duration: 0.9, ease: EASE }}
-        />
-      )}
-      <AnimatePresence mode="popLayout" initial={false}>
-        <motion.span
-          key={badge?.tier ?? 0}
-          className="relative flex items-center justify-center"
-          initial={{ scale: 0.4, rotate: -30, opacity: 0 }}
-          // `null` starts the pop from wherever the badge is: resting at full
-          // size for a rise within a tier, or still arriving for an upgrade.
-          animate={
-            lit
-              ? { scale: [null, 1.18, 0.96, 1], rotate: [null, -8, 5, 0], opacity: 1 }
-              : { scale: 1, rotate: 0, opacity: 1 }
-          }
-          exit={{ scale: 0.4, rotate: 30, opacity: 0 }}
-          transition={{ duration: 0.6, ease: EASE }}
-        >
-          <StreakBadge badge={shown} size={38} locked={!badge} />
-        </motion.span>
-      </AnimatePresence>
-      {burst && <Burst />}
-    </span>
-  );
-}
-
-const RING_STROKE = 2.5;
-const RING_RADIUS = (50 - RING_STROKE) / 2;
-
-/**
- * The fifths towards the next badge, from twelve o'clock. Keyed by the badge
- * it's filling towards, so earning one retires this ring — it completes as it
- * fades — and a fresh one fills from empty in the next colour. Mounting
- * doesn't animate, so an ordinary visit shows it already where it is.
- */
-function ProgressRing({ progress, tier, color }) {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 50 50" className="absolute inset-0 -rotate-90">
-      <circle
-        cx={25}
-        cy={25}
-        r={RING_RADIUS}
-        fill="none"
-        stroke="hsl(var(--surface-3))"
-        strokeWidth={RING_STROKE}
-      />
-      <AnimatePresence initial={false}>
-        <motion.circle
-          key={tier}
-          cx={25}
-          cy={25}
-          r={RING_RADIUS}
-          fill="none"
-          stroke={color}
-          strokeWidth={RING_STROKE}
-          strokeLinecap="round"
-          initial={{ pathLength: 0, opacity: 1 }}
-          // Hidden at zero, where a round cap would still draw a dot.
-          animate={{ pathLength: progress, opacity: progress > 0 ? 1 : 0 }}
-          exit={{ pathLength: 1, opacity: 0 }}
-          transition={{ duration: 0.6, ease: EASE }}
-        />
-      </AnimatePresence>
-    </svg>
-  );
-}
-
-const BURST_DOTS = 8;
-
-/** Eight dots thrown outward from the badge, once, in its colour. */
-function Burst() {
-  return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-      {Array.from({ length: BURST_DOTS }, (_, i) => {
-        const angle = (i / BURST_DOTS) * Math.PI * 2;
-        return (
-          <motion.span
-            key={i}
-            className="absolute left-1/2 top-1/2 -ml-[2.5px] -mt-[2.5px] h-[5px] w-[5px] rounded-full bg-current"
-            initial={{ x: 0, y: 0, scale: 1, opacity: 1 }}
-            animate={{
-              x: Math.cos(angle) * 34,
-              y: Math.sin(angle) * 34,
-              scale: 0.3,
-              opacity: 0,
-            }}
-            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          />
-        );
-      })}
-    </span>
-  );
-}
-
-/**
- * The whole badge ladder: the one you hold, the ones you've reached before
- * (off your best streak — the streak resets, what you once got to doesn't),
- * and the ones still ahead, with the days to the next.
- */
-function BadgesSheet({ open, onClose, currentStreak, longestStreak }) {
-  const tier = tierFor(currentStreak);
-  const bestTier = tierFor(longestStreak);
-  const top = BADGES.length;
-  const next = nextBadge(currentStreak);
-
-  return (
-    <BottomSheet open={open} onClose={onClose} title="Streak Badges">
-      <div className="space-y-3 pb-2">
-        <p className="text-[13px] leading-relaxed text-ink-3">
-          Every 5 days on budget earns the next badge. Go over and the streak
-          starts again from Bronze, unless a restore saves the day.
-        </p>
-        <ul className="divide-y divide-hairline">
-          {BADGES.map((b, i) => {
-            const t = i + 1;
-            // The top row stands for every level past it too.
-            const held = t === top ? tier >= top : tier === t;
-            const shown = held && t === top ? badgeAt(tier) : badgeAt(t);
-            const earned = !held && bestTier >= t;
-            const upNext = !held && t === Math.min(tier + 1, top) && tier < top;
-            return (
-              <li key={b.key} className="flex items-center gap-3 py-2.5">
-                <StreakBadge badge={shown} size={36} locked={!held && !earned} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-medium tracking-[-0.01em]">{shown.label}</p>
-                  <p className="text-meta text-ink-3">
-                    {t === top
-                      ? `${badgeAt(t).days} days, then a level every 5`
-                      : `${badgeAt(t).days} days`}
-                  </p>
-                </div>
-                {held ? (
-                  <span
-                    className="text-[12.5px] font-medium"
-                    style={{ color: `hsl(var(--badge-${b.key}))` }}
-                  >
-                    Current
-                  </span>
-                ) : earned ? (
-                  <span className="flex items-center gap-1 text-[12.5px] text-ink-2">
-                    <Check className="h-3.5 w-3.5" /> Earned
-                  </span>
-                ) : upNext ? (
-                  <span className="num text-[12.5px] text-ink-3">
-                    {next.daysToGo} {next.daysToGo === 1 ? "day" : "days"} to go
-                  </span>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </BottomSheet>
-  );
-}
-
-/**
- * Where the streak stops, when the shields can't say it.
- *
- * Restores only repair days in the current period, but the streak runs across
- * periods. When it stops at a day in one that has ended, the shields can still
- * show restores left and the button is simply gone — which, unexplained, reads
- * as restores being broken. The one exception is the grace day, when the ended
- * period's last day can still be restored with that period's own restores.
- */
-function BreakNote({ breakDay, restore, noun, mode }) {
-  if (!breakDay) return null;
-  const day = formatDay(breakDay.date);
-  const label = formatPeriodLabel(breakDay.period, { mode });
-  let text = null;
-  if (restore?.fromPeriod) {
-    text = `${day} was the last day of ${label}. You can restore it today only, with that ${noun}'s restores.`;
-  } else if (restore) {
-    return null;
-  } else if (breakDay.inActivePeriod) {
-    text = `Your streak stops at ${day}. This ${noun}'s restores are used up.`;
-  } else {
-    text = `Your streak stops at ${day}, in ${label}. Restores only repair days in the current ${noun}, so it can't be restored.`;
-  }
-  return <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">{text}</p>;
-}
-
-const CELL = {
-  win: { Icon: Check, cls: "bg-positive/[0.12] text-positive", label: "within budget" },
-  // Green, not amber. Amber says "something still needs your attention", which
-  // is wrong once a restore has succeeded — the streak IS intact. The shield
-  // glyph carries the distinction instead: a tick means you stayed within
-  // budget, a shield means the day was repaired. Colour tells you the outcome,
-  // shape tells you how you got there.
-  saved: { Icon: Shield, cls: "bg-positive/[0.12] text-positive", label: "restored" },
-  break: { Icon: X, cls: "bg-negative/[0.12] text-negative", label: "over budget" },
-  // Outside every budget period, so it has no budget to be judged against.
-  untracked: {
-    Icon: Minus,
-    cls: "bg-surface-2 text-ink-3/60",
-    label: "not in a budget period",
-  },
-  none: { Icon: Minus, cls: "bg-surface-2 text-ink-3/60", label: "no data" },
-};
-
-function DayCell({ day }) {
-  const isToday = day.status === "today";
-  const within = isToday ? day.within : day.status === "win";
-  const meta = isToday
-    ? within
-      ? { Icon: Flame, cls: "bg-ink text-surface", label: "today, on track" }
-      : { Icon: Flame, cls: "bg-negative text-white", label: "today, over budget" }
-    : CELL[day.status] ?? CELL.none;
-  const { Icon, cls, label } = meta;
-
-  return (
-    <div className="flex flex-1 flex-col items-center gap-1">
-      <span
-        className={`flex h-9 w-full items-center justify-center rounded-[8px] ${cls}`}
-        role="img"
-        aria-label={`${day.date}: ${label}`}
-      >
-        <Icon className="h-4 w-4" strokeWidth={2.5} />
-      </span>
-      <span className="text-[10px] font-medium text-ink-3">
-        {dowOf(day.date)}
-      </span>
-    </div>
   );
 }
