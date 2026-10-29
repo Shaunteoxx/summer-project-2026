@@ -40,7 +40,9 @@ import SwitchRow from "./components/SwitchRow.jsx";
 import StreakBadge from "./components/StreakBadge.jsx";
 import { badgeAt } from "./lib/streakBadges.js";
 import { LensTab, StatTile } from "./pages/StatsPage.jsx";
-import { SavedVsSpentCard, CategoryCard, TermCard } from "./pages/TrackerPage.jsx";
+import SavedVsSpentCard from "./components/SavedVsSpentCard.jsx";
+import CategoryCard from "./components/CategoryCard.jsx";
+import TermCard from "./components/TermCard.jsx";
 import {
   DynamicDailyHero,
   WhatIfCard,
