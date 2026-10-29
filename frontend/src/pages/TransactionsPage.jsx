@@ -1,33 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Plus,
-  Trash2,
-  X,
-  Receipt,
-  Search,
-  ArrowLeftRight,
-  ArrowRight,
-  Wallet,
-  ChevronDown,
-  Check,
-} from "lucide-react";
+import { Plus, Receipt, Search } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
 import AccountsCard from "@/components/AccountsCard";
 import AddTransactionSheet from "@/components/AddTransactionSheet";
-import BottomSheet from "@/components/BottomSheet";
 import EmptyState from "@/components/EmptyState";
 import TransferSheet from "@/components/TransferSheet";
-import CategoryIcon from "@/components/CategoryIcon";
-import RepeatBadge, { ruleFor } from "@/components/RepeatBadge";
-import EntryAmount from "@/components/EntryAmount";
-import SegmentPill from "@/components/SegmentPill";
-import SwipeToDelete from "@/components/SwipeToDelete";
+import { ruleFor } from "@/components/RepeatBadge";
+import AccountFilterSheet from "@/components/transactions/AccountFilterSheet";
+import LedgerFilters, { FILTERS } from "@/components/transactions/LedgerFilters";
+import LedgerRow from "@/components/transactions/LedgerRow";
+import TransferRow from "@/components/transactions/TransferRow";
+import { ledgerView, rowKey } from "@/lib/ledger";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   fetchTransactions,
@@ -37,23 +25,16 @@ import {
 } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { cn, formatMoney, localToday, rowAmount } from "@/lib/utils";
-import { addDaysYmd, formatDay, formatPeriodLabel } from "@/lib/period";
+import { cn, formatMoney } from "@/lib/utils";
+import { formatPeriodLabel } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useRecurring } from "@/hooks/useRecurring";
 import { useTour } from "@/tour/TourProvider";
-import { DUR, EASE, fadeUp } from "@/animations/variants";
+import { DUR, fadeUp } from "@/animations/variants";
 
 const DELETE_GRACE_MS = 10000;
-
-// How a deleted row leaves. The trash button slides it right and fades it,
-// which is what says the delete can still be undone. A swipe has already
-// carried the row off to the left, so what's left is the red strip, and that
-// folds shut instead — the rows below close the gap rather than jumping it.
-const BUTTON_EXIT = { opacity: 0, x: 24, transition: { duration: 0.25 } };
-const SWIPE_EXIT = { height: 0, opacity: 0, transition: { duration: 0.22, ease: EASE } };
 
 // Let the sheet finish leaving before the page moves under it, so the scroll
 // to a new row reads as a second step rather than a lurch behind the sheet.
@@ -76,19 +57,6 @@ export function deletedMessage(transaction, rules) {
   const next = rule.frequency === "weekly" ? "next week" : "next month";
   return `Deleted this one. ${rule.description} still repeats ${next}.`;
 }
-
-/**
- * A row's React key and DOM handle. An entry added here keeps the provisional
- * key it was drawn with even after the server gives it a real id, so the row
- * doesn't remount — and replay or lose its highlight — the moment it's saved.
- */
-const rowKey = (t) => t.clientKey ?? t._id;
-
-const FILTERS = [
-  { value: "all", label: "All" },
-  { value: "expense", label: "Expenses" },
-  { value: "income", label: "Income" },
-];
 
 export default function TransactionsPage() {
   const toast = useToast();
@@ -269,95 +237,19 @@ export default function TransactionsPage() {
     if (inView) land(rowKey(updated));
   };
 
-  // Transfers share the ledger with transactions so a move between your own
-  // accounts leaves a record, but they are not income or spending — they only
-  // appear under "All", never under the Expenses or Income filters.
-  const q = query.trim().toLowerCase();
-  const visibleTransactions = transactions.filter((t) => {
-    if (filter !== "all" && t.type !== filter) return false;
-    if (accountFilter && String(t.accountId ?? "") !== accountFilter) return false;
-    if (
-      q &&
-      !t.description.toLowerCase().includes(q) &&
-      !t.category.toLowerCase().includes(q)
-    )
-      return false;
-    return true;
-  });
-  const visibleTransfers = transfers.filter((m) => {
-    if (filter !== "all") return false;
-    // Either side of the move counts as belonging to that account.
-    if (
-      accountFilter &&
-      String(m.from) !== accountFilter &&
-      String(m.to) !== accountFilter
-    )
-      return false;
-    if (q) {
-      const names = `${getAccount(String(m.from))?.name ?? ""} ${
-        getAccount(String(m.to))?.name ?? ""
-      } transfer`.toLowerCase();
-      if (!names.includes(q)) return false;
-    }
-    return true;
+  const { visibleTransactions, visible, days } = ledgerView({
+    transactions,
+    transfers,
+    filter,
+    accountFilter,
+    query,
+    getAccount,
   });
 
   // Transfers count as entries too: with only transfers logged the ledger still
   // has something to show, and the filters are still worth offering.
   const hasEntries = transactions.length > 0 || transfers.length > 0;
   const selectedAccount = accountFilter ? getAccount(accountFilter) : null;
-
-  // Newest first, the same order the API returns each list in.
-  const visible = [
-    ...visibleTransactions.map((t) => ({ kind: "txn", date: t.date, row: t })),
-    ...visibleTransfers.map((m) => ({ kind: "transfer", date: m.date, row: m })),
-  ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
-
-  /**
-   * Entries grouped into days, newest day first.
-   *
-   * Dates are stored at UTC midnight, so the ISO prefix is the day key — the
-   * same key the streak and the tracker calendar use, which is what keeps a day
-   * here and a day there meaning the same thing.
-   *
-   * The day's figure is its net: income minus expenses. Transfers are left out
-   * of it deliberately — moving $400 between your own accounts isn't a $400 day,
-   * and a header that said so would contradict the row right beneath it. A day
-   * with nothing but transfers shows an em-dash instead of a misleading $0.00.
-   */
-  const days = (() => {
-    const map = new Map();
-    for (const entry of visible) {
-      const key = String(entry.date).slice(0, 10);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(entry);
-    }
-    const todayKey = localToday();
-    const yesterdayKey = addDaysYmd(todayKey, -1);
-    return [...map.entries()].map(([key, entries]) => {
-      const counted = entries.filter((e) => e.kind === "txn");
-      const net = counted.reduce(
-        (sum, e) => {
-          const { gain, value } = rowAmount(e.row);
-          return sum + (gain ? value : -value);
-        },
-        0
-      );
-      const date = formatDay(key);
-      return {
-        key,
-        entries,
-        net,
-        counted: counted.length > 0,
-        label:
-          key === todayKey
-            ? `Today · ${date}`
-            : key === yesterdayKey
-              ? `Yesterday · ${date}`
-              : date,
-      };
-    });
-  })();
 
   // The row the page tour points at: the first you could open right now. A
   // pending one can't be edited until the server has it.
@@ -503,103 +395,16 @@ export default function TransactionsPage() {
         }}
       />
 
-      {/* Search, with the account filter beside it. Type and account are not
-          the same kind of choice — type is three fixed options you flick
-          between, accounts are however many you have and get picked rarely —
-          so type keeps the always-visible segmented control below, and accounts
-          collapse into one button. Nothing scrolls, and it reads the same with
-          two accounts or eight. */}
       {!loading && hasEntries && (
-        <div className="mt-6 flex items-center gap-2">
-          <div className="relative min-w-0 flex-1" data-tour="tx.search">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
-            <Input
-              type="search"
-              inputMode="search"
-              aria-label="Search transactions"
-              placeholder="Search description or category"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              // WebKit draws its own clear button inside a search field, which
-              // lands right under the one below — two crosses, a few pixels
-              // apart, as soon as there's anything to clear. The custom one
-              // stays because it's the one that matches the rest of the app
-              // and is a real 28px target; the browser's is turned off here.
-              // Only here: the friends search has no button of its own, so its
-              // native cross is the only way to clear it.
-              className="px-9 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                aria-label="Clear search"
-                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-
-          {hasAccounts && accounts.length > 1 && (
-            <button
-              type="button"
-              onClick={() => setAccountPickerOpen(true)}
-              data-tour="tx.account-filter"
-              aria-label={
-                selectedAccount
-                  ? `Filtering by ${selectedAccount.name}. Change account`
-                  : "Filter by Account"
-              }
-              className={`flex h-11 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                selectedAccount
-                  ? "border-ink/40 bg-ink/[0.06] text-ink"
-                  : "border-hairline-strong text-ink-2 hover:bg-surface-2 active:bg-surface-3"
-              }`}
-            >
-              {selectedAccount ? (
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ background: selectedAccount.color }}
-                />
-              ) : (
-                <Wallet className="h-4 w-4 shrink-0" />
-              )}
-              <span className="max-w-[6.5rem] truncate">
-                {selectedAccount ? selectedAccount.name : "Account"}
-              </span>
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Type filter — three fixed options, so all of them stay on screen. */}
-      {!loading && hasEntries && (
-        <div
-          role="group"
-          aria-label="Filter by type"
-          data-tour="tx.types"
-          className="relative mt-3 flex gap-0.5 rounded-md bg-surface-2 p-[3px]"
-        >
-          <SegmentPill
-            index={FILTERS.findIndex((f) => f.value === filter)}
-            count={FILTERS.length}
-          />
-          {FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setFilter(f.value)}
-              className={`relative flex-1 rounded-[9px] px-3 py-1.5 text-[13px] transition-colors duration-base ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                filter === f.value
-                  ? "text-foreground"
-                  : "font-medium text-ink-3 hover:text-ink-2 active:opacity-60"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <LedgerFilters
+          query={query}
+          onQuery={setQuery}
+          showAccounts={hasAccounts && accounts.length > 1}
+          selectedAccount={selectedAccount}
+          onPickAccount={() => setAccountPickerOpen(true)}
+          filter={filter}
+          onFilter={setFilter}
+        />
       )}
 
       {/* Every account listed at once, however many there are. */}
@@ -734,115 +539,18 @@ export default function TransactionsPage() {
                         );
                       }
                       const t = entry.row;
-                      const cat = getCategory(t.category);
-                      const account = getAccount(t.accountId);
-                      // No entrance animation, and no `layout`. A row you just
-                      // added has to be readable the instant it lands — it
-                      // mounted mid-fade often enough that the ledger showed a
-                      // blank row until the next reload. Only the exit is
-                      // animated, because a delete is undoable and the slide is
-                      // what says so.
-                      //
-                      // What marks a new row instead is a tint laid *over* it
-                      // that fades away. The row itself is at full opacity from
-                      // its first frame, so a stalled animation can only ever
-                      // leave a faint highlight, never a blank.
                       return (
-                        <motion.li
+                        <LedgerRow
                           key={rowKey(t)}
-                          data-entry-key={rowKey(t)}
-                          data-tour={t === tourRow ? "tx.row" : undefined}
-                          custom={swipedId}
-                          variants={{
-                            exit: (swiped) => (swiped === t._id ? SWIPE_EXIT : BUTTON_EXIT),
-                          }}
-                          exit="exit"
-                          // Margins clear the sticky header above and the dock
-                          // below when this is scrolled to.
-                          className="relative overflow-hidden scroll-mt-[72px] scroll-mb-[var(--dock-clear)]"
-                        >
-                          <SwipeToDelete
-                            onDelete={() => handleDelete(t._id, { swiped: true })}
-                            // Not yet saved: no server id to edit or delete by.
-                            disabled={t.pending}
-                            className="flex items-center gap-1 px-4 py-[13px]"
-                          >
-                            {/* The row itself opens the edit sheet. Everything but
-                                the delete button is one target, so a mistyped
-                                amount is a tap on the amount to fix — delete stays
-                                a separate, deliberate button beside it. */}
-                            <button
-                              type="button"
-                              onClick={() => setEditing(t)}
-                              disabled={t.pending}
-                              aria-label={`Edit ${t.description}`}
-                              className="-my-1 flex min-w-0 flex-1 items-center gap-3 rounded-sm py-1 text-left transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                              <CategoryIcon category={cat} />
-                              <span className="min-w-0 flex-1">
-                                <span className="flex items-center gap-1.5 text-[15px] font-medium tracking-[-0.01em]">
-                                  <span className="truncate">{t.description}</span>
-                                  {/* Rows written by a repeating entry say so.
-                                      Nobody typed them, so without this they read
-                                      as entries you don't remember making. */}
-                                  <RepeatBadge transaction={t} />
-                                </span>
-                                {/* The date has moved to the day header, so the
-                                    meta line is category and account — plus, on a
-                                    shared bill, what came back. The figure on the
-                                    right is then your share, so the line says what
-                                    it was a share of. */}
-                                <span className="mt-0.5 block truncate text-meta text-ink-3">
-                                  {t.category}
-                                  {t.paidBack > 0 &&
-                                    (t.paidBack > t.amount ? (
-                                      <>
-                                        {" "}· {formatMoney(t.paidBack)} back on{" "}
-                                        {formatMoney(t.amount)}
-                                      </>
-                                    ) : t.paidBack === t.amount ? (
-                                      <> · {formatMoney(t.amount)} paid back in full</>
-                                    ) : (
-                                      <>
-                                        {" "}· {formatMoney(t.paidBack)} of {formatMoney(t.amount)} paid
-                                        back
-                                      </>
-                                    ))}
-                                  {account && <> · {account.name}</>}
-                                  {/* Only if the save is slow enough to notice:
-                                      the fade holds back ~0.4s, so a normal
-                                      save confirms before this ever shows. */}
-                                  {t.pending && (
-                                    <span className="opacity-0 motion-safe:animate-fade-in-delayed motion-reduce:opacity-100">
-                                      {" "}· Saving…
-                                    </span>
-                                  )}
-                                </span>
-                              </span>
-                              <EntryAmount entry={t} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(t._id)}
-                              disabled={t.pending}
-                              aria-label={`Delete ${t.description}`}
-                              // 44px of target in a 36px-looking button. It grows
-                              // to the RIGHT, into the row's own px-4 padding —
-                              // widening it leftward instead would close the 4px
-                              // gap to the edit button beside it, and a mis-tap
-                              // there deletes rather than opens.
-                              className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] active:bg-negative/[0.14] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </SwipeToDelete>
-                          {landed?.key === rowKey(t) && (
-                            <span
-                              key={landed.n}
-                              aria-hidden="true"
-                              className="pointer-events-none absolute inset-0 animate-row-land bg-ink/[0.07]"
-                            />
-                          )}
-                        </motion.li>
+                          t={t}
+                          category={getCategory(t.category)}
+                          account={getAccount(t.accountId)}
+                          swipedId={swipedId}
+                          landed={landed}
+                          isTourRow={t === tourRow}
+                          onEdit={() => setEditing(t)}
+                          onDelete={(opts) => handleDelete(t._id, opts)}
+                        />
                       );
                     })}
                   </AnimatePresence>
@@ -853,94 +561,5 @@ export default function TransactionsPage() {
         )}
       </div>
     </PageWrapper>
-  );
-}
-
-/** A move between the user's own accounts, recorded but never budgeted. */
-function TransferRow({ transfer, from, to, onDelete }) {
-  return (
-    <motion.li
-      exit={{ opacity: 0, x: 24, transition: { duration: 0.25 } }}
-      className="flex items-center gap-1 px-4 py-[13px]"
-    >
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        {/* Neutral tile, not a category colour: a transfer has no category,
-            and tinting it would file it alongside spending. */}
-        <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-sm bg-surface-2 text-ink-3">
-          <ArrowLeftRight className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="flex min-w-0 items-center gap-1.5 truncate text-[15px] font-medium tracking-[-0.01em]">
-            {from?.name ?? "Removed Account"}
-            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-3" />
-            {to?.name ?? "Removed Account"}
-          </p>
-          <p className="mt-0.5 truncate text-meta text-ink-3">
-            Transfer · doesn&apos;t touch your budget
-          </p>
-        </div>
-        {/* No sign and a quiet ink-3: a transfer is neither income nor
-            spending, and signing it either way would suggest it moved the
-            budget, which it never does. */}
-        <span className="num shrink-0 text-[15px] font-medium text-ink-3">
-          {formatMoney(transfer.amount)}
-        </span>
-      </div>
-      <button
-        type="button"
-        onClick={onDelete}
-        aria-label={`Delete transfer of ${formatMoney(transfer.amount)}`}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-ink-3 transition-colors duration-base ease-out hover:bg-negative/[0.08] active:bg-negative/[0.14] hover:text-negative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
-    </motion.li>
-  );
-}
-
-/**
- * Picks which account the ledger is filtered to.
- *
- * A sheet rather than a row of chips: chips only fit two or three accounts
- * before they start scrolling, and a filter you have to go looking for is worse
- * than no filter. Here every account is listed at once whether you have two or
- * eight, and the row above stays one button wide.
- */
-function AccountFilterSheet({ open, onClose, accounts, selectedId, onSelect }) {
-  const options = [{ id: "", name: "All Accounts" }, ...accounts];
-
-  return (
-    <BottomSheet open={open} onClose={onClose} title="Filter by Account">
-      <ul className="space-y-1.5">
-        {options.map((a) => {
-          const selected = selectedId === a.id;
-          return (
-            <li key={a.id || "all"}>
-              <button
-                type="button"
-                onClick={() => onSelect(a.id)}
-                aria-pressed={selected}
-                className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                  selected
-                    ? "border-ink/40 bg-ink/[0.06] text-ink"
-                    : "border-hairline-strong hover:bg-surface-2 active:bg-surface-3"
-                }`}
-              >
-                {a.color ? (
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-full"
-                    style={{ background: a.color }}
-                  />
-                ) : (
-                  <Wallet className="h-4 w-4 shrink-0 text-ink-3" />
-                )}
-                <span className="min-w-0 flex-1 truncate">{a.name}</span>
-                {selected && <Check className="h-4 w-4 shrink-0" />}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </BottomSheet>
   );
 }

@@ -3,7 +3,7 @@
 // each one press — all easy to break without noticing, because the form still
 // *works* afterwards, it just costs more taps or saves a blank-looking row.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Every fixture on this page is dated inside August 2026, and the add sheet
@@ -1504,5 +1504,107 @@ describe("saving without waiting", () => {
     expect(editor.getByLabelText("Description")).toHaveValue("Dinner");
     expect(editor.getByText("The server said no.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit Lunch" })).toBeInTheDocument();
+  });
+});
+
+// Each day of the ledger heads itself with its date and its net. Pinned before
+// the grouping moved out of the page into lib/ledger.js.
+describe("days in the ledger", () => {
+  const row = (over) => ({
+    _id: over.description,
+    type: "expense",
+    category: "F & B",
+    ...over,
+  });
+  const header = (label) => screen.getByText(label).closest("header");
+
+  it("names today and yesterday, and dates the days before", async () => {
+    mockTransactions = [
+      row({ description: "Lunch", amount: 4, date: "2026-08-12T00:00:00.000Z" }),
+      row({ description: "Bus", amount: 2, date: "2026-08-11T00:00:00.000Z" }),
+      row({ description: "Snacks", amount: 3, date: "2026-08-03T00:00:00.000Z" }),
+    ];
+    renderPage();
+    await screen.findByText("Lunch");
+
+    expect(screen.getByText("Today · 12 Aug")).toBeInTheDocument();
+    expect(screen.getByText("Yesterday · 11 Aug")).toBeInTheDocument();
+    expect(screen.getByText("3 Aug")).toBeInTheDocument();
+  });
+
+  it("heads a day with its net: income less what was spent", async () => {
+    mockTransactions = [
+      row({ description: "Allowance", type: "income", category: "Allowance", amount: 50, date: "2026-08-05T00:00:00.000Z" }),
+      row({ description: "Lunch", amount: 12, date: "2026-08-05T00:00:00.000Z" }),
+      row({ description: "Dinner", amount: 30, paidBack: 20, date: "2026-08-04T00:00:00.000Z" }),
+      row({ description: "Refund", type: "income", category: "Allowance", amount: 9, date: "2026-08-03T00:00:00.000Z" }),
+      row({ description: "Coffee", amount: 9, date: "2026-08-03T00:00:00.000Z" }),
+    ];
+    renderPage();
+    await screen.findByText("Lunch");
+
+    expect(within(header("5 Aug")).getByText("+$38.00")).toBeInTheDocument();
+    // Your share, not the whole bill.
+    expect(within(header("4 Aug")).getByText("−$10.00")).toBeInTheDocument();
+    expect(within(header("3 Aug")).getByText("$0.00")).toBeInTheDocument();
+  });
+
+  it("shows a dash for a day with nothing but a transfer", async () => {
+    mockAccounts = [
+      { id: "a1", name: "Trust", color: "#c26b6b", archived: false },
+      { id: "a2", name: "DBS", color: "#7cb37c", archived: false },
+    ];
+    mockTransactions = [row({ description: "Lunch", amount: 4, date: "2026-08-05T00:00:00.000Z" })];
+    mockTransfers = [{ _id: "m1", date: "2026-08-06T00:00:00.000Z", from: "a2", to: "a1", amount: 50 }];
+    renderPage();
+    await screen.findByText("Lunch");
+
+    expect(within(header("6 Aug")).getByText("—")).toBeInTheDocument();
+  });
+
+  it("lists the newest day first", async () => {
+    mockTransactions = [
+      row({ description: "Old", amount: 1, date: "2026-08-02T00:00:00.000Z" }),
+      row({ description: "New", amount: 1, date: "2026-08-09T00:00:00.000Z" }),
+    ];
+    renderPage();
+    await screen.findByText("Old");
+
+    const labels = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(labels).toEqual(["9 Aug", "2 Aug"]);
+  });
+});
+
+// The trash button on a row: out at once, with ten seconds to take it back.
+// Pinned when the row moved into LedgerRow, which hands the delete back up.
+describe("deleting an entry", () => {
+  const lunch = {
+    _id: "t1",
+    date: "2026-08-05T00:00:00.000Z",
+    type: "expense",
+    amount: 12,
+    category: "F & B",
+    description: "Lunch",
+  };
+
+  it("takes the row out and offers an undo that puts it back", async () => {
+    mockTransactions = [lunch];
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Lunch");
+
+    await user.click(screen.getByRole("button", { name: "Delete Lunch" }));
+
+    await waitFor(() => expect(screen.queryByText("Lunch")).not.toBeInTheDocument());
+    const toast = showToast.mock.calls.at(-1)[0];
+    expect(toast).toMatchObject({
+      message: "Transaction deleted",
+      variant: "info",
+      duration: 10000,
+      action: { label: "Undo" },
+    });
+
+    act(() => toast.action.onClick());
+    expect(await screen.findByText("Lunch")).toBeInTheDocument();
   });
 });
