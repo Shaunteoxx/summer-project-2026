@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Trophy, Shield, AlertTriangle } from "lucide-react";
+import { Trophy, AlertTriangle } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import StreakBadgeSlot from "@/components/StreakBadgeSlot";
 import StreakBadgesSheet from "@/components/StreakBadgesSheet";
 import StreakBreakNote from "@/components/StreakBreakNote";
@@ -13,6 +11,8 @@ import StreakDayCell from "@/components/StreakDayCell";
 import StreakRestoreSheet from "@/components/StreakRestoreSheet";
 import RollingNumber from "@/components/RollingNumber";
 import StreakPrompt from "@/components/StreakPrompt";
+import StreakRestores from "@/components/StreakRestores";
+import StreakSkeleton from "@/components/StreakSkeleton";
 import { fetchStreak, restoreStreak } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
@@ -101,21 +101,7 @@ export default function StreakCard() {
     }
   };
 
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="space-y-4 p-5">
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="h-3 w-full rounded-full" />
-          <div className="flex justify-between gap-2">
-            {[...Array(7)].map((_, i) => (
-              <Skeleton key={i} className="h-9 w-9 rounded-lg" />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (loading) return <StreakSkeleton />;
 
   // No period running (days mode, lapsed or not yet set up) — there's no
   // window to budget across, so point at the settings rather than the ledger.
@@ -170,10 +156,6 @@ export default function StreakCard() {
         ? 1
         : 0;
   const daysLeft = activePeriod?.daysLeft ?? 0;
-  // Restores scale with period length, so the shield row can't be a fixed
-  // three. Long periods show a count instead of an unreadable row of icons.
-  const savesTotal = activePeriod?.savesTotal ?? 3;
-  const showShields = savesTotal <= 5;
   // The rate the period is actually on now, not the one it handed out this
   // morning: what's left after today's spending, spread over the days after
   // today. Same figure as Plan's hero, so the reader doesn't have to go there
@@ -337,58 +319,20 @@ export default function StreakCard() {
           </button>
 
           {/* Saves + restore */}
-          <div
-            className="mt-3 flex items-center justify-between gap-3 border-t border-hairline pt-3"
-            data-tour="streak.restores"
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-[13px] text-ink-3">
-                <span className="num font-semibold text-ink">
-                  {savesLeftThisPeriod}
-                </span>{" "}
-                Restores left this {noun}
-              </span>
-              <span
-                className="flex shrink-0 items-center gap-1"
-                aria-label={`${savesLeftThisPeriod} of ${savesTotal} restores left`}
-              >
-                {showShields ? (
-                  [...Array(savesTotal)].map((_, i) => (
-                    <Shield
-                      key={i}
-                      className={`h-4 w-4 ${
-                        i < savesLeftThisPeriod
-                          ? "fill-ink text-ink"
-                          : "text-ink-3/40"
-                      }`}
-                    />
-                  ))
-                ) : (
-                  <>
-                    <Shield className="h-4 w-4 fill-ink text-ink" />
-                    <span className="num text-[12px] font-medium text-ink-3">
-                      / {savesTotal}
-                    </span>
-                  </>
-                )}
-              </span>
-            </div>
-            {restore && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5"
-                data-tour="streak.restore"
-                onClick={() => {
-                  if (guard()) return;
-                  setOffer(restore);
-                  setConfirmOpen(true);
-                }}
-              >
-                <Shield className="h-3.5 w-3.5" /> Restore
-              </Button>
-            )}
-          </div>
+          <StreakRestores
+            left={savesLeftThisPeriod}
+            total={activePeriod?.savesTotal ?? 3}
+            noun={noun}
+            onRestore={
+              restore
+                ? () => {
+                    if (guard()) return;
+                    setOffer(restore);
+                    setConfirmOpen(true);
+                  }
+                : null
+            }
+          />
           <StreakBreakNote
             breakDay={breakDay}
             restore={restore}
