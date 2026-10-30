@@ -14,7 +14,6 @@
     "icons": "node scripts/icons.mjs"
   },
   "dependencies": {
-    "axios": "^1.7.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "framer-motion": "^11.3.8",
