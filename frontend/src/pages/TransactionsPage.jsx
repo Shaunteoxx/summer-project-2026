@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Plus, Receipt, Search } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -8,33 +8,21 @@ import AccountsCard from "@/components/AccountsCard";
 import AddTransactionSheet from "@/components/AddTransactionSheet";
 import EmptyState from "@/components/EmptyState";
 import TransferSheet from "@/components/TransferSheet";
-import { ruleFor } from "@/components/RepeatBadge";
 import AccountFilterSheet from "@/components/AccountFilterSheet";
 import LedgerFilters, { FILTERS } from "@/components/LedgerFilters";
-import LedgerRow from "@/components/LedgerRow";
-import TransferRow from "@/components/TransferRow";
+import LedgerDays from "@/components/LedgerDays";
+import LedgerSkeleton from "@/components/LedgerSkeleton";
 import { ledgerView, rowKey } from "@/lib/ledger";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  fetchTransactions,
-  removeTransaction,
-  fetchTransfers,
-  removeTransfer,
-} from "@/api/endpoints";
+import { fetchTransactions, fetchTransfers } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
-import { useDemoGuard } from "@/hooks/useDemoGuard";
-import { cn, formatMoney } from "@/lib/utils";
 import { formatPeriodLabel } from "@/lib/period";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
-import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
-import { useRecurring } from "@/hooks/useRecurring";
+import { useLedgerDeletes } from "@/hooks/useLedgerDeletes";
 import { useTour } from "@/tour/TourProvider";
 import { DUR, fadeUp } from "@/animations/variants";
-
-const DELETE_GRACE_MS = 10000;
 
 // Let the sheet finish leaving before the page moves under it, so the scroll
 // to a new row reads as a second step rather than a lurch behind the sheet.
@@ -43,27 +31,9 @@ const AFTER_SHEET_MS = DUR.sheet * 1000 + 40;
 // dropped, or leaving a filter and coming back would remount it and replay it.
 const LANDED_MS = 2800;
 
-/**
- * What the undo toast says after a delete.
- *
- * Deleting one row a repeating entry wrote leaves the rule alone — it has
- * already moved past that date and won't write it again. The trash button looks
- * the same on every row, though, so without saying so a skipped month reads as
- * possibly cancelling the rent for good.
- */
-export function deletedMessage(transaction, rules) {
-  const rule = ruleFor(transaction, rules);
-  if (!rule || rule.paused) return "Transaction deleted";
-  const next = rule.frequency === "weekly" ? "next week" : "next month";
-  return `Deleted this one. ${rule.description} still repeats ${next}.`;
-}
-
 export default function TransactionsPage() {
   const toast = useToast();
-  const guard = useDemoGuard();
-  const { getCategory } = useCategories();
   const { active: accounts, hasAccounts, getAccount } = useAccounts();
-  const { rules } = useRecurring();
   const [transactions, setTransactions] = useState([]);
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -98,16 +68,11 @@ export default function TransactionsPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
 
-  // Pending deletes awaiting their 10s undo window: id -> timeout handle.
-  const pendingDeletes = useRef(new Map());
   // The row that just arrived — added, edited or undeleted — so it can be
   // highlighted and scrolled to. `n` changes every time, so landing the same
   // row twice replays the highlight.
   const [landed, setLanded] = useState(null);
   const land = (key) => setLanded({ key, n: Date.now() });
-  // The row deleted by swiping, if the last delete was one. Read by the exit
-  // animation through AnimatePresence, since a removed row can't take props.
-  const [swipedId, setSwipedId] = useState(null);
   // Bumped whenever the ledger changes in a way the Account Activity card
   // above sums over, so it re-fetches instead of showing the old totals.
   const [ledgerVersion, setLedgerVersion] = useState(0);
@@ -143,18 +108,6 @@ export default function TransactionsPage() {
     if (budgetPeriod.loading) return;
     load();
   }, [load, budgetPeriod.loading]);
-
-  // On unmount, commit any deletes still in their undo window so they aren't lost.
-  useEffect(() => {
-    const timers = pendingDeletes.current;
-    return () => {
-      timers.forEach((timer, id) => {
-        clearTimeout(timer);
-        removeTransaction(id).catch(() => {});
-      });
-      timers.clear();
-    };
-  }, []);
 
   // Only show a new row here if it lands inside the window being listed.
   const handleAdded = (created) => {
@@ -237,6 +190,15 @@ export default function TransactionsPage() {
     if (inView) land(rowKey(updated));
   };
 
+  // Deleting, with the undo window. See useLedgerDeletes.
+  const { handleDelete, handleDeleteTransfer, swipedId } = useLedgerDeletes({
+    transactions,
+    setTransactions,
+    transfers,
+    setTransfers,
+    land,
+  });
+
   const { visibleTransactions, visible, days } = ledgerView({
     transactions,
     transfers,
@@ -257,78 +219,6 @@ export default function TransactionsPage() {
   useTour("transactions", !loading && hasEntries);
   useTour("tip.repeating", !loading && visibleTransactions.some((t) => t.recurringId));
   useTour("tip.accounts", !loading && hasEntries && hasAccounts && accounts.length > 1);
-
-
-  /**
-   * Same optimistic-with-undo shape as a transaction delete, but transfers are
-   * cheap to restore (nothing derived hangs off them), so this commits straight
-   * away and puts the row back if the server refuses.
-   */
-  const handleDeleteTransfer = (id) => {
-    if (guard()) return;
-    const index = transfers.findIndex((m) => m._id === id);
-    if (index === -1) return;
-    const removed = transfers[index];
-
-    setTransfers((prev) => prev.filter((m) => m._id !== id));
-    removeTransfer(id)
-      .then(() => toast.info("Transfer removed"))
-      .catch(() => {
-        setTransfers((prev) => {
-          if (prev.some((m) => m._id === id)) return prev;
-          const next = [...prev];
-          next.splice(Math.min(index, next.length), 0, removed);
-          return next;
-        });
-        toast.error("Couldn't remove that transfer. Please try again.");
-      });
-  };
-
-  // Optimistically remove, then commit the server delete after a 10s undo window.
-  const handleDelete = (id, { swiped = false } = {}) => {
-    if (guard()) return;
-    const index = transactions.findIndex((t) => t._id === id);
-    if (index === -1) return;
-    const removed = transactions[index];
-
-    const restore = () =>
-      setTransactions((prev) => {
-        if (prev.some((t) => t._id === removed._id)) return prev;
-        const next = [...prev];
-        next.splice(Math.min(index, next.length), 0, removed);
-        return next;
-      });
-
-    setSwipedId(swiped ? id : null);
-    setTransactions((prev) => prev.filter((t) => t._id !== id));
-
-    const timer = setTimeout(() => {
-      pendingDeletes.current.delete(id);
-      removeTransaction(id).catch(() => {
-        restore();
-        toast.error("Couldn't delete transaction. Please try again.");
-      });
-    }, DELETE_GRACE_MS);
-    pendingDeletes.current.set(id, timer);
-
-    toast.show({
-      message: deletedMessage(removed, rules),
-      variant: "info",
-      duration: DELETE_GRACE_MS,
-      action: {
-        label: "Undo",
-        onClick: () => {
-          const pending = pendingDeletes.current.get(id);
-          if (pending) {
-            clearTimeout(pending);
-            pendingDeletes.current.delete(id);
-          }
-          restore();
-          land(rowKey(removed));
-        },
-      },
-    });
-  };
 
   return (
     <PageWrapper>
@@ -423,20 +313,7 @@ export default function TransactionsPage() {
       {/* List */}
       <div className="mt-4">
         {loading ? (
-          <div className="space-y-2.5">
-            {[0, 1, 2, 3].map((i) => (
-              <Card key={i}>
-                <CardContent className="flex items-center gap-3 p-3.5">
-                  <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-20" />
-                  </div>
-                  <Skeleton className="h-4 w-16 shrink-0" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <LedgerSkeleton />
         ) : !hasEntries ? (
           // The same shape Home uses for the same situation, rather than a
           // card: a border drawn around an absence gives the emptiest thing on
@@ -487,77 +364,15 @@ export default function TransactionsPage() {
             </CardContent>
           </Card>
         ) : (
-          /* Grouped by day, with the day's net beside its date. Rows sit on
-             hairlines inside one surface per day rather than each being its own
-             card — a card per entry gave every $4 coffee the same weight as the
-             day it belongs to, and the repetition is what made the list read as
-             noisy rather than as a register. */
-          <div>
-            {days.map(({ key, entries, net, counted, label }, dayIndex) => (
-              <section key={key} className="mt-4 first:mt-0">
-                <header
-                  className="flex items-baseline justify-between gap-3 pb-2"
-                  data-tour={dayIndex === 0 ? "tx.day" : undefined}
-                >
-                  <h2 className="text-overline text-ink-3">{label}</h2>
-                  <span
-                    className={cn(
-                      "num text-[12px] font-medium",
-                      counted && net > 0 ? "text-positive" : "text-ink-3"
-                    )}
-                  >
-                    {!counted
-                      ? "—"
-                      : net > 0
-                        ? `+${formatMoney(net)}`
-                        : net < 0
-                          ? `−${formatMoney(-net)}`
-                          : formatMoney(0)}
-                  </span>
-                </header>
-
-                {/* The presence boundary is *inside* the day, around the rows
-                    only. Put it around the days instead and a day that stops
-                    matching the search stays mounted for as long as its rows
-                    take to fade — so typing leaves a trail of headers with a
-                    row-shaped hole under each. A day that no longer matches
-                    isn't leaving, it was never in this result: it goes at
-                    once, and only a row you actually deleted animates out. */}
-                <ul className="-mx-4 border-y border-hairline bg-surface [&>*+*]:border-t [&>*+*]:border-hairline">
-                  <AnimatePresence initial={false} custom={swipedId}>
-                    {entries.map((entry) => {
-                      if (entry.kind === "transfer") {
-                        const m = entry.row;
-                        return (
-                          <TransferRow
-                            key={m._id}
-                            transfer={m}
-                            from={getAccount(String(m.from))}
-                            to={getAccount(String(m.to))}
-                            onDelete={() => handleDeleteTransfer(m._id)}
-                          />
-                        );
-                      }
-                      const t = entry.row;
-                      return (
-                        <LedgerRow
-                          key={rowKey(t)}
-                          t={t}
-                          category={getCategory(t.category)}
-                          account={getAccount(t.accountId)}
-                          swipedId={swipedId}
-                          landed={landed}
-                          isTourRow={t === tourRow}
-                          onEdit={() => setEditing(t)}
-                          onDelete={(opts) => handleDelete(t._id, opts)}
-                        />
-                      );
-                    })}
-                  </AnimatePresence>
-                </ul>
-              </section>
-            ))}
-          </div>
+          <LedgerDays
+            days={days}
+            swipedId={swipedId}
+            landed={landed}
+            tourRow={tourRow}
+            onEdit={setEditing}
+            onDelete={handleDelete}
+            onDeleteTransfer={handleDeleteTransfer}
+          />
         )}
       </div>
     </PageWrapper>

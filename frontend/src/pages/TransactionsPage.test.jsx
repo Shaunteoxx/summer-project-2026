@@ -22,6 +22,7 @@ const addCategory = vi.fn();
 let mockTransactions = [];
 let mockTransfers = [];
 const removeTransfer = vi.fn();
+const removeTransaction = vi.fn();
 // Asked after an add, for what the entry did to today. Offline by default, so
 // every confirmation below that doesn't care is the plain one.
 const fetchStreak = vi.fn();
@@ -30,7 +31,7 @@ vi.mock("@/api/endpoints", () => ({
   fetchTransactions: () => Promise.resolve(mockTransactions),
   addTransaction: (...args) => addTransaction(...args),
   updateTransaction: (...args) => updateTransaction(...args),
-  removeTransaction: () => Promise.resolve({}),
+  removeTransaction: (...args) => removeTransaction(...args),
   fetchTransfers: () => Promise.resolve(mockTransfers),
   removeTransfer: (...args) => removeTransfer(...args),
   // Account activity sits above the list on this page. It has its own suite;
@@ -124,7 +125,8 @@ vi.mock("@/hooks/useCategories", async () => {
 
 import { MemoryRouter, useLocation } from "react-router-dom";
 
-import TransactionsPage, { deletedMessage } from "@/pages/TransactionsPage";
+import TransactionsPage from "@/pages/TransactionsPage";
+import { deletedMessage } from "@/hooks/useLedgerDeletes";
 
 // The page reads router state so the app-shell add button can ask it to open
 // the sheet. Rendering it bare would throw, so give it the Router it has in
@@ -200,6 +202,7 @@ beforeEach(() => {
   mockTransactions = [];
   mockTransfers = [];
   removeTransfer.mockReset().mockResolvedValue({});
+  removeTransaction.mockReset().mockResolvedValue({});
   addTransaction.mockReset().mockImplementation((payload) =>
     Promise.resolve({ ...payload, _id: "t1", date: `${payload.date}T00:00:00.000Z` })
   );
@@ -1607,6 +1610,82 @@ describe("deleting an entry", () => {
     act(() => toast.action.onClick());
     expect(await screen.findByText("Lunch")).toBeInTheDocument();
   });
+
+  // The undo window's timer, held rather than waited out: the 10s commit is
+  // run by hand, and nothing else is slowed down.
+  const holdUndoWindow = () => {
+    const held = [];
+    const realSetTimeout = globalThis.setTimeout;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation((fn, ms, ...rest) =>
+      ms === 10000 ? (held.push(fn), 0) : realSetTimeout(fn, ms, ...rest)
+    );
+    return () => act(() => held.splice(0).forEach((fn) => fn()));
+  };
+
+  it("sends the delete once the undo window closes", async () => {
+    mockTransactions = [lunch];
+    const closeWindow = holdUndoWindow();
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Lunch");
+
+    await user.click(screen.getByRole("button", { name: "Delete Lunch" }));
+    expect(removeTransaction).not.toHaveBeenCalled();
+    closeWindow();
+    expect(removeTransaction).toHaveBeenCalledWith("t1");
+  });
+
+  it("puts the row back and says so when the server refuses the delete", async () => {
+    mockTransactions = [lunch];
+    removeTransaction.mockImplementation(() => Promise.reject(new Error("offline")));
+    const closeWindow = holdUndoWindow();
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Lunch");
+
+    await user.click(screen.getByRole("button", { name: "Delete Lunch" }));
+    await waitFor(() => expect(screen.queryByText("Lunch")).not.toBeInTheDocument());
+    closeWindow();
+    expect(await screen.findByText("Lunch")).toBeInTheDocument();
+    expect(errorToast).toHaveBeenCalledWith("Couldn't delete transaction. Please try again.");
+  });
+
+  it("sends a delete still in its undo window when the page is left", async () => {
+    mockTransactions = [lunch];
+    const user = userEvent.setup();
+    const { unmount } = renderPage();
+    await screen.findByText("Lunch");
+
+    await user.click(screen.getByRole("button", { name: "Delete Lunch" }));
+    unmount();
+    expect(removeTransaction).toHaveBeenCalledWith("t1");
+  });
+
+  it("never sends a delete that was undone", async () => {
+    mockTransactions = [lunch];
+    const user = userEvent.setup();
+    const { unmount } = renderPage();
+    await screen.findByText("Lunch");
+
+    await user.click(screen.getByRole("button", { name: "Delete Lunch" }));
+    act(() => showToast.mock.calls.at(-1)[0].action.onClick());
+    await screen.findByText("Lunch");
+    unmount();
+    expect(removeTransaction).not.toHaveBeenCalled();
+  });
+
+  it("says the rule carries on, for a row a rule wrote", async () => {
+    mockRules = [{ id: "r1", description: "Rent", frequency: "monthly", paused: false }];
+    mockTransactions = [{ ...lunch, description: "Rent", recurringId: "r1" }];
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Rent");
+
+    await user.click(screen.getByRole("button", { name: "Delete Rent" }));
+    expect(showToast.mock.calls.at(-1)[0].message).toBe(
+      "Deleted this one. Rent still repeats next month."
+    );
+  });
 });
 
 // Which tip the entry sheet asks the tour provider for. Pinned when the
@@ -1718,5 +1797,46 @@ describe("checking an entry before it's sent", () => {
     await user.click(screen.getByRole("button", { name: "Add Expense" }));
     expect(sheet.getByText("Choose a valid date.")).toBeInTheDocument();
     expect(addTransaction).not.toHaveBeenCalled();
+  });
+});
+
+// A search or filter that leaves nothing: say what was looked for, and offer
+// the way back. Pinned before the page's list states were split up.
+describe("when nothing matches", () => {
+  const lunch = {
+    _id: "t1",
+    date: "2026-08-05T00:00:00.000Z",
+    type: "expense",
+    amount: 12,
+    category: "F & B",
+    description: "Lunch",
+  };
+
+  it("quotes the search, and clears it with Clear Filters", async () => {
+    mockTransactions = [lunch];
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Lunch");
+
+    await user.type(screen.getByRole("searchbox", { name: "Search transactions" }), " zzz ");
+    expect(screen.getByText("No transactions match “zzz”.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear Filters" }));
+    expect(screen.getByText("Lunch")).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Search transactions" })).toHaveValue("");
+  });
+
+  it("names the type and the period for an empty filter", async () => {
+    mockTransactions = [lunch];
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Lunch");
+
+    const types = within(screen.getByRole("group", { name: "Filter by type" }));
+    await user.click(types.getByRole("button", { name: "Income" }));
+    expect(screen.getByText("No income this month.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear Filters" }));
+    expect(screen.getByText("Lunch")).toBeInTheDocument();
   });
 });
