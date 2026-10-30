@@ -13,8 +13,8 @@ import { fadeUp } from "@/animations/variants";
    than anything else.                                                      */
 
 /**
- * The label is optional: rows that name themselves (Plan and Friends, Log Out
- * and Delete Account) read fine as a group without a heading over them.
+ * The label is optional: rows that name themselves (Plan and Friends, Log Out)
+ * read fine without a heading over them.
  */
 export function Section({ label, children }) {
   return (
@@ -38,14 +38,9 @@ export function Section({ label, children }) {
  *
  * Renders as a button only when it does something — a static row shouldn't be
  * in the tab order or announce itself as clickable.
- *
- * `tone="negative"` sets the icon and title in red, for a destructive row
- * (Delete Account). The tile and the pressed state stay neutral, so the row is
- * marked without outweighing the rows around it.
  */
-export function Row({ icon: Icon, title, meta, value, onClick, chevron = true, tone, ...rest }) {
+export function Row({ icon: Icon, title, meta, value, onClick, chevron = true, ...rest }) {
   const Tag = onClick ? "button" : "div";
-  const negative = tone === "negative";
 
   return (
     <Tag
@@ -59,21 +54,11 @@ export function Row({ icon: Icon, title, meta, value, onClick, chevron = true, t
           "group transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       )}
     >
-      <span
-        className={cn(
-          "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-sm bg-surface-2",
-          negative ? "text-negative" : "text-ink-2"
-        )}
-      >
+      <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-sm bg-surface-2 text-ink-2">
         <Icon className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <span
-          className={cn(
-            "block truncate text-[15px] font-medium tracking-[-0.01em]",
-            negative && "text-negative"
-          )}
-        >
+        <span className="block truncate text-[15px] font-medium tracking-[-0.01em]">
           {title}
         </span>
         {meta && (

@@ -17,7 +17,6 @@ import {
   Compass,
   Smartphone,
   ChevronRight,
-  Trash2,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -430,28 +429,29 @@ export default function MorePage() {
         />
       </Section>
 
-      {/* Account. Delete Account sits under Log Out, where people look for it,
-          as a row rather than a link so the page ends on one kind of thing.
-          It's marked by red text and a red icon but keeps the neutral tile and
-          an ordinary row's size: as a full-width red button it once outweighed
-          Log Out and everything above it. The confirmation sheet is unchanged. */}
+      {/* Account. Log Out names itself, so it needs no heading. */}
       <Section>
         <Row icon={LogOut} title="Log Out" chevron={false} onClick={logout} />
-        <Row
-          icon={Trash2}
-          title="Delete Account"
-          tone="negative"
-          chevron={false}
+      </Section>
+
+      {/* Deleting your account is a real action but not a common one. As a
+          full-width red button it had the same visual weight as Log out and
+          more than anything above it; as a text link it stays reachable
+          without shouting. The confirmation sheet is unchanged. */}
+      <div className="mt-[30px] text-center">
+        <button
           onClick={() => {
             if (guard()) return;
             setDeleteOpen(true);
           }}
-        />
-      </Section>
-
-      <p className="mt-6 text-center text-[11.5px] leading-relaxed text-ink-3">
-        Broke No More · Avatars by Twemoji (CC-BY 4.0)
-      </p>
+          className="rounded-sm px-2.5 py-1.5 text-[13px] font-medium text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] active:bg-negative/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
+        >
+          Delete Account
+        </button>
+        <p className="mt-4 text-[11.5px] leading-relaxed text-ink-3">
+          Broke No More · Avatars by Twemoji (CC-BY 4.0)
+        </p>
+      </div>
 
       <AccountsSheet open={accountsOpen} onClose={() => setAccountsOpen(false)} />
 
