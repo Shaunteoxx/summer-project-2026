@@ -196,6 +196,9 @@ cd backend  && npm test    # node:test + in-memory MongoDB
 cd frontend && npm test    # Vitest + Testing Library (jsdom)
 ```
 
+Running the frontend outside Docker needs **Node 22.12 or newer** (Vitest 5's
+minimum). Docker and CI already use Node 22.
+
 Both suites run in CI on every push. The backend suite includes an
 **equivalence check**: budgeting by calendar month must produce byte-identical
 results to the implementation that predated budget periods, which is kept
