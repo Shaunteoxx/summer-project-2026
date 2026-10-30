@@ -110,3 +110,30 @@ export const formFrom = (transaction) => ({
   paidBack: transaction.paidBack ? String(transaction.paidBack) : "",
   paidBackAccountId: transaction.paidBackAccountId ? String(transaction.paidBackAccountId) : "",
 });
+
+/**
+ * What submitting `form` would send, and what stops it: `description` and
+ * `amount` as they'd be saved, and `errors` by field (category, amount, date),
+ * empty when there's nothing to fix.
+ */
+export function readDraft(form) {
+  // Typing is the slowest step in this form, so the description is optional
+  // and falls back to the category — "F & B" reads fine in the
+  // ledger, and the placeholder shows what will be saved before you submit.
+  const description = form.description.trim() || form.category;
+  const amount = Number(form.amount);
+
+  // Validate every field at once so all problems light up together, rather
+  // than surfacing them one refused submit at a time.
+  const errors = {};
+  if (!form.category) errors.category = "Choose a category.";
+  if (form.amount === "" || !Number.isFinite(amount) || amount <= 0) {
+    errors.amount = "Enter an amount greater than $0.";
+  } else if (amount > 1e9) {
+    errors.amount = "Keep it under $1,000,000,000.";
+  }
+  if (!form.date || Number.isNaN(new Date(`${form.date}T00:00:00`).getTime())) {
+    errors.date = "Choose a valid date.";
+  }
+  return { description, amount, errors };
+}

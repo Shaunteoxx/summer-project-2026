@@ -1608,3 +1608,115 @@ describe("deleting an entry", () => {
     expect(await screen.findByText("Lunch")).toBeInTheDocument();
   });
 });
+
+// Which tip the entry sheet asks the tour provider for. Pinned when the
+// choosing moved out of the sheet into a hook of its own.
+describe("the entry sheet's tip", () => {
+  const lunch = {
+    _id: "t1",
+    date: "2026-08-05T00:00:00.000Z",
+    type: "expense",
+    amount: 12,
+    category: "F & B",
+    description: "Lunch",
+  };
+  let seen;
+  let tour;
+  beforeEach(() => {
+    seen = new Set();
+    tour = {
+      available: true,
+      off: false,
+      running: null,
+      isDone: (id) => seen.has(id),
+      has: () => false,
+      mark: vi.fn(),
+      request: vi.fn(),
+      release: vi.fn(),
+      start: vi.fn(),
+      replay: vi.fn(),
+      setOff: vi.fn(),
+      registerQuest: () => () => {},
+    };
+  });
+  const asked = () =>
+    tour.request.mock.calls.map(([id]) => id).filter((id) => String(id).startsWith("entry."));
+  const renderWithTour = async (state) => {
+    const { TourContext } = await import("@/tour/TourProvider");
+    render(
+      <TourContext.Provider value={tour}>
+        <MemoryRouter initialEntries={[{ pathname: "/transactions", state }]}>
+          <TransactionsPage />
+        </MemoryRouter>
+      </TourContext.Provider>
+    );
+  };
+
+  it("asks for the first tip not seen yet as the sheet opens to add", async () => {
+    await renderWithTour({ openAdd: "expense" });
+    await screen.findByRole("dialog");
+    await waitFor(() => expect(asked()).toEqual(["entry.paid-back"]));
+  });
+
+  it("skips paid back when adding income", async () => {
+    await renderWithTour({ openAdd: "income" });
+    await screen.findByRole("dialog");
+    await waitFor(() => expect(asked()).toEqual(["entry.repeat"]));
+  });
+
+  it("holds the same tip until the sheet closes, even once it's been seen", async () => {
+    const user = userEvent.setup();
+    await renderWithTour({ openAdd: "expense" });
+    const sheet = within(await screen.findByRole("dialog"));
+    await waitFor(() => expect(asked()).toEqual(["entry.paid-back"]));
+
+    seen.add("entry.paid-back");
+    await user.type(sheet.getByLabelText("Description"), "Chicken rice");
+    expect(asked()).toEqual(["entry.paid-back"]);
+  });
+
+  it("lets the tip go while the keypad covers the form", async () => {
+    const user = userEvent.setup();
+    await renderWithTour({ openAdd: "expense" });
+    const sheet = within(await screen.findByRole("dialog"));
+    await waitFor(() => expect(asked()).toEqual(["entry.paid-back"]));
+
+    await user.click(sheet.getByLabelText(/^Amount/));
+    expect(tour.release).toHaveBeenCalledWith("entry.paid-back");
+  });
+
+  it("asks for none while editing", async () => {
+    mockTransactions = [lunch];
+    const user = userEvent.setup();
+    await renderWithTour();
+    await user.click(await screen.findByRole("button", { name: "Edit Lunch" }));
+    await screen.findByRole("dialog");
+    expect(asked()).toEqual([]);
+  });
+});
+
+// Every problem lights up at once, rather than one refused submit at a time.
+// Pinned when the checks moved out of the sheet into lib/entryDraft.js.
+describe("checking an entry before it's sent", () => {
+  it("names every missing field together", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet();
+
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
+    expect(sheet.getByText("Choose a category.")).toBeInTheDocument();
+    expect(sheet.getByText("Enter an amount greater than $0.")).toBeInTheDocument();
+    expect(addTransaction).not.toHaveBeenCalled();
+  });
+
+  it("refuses a date that isn't one", async () => {
+    const user = userEvent.setup();
+    const sheet = await openExpenseSheet();
+    await enterAmount(user, sheet, "4");
+    await user.click(sheet.getByRole("button", { name: /F & B/ }));
+    fireEvent.change(sheet.getByLabelText("Date"), { target: { value: "" } });
+
+    await user.click(screen.getByRole("button", { name: "Add Expense" }));
+    expect(sheet.getByText("Choose a valid date.")).toBeInTheDocument();
+    expect(addTransaction).not.toHaveBeenCalled();
+  });
+});

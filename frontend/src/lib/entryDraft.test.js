@@ -34,6 +34,7 @@ import {
   emptyForm,
   formFrom,
   pickEntryTip,
+  readDraft,
   repeatPlan,
   todayAfter,
   TODAY_WAIT_MS,
@@ -199,3 +200,45 @@ describe("todayAfter", () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(TODAY_WAIT_MS - 50);
   });
 });
+
+describe("readDraft", () => {
+  const draft = (over) => ({ ...emptyForm(), category: "F & B", amount: "4.5", ...over });
+
+  it("sends the description as typed, trimmed, and the amount as a number", () => {
+    expect(readDraft(draft({ description: "  Chicken rice " }))).toEqual({
+      description: "Chicken rice",
+      amount: 4.5,
+      errors: {},
+    });
+  });
+
+  it("falls back to the category for a blank description", () => {
+    expect(readDraft(draft({ description: "   " })).description).toBe("F & B");
+  });
+
+  it("names every problem at once", () => {
+    expect(readDraft(draft({ category: "", amount: "", date: "" })).errors).toEqual({
+      category: "Choose a category.",
+      amount: "Enter an amount greater than $0.",
+      date: "Choose a valid date.",
+    });
+  });
+
+  it("refuses zero, a negative and anything that isn't a number", () => {
+    for (const amount of ["0", "-3", "abc"]) {
+      expect(readDraft(draft({ amount })).errors.amount).toBe("Enter an amount greater than $0.");
+    }
+  });
+
+  it("caps an amount at a billion", () => {
+    expect(readDraft(draft({ amount: "1000000000" })).errors).toEqual({});
+    expect(readDraft(draft({ amount: "1000000000.01" })).errors.amount).toBe(
+      "Keep it under $1,000,000,000."
+    );
+  });
+
+  it("refuses a date it can't read", () => {
+    expect(readDraft(draft({ date: "2026-13-45" })).errors.date).toBe("Choose a valid date.");
+  });
+});
+

@@ -1,17 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { motion, useAnimationControls } from "framer-motion";
-import { Repeat } from "lucide-react";
+import { useAnimationControls } from "framer-motion";
 
 import AmountCalculator from "@/components/AmountCalculator";
 import BottomSheet from "@/components/BottomSheet";
-import FieldError from "@/components/FieldError";
+import EntryDetails from "@/components/EntryDetails";
+import EntryRepeat from "@/components/EntryRepeat";
 import PaidBackField from "@/components/PaidBackField";
-import SwitchRow from "@/components/SwitchRow";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  AccountOptions,
-  AccountSelect,
   AmountHero,
   CategoryPicker,
   EntryTypeToggle,
@@ -21,11 +17,10 @@ import {
 import { useDemoGuard } from "@/hooks/useDemoGuard";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useEntrySave } from "@/hooks/useEntrySave";
+import { useEntryTip } from "@/hooks/useEntryTip";
 import { haptic } from "@/lib/haptics";
-import { useTour, useTourContext } from "@/tour/TourProvider";
-import { cn } from "@/lib/utils";
 import { SHAKE } from "@/animations/variants";
-import { emptyForm, formFrom, pickEntryTip, repeatPlan } from "@/lib/entryDraft";
+import { emptyForm, formFrom, readDraft } from "@/lib/entryDraft";
 
 
 /**
@@ -96,8 +91,7 @@ export default function AddTransactionSheet({
   const type = editing ? editing.type : draftType;
   const isEdit = Boolean(editing);
   const guard = useDemoGuard();
-  const { defaultAccountId, hasAccounts } = useAccounts();
-  const tour = useTourContext();
+  const { defaultAccountId } = useAccounts();
 
   const [form, setForm] = useState(emptyForm);
   // Ticked while adding: also set this entry up to repeat every month.
@@ -159,22 +153,7 @@ export default function AddTransactionSheet({
   // Paid back is only ever part of an expense: nobody pays back income.
   const paidBackNumber = type === "expense" ? Number(form.paidBack) || 0 : 0;
 
-  // Which tip this opening gets, chosen as the sheet opens and held until it
-  // closes — so finishing one doesn't queue the next up behind it. None while
-  // editing: that entry has already happened. Asked for only while the form is
-  // showing, since the keypad covers all three.
-  const [openTip, setOpenTip] = useState(null);
-  const wasOpen = useRef(false);
-  // No dependency list on purpose: it runs after every render and acts only
-  // when the sheet goes from closed to open, which the ref detects.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const open = type !== null;
-    if (open === wasOpen.current) return;
-    wasOpen.current = open;
-    setOpenTip(open && !isEdit ? pickEntryTip(tour, { type, hasAccounts }) : null);
-  });
-  useTour(openTip, Boolean(openTip) && !calcOpen);
+  useEntryTip({ type, isEdit, calcOpen });
 
   // Reseed every time the sheet opens, so a cancelled entry never leaks into
   // the next one and an edit always starts from the row as it stands — unless
@@ -210,44 +189,13 @@ export default function AddTransactionSheet({
   };
 
 
-  /**
-   * The description's return key just puts the keyboard away.
-   *
-   * It must not fall through to the browser's implicit submit — the amount
-   * isn't filled in yet at this point, so that would only ever bounce the form
-   * back with errors. It doesn't jump on to the amount either: that's one
-   * button sitting right there, and moving focus for the user is what made
-   * this form feel like it was fighting them.
-   */
-  const handleDescriptionKeyDown = (e) => {
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    e.currentTarget.blur();
-  };
 
 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Typing is the slowest step in this form, so the description is optional
-    // and falls back to the category — "F & B" reads fine in the
-    // ledger, and the placeholder shows what will be saved before you submit.
-    const description = form.description.trim() || form.category;
-    const amount = Number(form.amount);
-
-    // Validate every field at once so all problems light up together, rather
-    // than surfacing them one refused submit at a time.
-    const nextErrors = {};
-    if (!form.category) nextErrors.category = "Choose a category.";
-    if (form.amount === "" || !Number.isFinite(amount) || amount <= 0) {
-      nextErrors.amount = "Enter an amount greater than $0.";
-    } else if (amount > 1e9) {
-      nextErrors.amount = "Keep it under $1,000,000,000.";
-    }
-    if (!form.date || Number.isNaN(new Date(`${form.date}T00:00:00`).getTime())) {
-      nextErrors.date = "Choose a valid date.";
-    }
+    const { description, amount, errors: nextErrors } = readDraft(form);
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
@@ -345,84 +293,16 @@ export default function AddTransactionSheet({
           />
         </div>
 
-        {/* Three fields, no labels above them. The description carries the
-            name that will be saved as its placeholder, and the date and
-            account show their own values — a label over each would be a third
-            row of text saying what the row already says. */}
-        <div className="space-y-2.5" data-tour="entry.details">
-          <Input
-            id="description"
-            aria-label="Description"
-            // Once a category is picked the placeholder becomes the name
-            // that will actually be saved, so the fallback is visible
-            // rather than a surprise in the ledger.
-            placeholder={
-              form.category ||
-              (type === "income" ? "e.g. Monthly allowance" : "e.g. Lunch")
-            }
-            value={form.description}
-            maxLength={120}
-            enterKeyHint="done"
-            onKeyDown={handleDescriptionKeyDown}
-            onChange={(e) => updateForm({ description: e.target.value })}
-          />
-          {/* Side by side when they fit, stacked when they don't — a wrapping
-              flex row, not a two-column grid.
-
-              The grid was the bug: its tracks were sized off the date input,
-              which on iOS is a native control that refuses to shrink, so it
-              overflowed its column and sat on the account field. Dropping the
-              native appearance (see index.css) makes it shrink, and this makes
-              the point moot either way — anything that still can't fit in half
-              the width pushes the account onto its own line instead of
-              overlapping it. Correctness first; the row is the nice-to-have. */}
-          <div className="flex flex-wrap items-start gap-2.5">
-            <motion.div animate={shakeControls.date} className="flex-1 basis-[9rem]">
-              <Input
-                id="date"
-                type="date"
-                aria-label="Date"
-                value={form.date}
-                required
-                aria-invalid={Boolean(errors.date)}
-                aria-describedby={errors.date ? "tx-date-error" : undefined}
-                className={cn(
-                  errors.date && "border-destructive focus-visible:ring-destructive"
-                )}
-                onChange={(e) => updateForm({ date: e.target.value })}
-              />
-              {errors.date && (
-                <FieldError id="tx-date-error">{errors.date}</FieldError>
-              )}
-            </motion.div>
-
-            {/* The account sits beside the date because it's the same kind of
-                thing: a fact about the entry that is almost always already
-                right. It reads as its value, and opens the chips when it
-                isn't. Hidden entirely for anyone with no accounts, so the
-                form is exactly as it was for them. */}
-            {accountChoice.available && (
-              <AccountSelect
-                type={type}
-                choice={accountChoice}
-                open={accountPickerOpen}
-                onToggle={() => setAccountPickerOpen((v) => !v)}
-                className="flex-1 basis-[9rem]"
-                data-tour="entry.account"
-              />
-            )}
-          </div>
-
-          {accountPickerOpen && accountChoice.available && (
-            <AccountOptions
-              type={type}
-              choice={accountChoice}
-              value={form.accountId}
-              onChange={(id) => updateForm({ accountId: id })}
-              onClose={() => setAccountPickerOpen(false)}
-            />
-          )}
-        </div>
+        <EntryDetails
+          type={type}
+          form={form}
+          error={errors.date}
+          shake={shakeControls.date}
+          choice={accountChoice}
+          pickerOpen={accountPickerOpen}
+          setPickerOpen={setAccountPickerOpen}
+          onChange={updateForm}
+        />
         {/* Paid back: what friends returned for a shared bill. Expenses only.
             The amount above stays the whole bill — it's what left the account —
             and the budget counts the bill less this, on the bill's own date.
@@ -445,38 +325,12 @@ export default function AddTransactionSheet({
           />
         )}
 
-        {/* Rent and subscriptions are realised at the moment you log them, not
-            later in a settings screen — so the offer to repeat sits here,
-            after the date it derives its schedule from. Editing an existing
-            entry doesn't offer it: that entry has already happened, and its
-            rule (if any) is managed on the More page. */}
-        {!isEdit && (
-          <div data-tour="entry.repeat">
-            <SwitchRow
-              checked={repeat}
-              onChange={setRepeat}
-              label="Repeat Monthly"
-              description={
-                repeat && repeatPlan(form.date)
-                  ? repeatPlan(form.date).caption
-                  : undefined
-              }
-            />
-          </div>
-        )}
-        {/* The same slot, while editing a row a rule wrote: say that changing
-            or deleting it is this one time only. Otherwise a one-off month —
-            a cheaper bill, a skipped subscription — looks like it might break
-            the rule, and people leave a wrong entry rather than risk that. */}
-        {isEdit && editing.recurringId && (
-          <p className="flex gap-2 rounded-md bg-surface-2 px-3 py-2.5 text-[13px] leading-snug text-ink-2">
-            <Repeat className="mt-px h-3.5 w-3.5 shrink-0 text-ink-3" aria-hidden="true" />
-            <span>
-              Added by a repeating entry. Changing or deleting it only affects
-              this one, not the entries still to come.
-            </span>
-          </p>
-        )}
+        <EntryRepeat
+          editing={editing}
+          repeat={repeat}
+          onRepeat={setRepeat}
+          date={form.date}
+        />
 
         {formError && (
           <p
