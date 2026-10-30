@@ -44,7 +44,7 @@ Built with **React + Vite**, **Node + Express**, and **MongoDB**, with Google OA
 
 | Layer    | Tech |
 |----------|------|
-| Frontend | React 18, React Router 7, Vite 8, Tailwind CSS 3, shadcn-style UI, Framer Motion, Recharts, lucide-react, Axios |
+| Frontend | React 18, React Router 7, Vite 8, Tailwind CSS 3, shadcn-style UI, Framer Motion, Recharts, lucide-react |
 | Backend  | Node.js, Express 4, Passport (Google OAuth 2.0), JWT, Mongoose 8, web-push, node-cron, Helmet, express-rate-limit |
 | Database | MongoDB 7 (via Docker) |
 | Tests    | Vitest 5 + Testing Library (frontend), `node:test` + mongodb-memory-server (backend), ESLint |
@@ -60,7 +60,7 @@ Built with **React + Vite**, **Node + Express**, and **MongoDB**, with Google OA
   /public          → Twemoji avatar SVGs, app icons, web app manifest, service worker (push), theme-init.js
   /scripts         → Dev tools: icons.mjs renders the app icons, shots.mjs screenshots the design harness
   /src
-    /api           → Axios client + endpoint helpers
+    /api           → fetch-based API client + endpoint helpers
     /animations    → Shared Framer Motion variants
     /assets        → Brand mark
     /components    → Reusable UI (incl. /ui shadcn-style primitives) and the bottom sheets
