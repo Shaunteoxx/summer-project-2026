@@ -64,8 +64,8 @@ readers don't announce capitalisation), and anything CSS uppercases anyway —
 that merely hasn't been spent yet.
 
 - Home's strip cell is **Reserved** — a target, a plan.
-- Home's tile is **Unspent So Far**, derived from the pace bar so the two always
-  sum to 100.
+- Home's pace bar is labelled **N% spent**. The **Unspent So Far** tile that used
+  to sit beside it is gone, so Home has no unspent figure to disagree with the bar.
 - Tracker's ring is **Unspent** — a live period, so nothing is saved yet.
 - `percentageSaved` on **Stats** keeps its income denominator and its name:
   those months have finished, so money not spent really was saved.
