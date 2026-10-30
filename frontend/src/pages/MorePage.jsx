@@ -15,8 +15,9 @@ import {
   Bell,
   Vibrate,
   Compass,
-  Lightbulb,
   Smartphone,
+  ChevronRight,
+  Trash2,
 } from "lucide-react";
 
 import PageWrapper from "@/components/PageWrapper";
@@ -33,7 +34,6 @@ import BudgetPeriodSheet from "@/components/BudgetPeriodSheet";
 import DeleteAccountSheet from "@/components/DeleteAccountSheet";
 import NotificationsSheet, { DEFAULT_HOURS, notificationsMeta } from "@/components/NotificationsSheet";
 import { Section, Row, RowValue, Segmented } from "@/components/SettingsList";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useBudgetPeriod } from "@/hooks/useBudgetPeriod";
 import { useAccounts } from "@/hooks/useAccounts";
@@ -218,16 +218,21 @@ export default function MorePage() {
 
   return (
     <PageWrapper>
-      {/* Profile header */}
-      <motion.div variants={fadeUp} initial="initial" animate="animate">
-        <div className="flex items-center gap-3.5">
-          <button
-            onClick={openEdit}
-            aria-label="Edit profile"
-            className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            <Avatar user={user} className="h-[54px] w-[54px]" />
-          </button>
+      {/* Profile header. The whole header opens Edit Profile: it used to offer
+          two ways in (the avatar and an Edit button) that did the same thing.
+          The button sits behind the header rather than around it, because a
+          button can't hold the page's h1; the content above it lets taps
+          through, and its hover and pressed fills show behind the text the
+          way a row's do. The chevron lines up with the rows' chevrons. */}
+      <motion.div variants={fadeUp} initial="initial" animate="animate" className="relative">
+        <button
+          type="button"
+          onClick={openEdit}
+          aria-label="Edit profile"
+          className="absolute -inset-x-2 -inset-y-2 rounded-md transition-colors duration-base ease-out hover:bg-surface-2 active:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <div className="pointer-events-none relative flex items-center gap-3.5 pr-4">
+          <Avatar user={user} className="h-[54px] w-[54px] shrink-0" />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-[19px] font-semibold tracking-[-0.02em]">
               {user?.username ?? "Your Account"}
@@ -236,19 +241,14 @@ export default function MorePage() {
               <p className="mt-0.5 truncate text-meta text-ink-3">{user.email}</p>
             )}
           </div>
-          <Button
-            variant="outline"
-            onClick={openEdit}
-            className="h-8 shrink-0 rounded-sm px-3.5 text-[13px] font-medium"
-          >
-            Edit
-          </Button>
+          <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" aria-hidden="true" />
         </div>
       </motion.div>
 
-      {/* Browse — Stats and Friends are destinations, not settings, but they
-          live behind this tab, so they read as the first list on the page. */}
-      <Section label="Browse">
+      {/* Plan and Friends are destinations, not settings, but they live behind
+          this tab, so they're the first list on the page. They name
+          themselves, so the group has no heading. */}
+      <Section>
         {shortcuts.map(({ to, label, desc, icon }) => (
           <Row
             key={to}
@@ -260,9 +260,11 @@ export default function MorePage() {
         ))}
       </Section>
 
-      {/* Budget — each row's current setting sits at the right edge as a
-          tabular figure, so the section reads as a summary you can scan
-          rather than four descriptions you have to parse. */}
+      {/* Budget — the two settings that shape every figure in the app come
+          first, Budget Period then Savings Target, in the order the More tour
+          visits them; the tour's three optional extras follow. Each row's
+          current setting sits at the right edge as a tabular figure, so the
+          section reads as a summary you can scan. */}
       <Section label="Budget">
         <Row
           icon={CalendarRange}
@@ -297,6 +299,22 @@ export default function MorePage() {
             )
           }
           onClick={openPeriod}
+        />
+        <Row
+          icon={PiggyBank}
+          title="Savings Target"
+          data-tour="more.savings"
+          meta={
+            isDays
+              ? period.current
+                ? `${formatPeriodLabel(period.current)} · reserved first`
+                : "Start a period to set one"
+              : repeatSavingsOn
+                ? `${monthName(now.getMonth())} · repeats monthly`
+                : `${monthName(now.getMonth())} · reserved first`
+          }
+          value={<RowValue strong>{formatMoney(currentSavings)}</RowValue>}
+          onClick={openSavings}
         />
         <Row
           icon={Wallet}
@@ -337,25 +355,12 @@ export default function MorePage() {
             setRecurringOpen(true);
           }}
         />
-        <Row
-          icon={PiggyBank}
-          title="Savings Target"
-          data-tour="more.savings"
-          meta={
-            isDays
-              ? period.current
-                ? `${formatPeriodLabel(period.current)} · reserved first`
-                : "Start a period to set one"
-              : repeatSavingsOn
-                ? `${monthName(now.getMonth())} · repeats monthly`
-                : `${monthName(now.getMonth())} · reserved first`
-          }
-          value={<RowValue strong>{formatMoney(currentSavings)}</RowValue>}
-          onClick={openSavings}
-        />
       </Section>
 
-      {/* Preferences */}
+      {/* Preferences — Notifications comes straight after Appearance, as the one
+          here that does something every day; the set-once device settings
+          follow, then Tours & Tips. Help used to be a section of its own with
+          two rows; the Tips switch now lives inside the tours sheet. */}
       <Section label="Preferences">
         <Row
           icon={isDark ? Moon : Sun}
@@ -374,6 +379,15 @@ export default function MorePage() {
             />
           }
         />
+        {!["loading", "hidden"].includes(notifications.status) && (
+          <Row
+            icon={Bell}
+            title="Notifications"
+            data-tour="more.notifications"
+            meta={notificationsMeta(notifications, { ...DEFAULT_HOURS, ...user?.notificationHours })}
+            onClick={() => setNotificationsOpen(true)}
+          />
+        )}
         {iconChoice && (
           <Row
             icon={Smartphone}
@@ -405,62 +419,39 @@ export default function MorePage() {
             value={<SwitchTrack checked={vibration} />}
           />
         )}
-        {!["loading", "hidden"].includes(notifications.status) && (
-          <Row
-            icon={Bell}
-            title="Notifications"
-            data-tour="more.notifications"
-            meta={notificationsMeta(notifications, { ...DEFAULT_HOURS, ...user?.notificationHours })}
-            onClick={() => setNotificationsOpen(true)}
-          />
-        )}
-      </Section>
-
-      {/* Help: every page's tour, to replay, and the switch for the tips that
-          turn up as you go. The switch is per account, like the tours. */}
-      <Section label="Help">
+        {/* Every page's tour, to replay, and the switch for the tips that turn
+            up as you go (per account, like the tours), both in one sheet. */}
         <Row
           icon={Compass}
-          title="Page Tours"
-          meta="A quick look at what's on each page"
+          title="Tours & Tips"
+          meta={tour.off ? "Tips off — tours only when you ask" : "A quick look at what's on each page"}
           onClick={() => setToursOpen(true)}
           data-tour="more.help"
         />
-        <Row
-          icon={Lightbulb}
-          title="Tips"
-          meta={tour.off ? "Off — tours only when you ask" : "Shown as you come across things"}
-          chevron={false}
-          onClick={() => tour.setOff(!tour.off)}
-          role="switch"
-          aria-checked={!tour.off}
-          value={<SwitchTrack checked={!tour.off} />}
-        />
       </Section>
 
-      {/* Account */}
-      <Section label="Account">
+      {/* Account. Delete Account sits under Log Out, where people look for it,
+          as a row rather than a link so the page ends on one kind of thing.
+          It's marked by red text and a red icon but keeps the neutral tile and
+          an ordinary row's size: as a full-width red button it once outweighed
+          Log Out and everything above it. The confirmation sheet is unchanged. */}
+      <Section>
         <Row icon={LogOut} title="Log Out" chevron={false} onClick={logout} />
-      </Section>
-
-      {/* Deleting your account is a real action but not a common one. As a
-          full-width red button it had the same visual weight as Log out and
-          more than anything above it; as a text link it stays reachable
-          without shouting. The confirmation sheet is unchanged. */}
-      <div className="mt-[30px] text-center">
-        <button
+        <Row
+          icon={Trash2}
+          title="Delete Account"
+          tone="negative"
+          chevron={false}
           onClick={() => {
             if (guard()) return;
             setDeleteOpen(true);
           }}
-          className="rounded-sm px-2.5 py-1.5 text-[13px] font-medium text-negative transition-colors duration-base ease-out hover:bg-negative/[0.08] active:bg-negative/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-negative"
-        >
-          Delete Account
-        </button>
-        <p className="mt-4 text-[11.5px] leading-relaxed text-ink-3">
-          Broke No More · Avatars by Twemoji (CC-BY 4.0)
-        </p>
-      </div>
+        />
+      </Section>
+
+      <p className="mt-6 text-center text-[11.5px] leading-relaxed text-ink-3">
+        Broke No More · Avatars by Twemoji (CC-BY 4.0)
+      </p>
 
       <AccountsSheet open={accountsOpen} onClose={() => setAccountsOpen(false)} />
 
