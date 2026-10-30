@@ -12,6 +12,10 @@ import { fadeUp } from "@/animations/variants";
    old version gave every setting a card, so nothing on the page was quieter
    than anything else.                                                      */
 
+/**
+ * The label is optional: rows that name themselves (Plan and Friends, Log Out)
+ * read fine without a heading over them.
+ */
 export function Section({ label, children }) {
   return (
     <motion.section
@@ -20,7 +24,7 @@ export function Section({ label, children }) {
       animate="animate"
       className="mt-6"
     >
-      <h2 className="mb-2.5 px-0.5 text-overline text-ink-3">{label}</h2>
+      {label && <h2 className="mb-2.5 px-0.5 text-overline text-ink-3">{label}</h2>}
       <Card className="overflow-hidden [&>*+*]:border-t [&>*+*]:border-hairline">
         {children}
       </Card>

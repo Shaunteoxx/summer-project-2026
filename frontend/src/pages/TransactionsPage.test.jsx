@@ -1437,8 +1437,12 @@ describe("saving without waiting", () => {
 
     server.reject(refused);
 
+    // The sheet opens a render before it's reseeded on the draft and the
+    // reason (AddTransactionSheet does that in an effect), so wait for the
+    // reason instead of reading the sheet the moment it appears. Reading it
+    // straight away failed now and then on a busy machine.
     const sheet = within(await screen.findByRole("dialog"));
-    expect(sheet.getByText("The server said no.")).toBeInTheDocument();
+    expect(await sheet.findByText("The server said no.")).toBeInTheDocument();
     expect(sheet.getByLabelText("Description")).toHaveValue("Chicken rice");
     expect(sheet.getByLabelText(/^Amount/)).toHaveTextContent("−$4.00");
     expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
@@ -1502,10 +1506,11 @@ describe("saving without waiting", () => {
     expect(await screen.findByText("Dinner")).toBeInTheDocument();
     server.reject(refused);
 
-    // ...and is undone in the ledger, but not in the editor it reopens.
+    // ...and is undone in the ledger, but not in the editor it reopens. As in
+    // the test above, the reason arrives a render after the sheet does.
     const editor = within(await screen.findByRole("dialog", { name: "Edit Expense" }));
+    expect(await editor.findByText("The server said no.")).toBeInTheDocument();
     expect(editor.getByLabelText("Description")).toHaveValue("Dinner");
-    expect(editor.getByText("The server said no.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit Lunch" })).toBeInTheDocument();
   });
 });

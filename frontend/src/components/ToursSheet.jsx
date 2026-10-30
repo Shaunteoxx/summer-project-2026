@@ -1,14 +1,21 @@
 import { RotateCcw } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
+import SwitchRow from "@/components/SwitchRow";
 import { Button } from "@/components/ui/button";
 import { useTourContext } from "@/tour/TourProvider";
 import { ALL_TOURS, REPLAY_WITH, REPLAYABLE, TOURS } from "@/tour/tours";
 
 /**
- * Every page's tour, to run again. Replaying one takes you to its page and
- * starts it there — tips on or off, because asking for a tour by name is the
- * opposite of having turned them off.
+ * Every page's tour, to run again, and the switch for the tips that turn up as
+ * you go. Replaying one takes you to its page and starts it there — tips on or
+ * off, because asking for a tour by name is the opposite of having turned them
+ * off.
+ *
+ * The Tips switch used to be its own row on More. It lives here now, beside
+ * the tours it governs, so Help takes one row there instead of two. It comes
+ * first because the list runs to seven tours, which would push a switch at the
+ * bottom off a small screen.
  */
 export default function ToursSheet({ open, onClose }) {
   const tour = useTourContext();
@@ -19,8 +26,17 @@ export default function ToursSheet({ open, onClose }) {
   };
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Page Tours">
+    <BottomSheet open={open} onClose={onClose} title="Tours & Tips">
       <div className="space-y-4">
+        <SwitchRow
+          checked={!tour.off}
+          onChange={(on) => tour.setOff(!on)}
+          label="Tips"
+          description={
+            tour.off ? "Off — tours only when you ask" : "Shown as you come across things"
+          }
+        />
+
         <p className="text-[13px] leading-relaxed text-ink-3">
           Each page has a short tour of what&apos;s on it. Replay one and it
           starts as soon as you get there.
