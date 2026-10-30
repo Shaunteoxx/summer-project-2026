@@ -9,7 +9,7 @@ import { BADGES, badgeAt, nextBadge, tierFor } from "@/lib/streakBadges";
  * (off your best streak — the streak resets, what you once got to doesn't),
  * and the ones still ahead, with the days to the next.
  */
-export default function BadgesSheet({ open, onClose, currentStreak, longestStreak }) {
+export default function StreakBadgesSheet({ open, onClose, currentStreak, longestStreak }) {
   const tier = tierFor(currentStreak);
   const bestTier = tierFor(longestStreak);
   const top = BADGES.length;

@@ -9,7 +9,7 @@ import { formatDay, formatPeriodLabel } from "@/lib/period";
  * as restores being broken. The one exception is the grace day, when the ended
  * period's last day can still be restored with that period's own restores.
  */
-export default function BreakNote({ breakDay, restore, noun, mode }) {
+export default function StreakBreakNote({ breakDay, restore, noun, mode }) {
   if (!breakDay) return null;
   const day = formatDay(breakDay.date);
   const label = formatPeriodLabel(breakDay.period, { mode });

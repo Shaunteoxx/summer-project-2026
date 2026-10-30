@@ -6,13 +6,13 @@ import { Trophy, Shield, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import BadgeSlot from "@/components/streak/BadgeSlot";
-import BadgesSheet from "@/components/streak/BadgesSheet";
-import BreakNote from "@/components/streak/BreakNote";
-import DayCell from "@/components/streak/DayCell";
-import RestoreSheet from "@/components/streak/RestoreSheet";
-import RollingNumber from "@/components/streak/RollingNumber";
-import StreakPrompt from "@/components/streak/StreakPrompt";
+import StreakBadgeSlot from "@/components/StreakBadgeSlot";
+import StreakBadgesSheet from "@/components/StreakBadgesSheet";
+import StreakBreakNote from "@/components/StreakBreakNote";
+import StreakDayCell from "@/components/StreakDayCell";
+import StreakRestoreSheet from "@/components/StreakRestoreSheet";
+import RollingNumber from "@/components/RollingNumber";
+import StreakPrompt from "@/components/StreakPrompt";
 import { fetchStreak, restoreStreak } from "@/api/endpoints";
 import { useToast } from "@/hooks/useToast";
 import { useDemoGuard } from "@/hooks/useDemoGuard";
@@ -211,7 +211,7 @@ export default function StreakCard() {
                 }
                 className="shrink-0 rounded-full transition-transform duration-micro ease-out active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <BadgeSlot
+                <StreakBadgeSlot
                   days={shownStreak}
                   lit={celebrating}
                   burst={celebrating && (moment.upgraded || moment.newBest)}
@@ -332,7 +332,7 @@ export default function StreakCard() {
             className="mt-3 flex w-full justify-between gap-1.5 rounded-sm transition-opacity duration-base ease-out hover:opacity-80 active:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {last7.map((d) => (
-              <DayCell key={d.date} day={d} />
+              <StreakDayCell key={d.date} day={d} />
             ))}
           </button>
 
@@ -389,7 +389,7 @@ export default function StreakCard() {
               </Button>
             )}
           </div>
-          <BreakNote
+          <StreakBreakNote
             breakDay={breakDay}
             restore={restore}
             noun={noun}
@@ -398,7 +398,7 @@ export default function StreakCard() {
         </CardContent>
       </Card>
 
-      <BadgesSheet
+      <StreakBadgesSheet
         open={badgesOpen}
         onClose={() => setBadgesOpen(false)}
         currentStreak={currentStreak}
@@ -406,7 +406,7 @@ export default function StreakCard() {
       />
 
       {/* Restore confirmation */}
-      <RestoreSheet
+      <StreakRestoreSheet
         open={confirmOpen}
         onClose={() => !restoring && setConfirmOpen(false)}
         onCancel={() => setConfirmOpen(false)}

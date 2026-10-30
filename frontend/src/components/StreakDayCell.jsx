@@ -21,7 +21,7 @@ const CELL = {
   none: { Icon: Minus, cls: "bg-surface-2 text-ink-3/60", label: "no data" },
 };
 
-export default function DayCell({ day }) {
+export default function StreakDayCell({ day }) {
   const isToday = day.status === "today";
   const within = isToday ? day.within : day.status === "win";
   const meta = isToday

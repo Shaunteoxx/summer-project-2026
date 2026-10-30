@@ -19,7 +19,7 @@ import { EASE } from "@/animations/variants";
  * on an ordinary visit: only a rise moves anything, once, on the first look of
  * the day.
  */
-export default function BadgeSlot({ days, lit, burst }) {
+export default function StreakBadgeSlot({ days, lit, burst }) {
   const badge = badgeFor(days);
   const shown = badge ?? badgeAt(1);
   const next = nextBadge(days);

@@ -12,7 +12,7 @@ import { formatDay, formatPeriodLabel } from "@/lib/period";
  * StreakCard ignores mid-restore; `onCancel` is the button, which is disabled
  * then anyway.
  */
-export default function RestoreSheet({
+export default function StreakRestoreSheet({
   open,
   onClose,
   onCancel,
