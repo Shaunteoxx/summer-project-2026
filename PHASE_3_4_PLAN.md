@@ -1,7 +1,26 @@
 # Phases 3 & 4 — plan
 
-> **Status: Phase 3 done 2026-10-30. Phase 4 in progress.** The plan below is
-> kept as written. Where Phase 3 went differently:
+> **Status: Phases 3 and 4 done 2026-10-30.** The plan below is kept as
+> written.
+>
+> **Phase 4** measured the first visit under Vite 8: the four scripts
+> `index.html` loads came to 450.6 kB, 151.2 kB gzipped. The largest parts,
+> gzipped: react-dom 40.7 kB, framer-motion 35.0, axios 20.8, React Router 13.2,
+> the tour code 9.0, tailwind-merge 6.6.
+>
+> - **One change: the browser's fetch instead of axios.** The first visit is now
+>   393.9 kB, 130.8 kB gzipped, 20.4 kB (13%) less. `src/api/client.test.js`
+>   pins the client's behaviour and was committed before the swap.
+> - **The tour code stays.** At most about 5 kB could leave the first visit, and
+>   only by splitting `tours.js` and downloading the tour runner when a tour
+>   starts, where a failed download would need handling of its own.
+> - **framer-motion stays.** Most pages fade in from opacity 0 (`fadeUp`), so
+>   with the animation code loaded separately they would stay blank until it
+>   arrived.
+> - The rest are fixed costs: React, the router, tailwind-merge and the
+>   bundler's runtime.
+>
+> **Phase 3**, where it went differently:
 >
 > - **Where the pieces went.** Into `components/`, `hooks/` and `lib/`, not new
 >   `tracker/`, `streak/` and `transactions/` folders. The streak pieces carry
