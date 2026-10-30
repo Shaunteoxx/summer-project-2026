@@ -23,8 +23,9 @@ Single screenshots of each version are in [`screens/`](screens/).
 
 ## As built
 
-The Cleaned Up version, with every row's description kept. These are
-screenshots of the real `MorePage` component with the same example data in
-place of a backend, at the same size.
+The Cleaned Up version, with every row's description kept and Delete Account
+left as the red link under Log Out. These are screenshots of the real
+`MorePage` component with the same example data in place of a backend, at the
+same size.
 
 <img src="screens/5-built-full-page.png" width="393" alt="The More page as built"> <img src="screens/6-built-tours-tips-sheet.png" width="393" alt="The Tours & Tips sheet, with the Tips switch at the top">
