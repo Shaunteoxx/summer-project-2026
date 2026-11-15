@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI Review Mockups</title>
+<style>
+  :root {
+    --canvas:#FBFBF9; --surface:#fff; --surface-2:#F3F3F0; --surface-3:#EAEAE6;
+    --hairline:#E7E7E2; --hairline-strong:#D8D8D2;
+    --ink:#17181A; --ink-2:#55595E; --ink-3:#6B6F74;
+    --positive:#0F7A56; --negative:#B4342A; --pos-tint:#E4F0EA; --neg-tint:#F8E6E3;
+    --food:#CC624E; --transport:#B9740F; --job:#A968BC; --page:#EFEFEA; --note:#8F5008;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --canvas:#161618; --surface:#1F1F21; --surface-2:#28282C; --surface-3:#333338;
+      --hairline:#2F2F32; --hairline-strong:#404045;
+      --ink:#F3F3F2; --ink-2:#B0B1B5; --ink-3:#96979C;
+      --positive:#45D19C; --negative:#EE6C63; --pos-tint:#1F3A30; --neg-tint:#402422;
+      --food:#FE9580; --transport:#F0A346; --job:#DB98EF; --page:#0E0E10; --note:#F0B24A;
+    }
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--page); color:var(--ink); font:15px/1.45 Geist, ui-sans-serif, system-ui, -apple-system, sans-serif; padding:24px 16px 64px; }
+  .wrap { max-width:1040px; margin:0 auto; }
+  h1 { font-size:27px; letter-spacing:-.025em; line-height:1.15; }
+  .lede { color:var(--ink-2); margin:8px 0 32px; max-width:64ch; }
+  section { margin:0 0 48px; }
+  h2 { font-size:19px; letter-spacing:-.02em; margin-bottom:4px; }
+  .sub { color:var(--ink-2); font-size:13px; margin-bottom:16px; max-width:70ch; }
+  .row { display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start; }
+  .col { flex:0 0 auto; }
+  .tag { display:inline-block; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; margin-bottom:8px; color:var(--ink-3); }
+  .tag.after { color:var(--positive); }
+  .notes { flex:1 1 260px; min-width:240px; font-size:13px; color:var(--ink-2); }
+  .notes li { margin:0 0 8px 18px; }
+  .notes b { color:var(--ink); font-weight:600; }
+  .ref { color:var(--note); font-weight:600; }
+
+  /* phone */
+  .phone { width:320px; background:var(--canvas); border:1px solid var(--hairline-strong); border-radius:28px; overflow:hidden; position:relative; }
+  .bar { display:flex; align-items:center; gap:8px; padding:12px 16px; background:var(--surface); border-bottom:1px solid var(--hairline); font-weight:600; }
+  .logo { width:22px; height:22px; border-radius:6px; background:var(--ink); }
+  .bar .sp { flex:1; }
+  .ava { width:28px; height:28px; border-radius:50%; background:var(--surface-2); display:grid; place-items:center; font-size:15px; }
+  .ico { width:28px; height:28px; display:grid; place-items:center; color:var(--ink-2); }
+  .pad { padding:16px; }
+  .ov { font-size:12px; letter-spacing:.06em; color:var(--ink-3); font-weight:500; }
+  .ov.up { text-transform:uppercase; }
+  .meta { font-size:12.5px; color:var(--ink-3); }
+  .cap { font-size:13px; color:var(--ink-2); }
+  .hero { text-align:center; padding:8px 0 4px; }
+  .hero .n { font-size:44px; font-weight:600; letter-spacing:-.03em; line-height:1.1; }
+  .track { height:6px; border-radius:3px; background:var(--surface-3); position:relative; margin:6px 0; }
+  .track i { position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:var(--ink); }
+  .track i.g { background:var(--positive); }
+  .track b { position:absolute; top:-3px; width:2px; height:12px; background:var(--ink-2); }
+  .between { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .strip { display:grid; grid-template-columns:1fr 1fr 1fr; border-block:1px solid var(--hairline); margin-top:12px; }
+  .strip div { padding:10px 0; text-align:center; }
+  .strip div + div { border-left:1px solid var(--hairline); }
+  .strip .v { font-size:17px; font-weight:500; letter-spacing:-.02em; }
+  .card { background:var(--surface); border:1px solid var(--hairline); border-radius:18px; padding:16px; margin-top:14px; }
+  .pos { color:var(--positive); } .neg { color:var(--negative); }
+  .days { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:12px; }
+  .days span { height:32px; border-radius:8px; background:var(--pos-tint); display:grid; place-items:center; color:var(--positive); font-size:13px; }
+  .days span.t { background:var(--ink); color:var(--surface); }
+  .btn { min-height:44px; border-radius:12px; border:1px solid var(--hairline-strong); background:var(--surface); padding:0 16px; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-weight:600; font-size:15px; color:var(--ink); }
+  .btn.pri { background:var(--ink); color:var(--surface); border-color:var(--ink); width:100%; }
+  .btn.off { background:var(--surface-3); color:var(--ink-3); border-color:var(--surface-3); width:100%; }
+  .btn.ghost { border-color:transparent; background:transparent; }
+  .link { min-height:44px; display:inline-flex; align-items:center; font-size:13px; font-weight:500; }
+  .item { display:flex; align-items:center; gap:12px; padding:12px 16px; background:var(--surface); border-top:1px solid var(--hairline); }
+  .chip { width:34px; height:34px; border-radius:10px; flex:none; opacity:.9; }
+  .item .g { flex:1; min-width:0; }
+  .item .amt { font-size:17px; letter-spacing:-.02em; font-weight:500; }
+  .dock { position:absolute; left:12px; right:12px; bottom:12px; display:flex; gap:10px; align-items:center; }
+  .tabs { flex:1; height:60px; border-radius:30px; background:var(--surface); border:1px solid var(--hairline); display:grid; grid-template-columns:repeat(4,1fr); padding:5px; box-shadow:0 12px 32px -12px rgb(0 0 0 / .25); }
+  .tabs div { display:grid; place-items:center; align-content:center; gap:2px; font-size:12px; border-radius:25px; color:var(--ink-2); }
+  .tabs div.on { background:var(--surface-2); color:var(--ink); font-weight:600; }
+  .tabs em { width:18px; height:18px; border:2px solid currentColor; border-radius:5px; font-style:normal; }
+  .fab { width:60px; height:60px; border-radius:50%; background:var(--ink); color:var(--surface); display:grid; place-items:center; font-size:28px; flex:none; }
+  .seg { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; background:var(--surface-2); border-radius:12px; padding:3px; }
+  .seg span { min-height:44px; display:grid; place-items:center; border-radius:10px; font-size:14px; color:var(--ink-2); }
+  .seg span.on { background:var(--surface); color:var(--ink); font-weight:600; box-shadow:0 1px 2px rgb(0 0 0 / .08); }
+  .field { min-height:48px; border:1px solid var(--hairline-strong); border-radius:12px; background:var(--surface); padding:0 14px; display:flex; align-items:center; gap:8px; font-size:15px; }
+  .field.ph { color:var(--ink-3); }
+  label.l { display:block; font-size:12.5px; color:var(--ink-2); margin:12px 0 6px; font-weight:500; }
+  .sheet { background:var(--surface); border-radius:22px 22px 0 0; padding:10px 16px 16px; border-top:1px solid var(--hairline); }
+  .grab { width:36px; height:4px; border-radius:2px; background:var(--hairline-strong); margin:0 auto 12px; }
+  .cats { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  .cats div { text-align:center; font-size:12px; color:var(--ink-2); }
+  .cats i { display:block; height:44px; border-radius:12px; background:var(--surface-2); margin-bottom:4px; }
+  .cats .on i { outline:2px solid var(--ink); }
+  .keys { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin:12px 0; }
+  .keys span { min-height:48px; border-radius:10px; background:var(--surface-2); display:grid; place-items:center; font-size:19px; }
+  .keys span.op { background:var(--surface-3); }
+  .keys span.w2 { grid-column:span 2; }
+  .cal { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal .h { font-size:12px; color:var(--ink-3); text-align:center; padding:4px 0; }
+  .cal .d { min-height:44px; border-radius:10px; background:var(--pos-tint); display:grid; place-items:center; align-content:center; font-size:14px; font-weight:600; color:var(--positive); position:relative; }
+  .cal .d.o { background:var(--neg-tint); color:var(--negative); outline:1.5px solid var(--negative); }
+  .cal .d.t { background:var(--ink); color:var(--surface); }
+  .cal .d.f { background:transparent; border:1px dashed var(--hairline-strong); color:var(--ink-3); font-weight:400; }
+  .cal .d u { position:absolute; top:5px; right:5px; width:5px; height:5px; border-radius:50%; background:currentColor; }
+  .old { font-size:9px !important; }
+  table.scale { border-collapse:collapse; font-size:13px; width:100%; max-width:680px; }
+  table.scale th, table.scale td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--hairline-strong); vertical-align:top; }
+  table.scale th { color:var(--ink-3); font-weight:500; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>UI Review Mockups</h1>
+  <p class="lede">Proposed fixes for the November 2026 UI review, drawn with the app's own tokens. Each screen shows the target state; the notes beside it name what changed, numbered to match <b>design/UI_REVIEW.md</b>. Layout only — icons are placeholders.</p>
+
+  <section>
+    <h2>Type and tap-target floors</h2>
+    <p class="sub">The two rules behind most of the changes below.</p>
+    <table class="scale">
+      <tr><th>Used for</th><th>Now</th><th>Target</th></tr>
+      <tr><td>Tab bar labels</td><td>10px</td><td>12px</td></tr>
+      <tr><td>Overline labels (In / Out / Reserved, section heads, weekday letters)</td><td>9.5–11px</td><td>12px</td></tr>
+      <tr><td>Calendar day amounts and month tag</td><td>8–9px</td><td>moved off the cell (see Tracker)</td></tr>
+      <tr><td>Ledger day headers, pace captions</td><td>11px</td><td>12.5px (the existing <code>meta</code> size)</td></tr>
+      <tr><td>Anything tappable</td><td>28–39px in places</td><td>44×44px minimum hit area</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Home</h2>
+    <p class="sub">One fact, once. The streak card keeps today and the streak; forecasting moves to Plan.</p>
+    <div class="row">
+      <div class="col"><span class="tag after">Target</span>
+        <div class="phone" style="padding-bottom:88px">
+          <div class="bar"><span class="logo"></span>Broke No More<span class="sp"></span><span class="ava">🐼</span></div>
+          <div class="pad">
+            <div style="font-size:21px;font-weight:600;letter-spacing:-.02em">Welcome back, Shaun</div>
+            <div class="meta">16 Nov · 15 days left in November</div>
+            <div class="hero"><div class="ov" style="margin-top:14px">Left to Spend This Month</div><div class="n">$675.93</div></div>
+            <div class="between"><span class="meta">20% spent</span><span class="link pos">$250.93 under pace ›</span></div>
+            <div class="track" style="margin-top:0"><i style="width:20%"></i><b style="left:50%"></b></div>
+            <div class="strip">
+              <div><div class="ov up">In</div><div class="v pos">$1,050.00</div></div>
+              <div><div class="ov up">Out</div><div class="v">$174.07</div></div>
+              <div><div class="ov up">Reserved</div><div class="v">$200.00</div></div>
+            </div>
+            <div class="card">
+              <div class="between"><div><span style="font-size:28px;font-weight:600">8</span> <span class="cap">days on budget</span></div><span class="meta">Best 26 · Silver in 2</span></div>
+              <div class="between" style="margin-top:10px"><span>Today</span><span class="cap">$12.15 of $45.87</span></div>
+              <div class="track"><i class="g" style="width:26%"></i></div>
+              <div class="cap pos" style="font-weight:500">$33.72 left to spend today</div>
+              <div class="days"><span>✓</span><span>✓</span><span>✓</span><span>✓</span><span>✓</span><span>✓</span><span class="t">●</span></div>
+              <div class="between" style="margin-top:12px;border-top:1px solid var(--hairline);padding-top:10px"><span class="cap"><b style="color:var(--ink)">3</b> restores left</span><span class="btn">Restore</span></div>
+            </div>
+          </div>
+          <div class="dock"><div class="tabs"><div class="on"><em></em>Home</div><div><em></em>Ledger</div><div><em></em>Tracker</div><div><em></em>More</div></div><div class="fab">+</div></div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li><span class="ref">#5</span> <b>"15 days left" appears once</b>, in the date line. Removed from the streak card. "Monthly · 1 – 30 Nov" and "50% of the month passed" are dropped; the tick on the bar already shows it.</li>
+        <li><span class="ref">#5</span> <b>Streak card loses the forecast line and the Plan link.</b> Both live on Plan. Best and next badge share one line.</li>
+        <li><span class="ref">#3</span> <b>"3 restores left"</b> — short enough never to truncate. The shield icons go; the number says it.</li>
+        <li><span class="ref">#6</span> <b>No theme toggle in the top bar.</b> It stays under More → Appearance.</li>
+        <li><span class="ref">#14</span> <b>Greets by a display name</b>, falling back to the handle only if there is none.</li>
+        <li><span class="ref">#2</span> <b>"Under pace" and Restore are 44px tall.</b></li>
+        <li><span class="ref">#1, #3</span> <b>Tab labels at 12px</b>, and the tab reads "Ledger" so it fits. (If you'd rather keep "Transactions", the label needs the icon-only treatment instead.)</li>
+        <li><span class="ref">#1</span> Overlines at 12px.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Transactions</h2>
+    <p class="sub">The list is the page. Account activity becomes one line that opens the full card.</p>
+    <div class="row">
+      <div class="col"><span class="tag after">Target</span>
+        <div class="phone" style="padding-bottom:88px">
+          <div class="bar"><span class="logo"></span>Broke No More<span class="sp"></span><span class="ava">🐼</span></div>
+          <div class="pad" style="padding-bottom:8px">
+            <div style="font-size:27px;font-weight:600;letter-spacing:-.025em">Transactions</div>
+            <div class="meta">November 2026 · 22 entries</div>
+            <div class="field ph" style="margin-top:12px">⌕ Search</div>
+            <div class="seg" style="margin-top:10px"><span class="on">All</span><span>Expenses</span><span>Income</span></div>
+            <div class="between" style="margin-top:10px;min-height:44px;border-block:1px solid var(--hairline)"><span class="cap">2 accounts · <span class="pos">+$1,450.00</span> · −$574.07</span><span class="cap">›</span></div>
+          </div>
+          <div class="between" style="padding:6px 16px"><span class="meta">Today · 16 Nov</span><span class="meta">−$12.15</span></div>
+          <div class="item"><span class="chip" style="background:var(--food)"></span><div class="g"><div>Groceries</div><div class="meta">F &amp; B · Trust</div></div><span class="amt">−$7.38</span></div>
+          <div class="item"><span class="chip" style="background:var(--transport)"></span><div class="g"><div>Bus / MRT</div><div class="meta">Transport · Trust</div></div><span class="amt">−$4.77</span></div>
+          <div class="between" style="padding:10px 16px 6px"><span class="meta">Yesterday · 15 Nov</span><span class="meta pos">+$239.34</span></div>
+          <div class="item"><span class="chip" style="background:var(--job)"></span><div class="g"><div>Part-time shift</div><div class="meta">Job · DBS</div></div><span class="amt pos">+$250.00</span></div>
+          <div class="dock"><div class="tabs"><div><em></em>Home</div><div class="on"><em></em>Ledger</div><div><em></em>Tracker</div><div><em></em>More</div></div><div class="fab">+</div></div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li><span class="ref">#4</span> <b>The first entry is in view without scrolling.</b> Account Activity collapses to one 44px row; tapping it opens the existing card (with Transfer) in a sheet.</li>
+        <li><span class="ref">#3</span> <b>Search placeholder is just "Search"</b>, full width. The account filter moves into the collapsed row's sheet, or behind a filter icon in the field.</li>
+        <li><span class="ref">#2</span> <b>Filter pills are 44px tall.</b></li>
+        <li><span class="ref">#15</span> <b>No bin on every row.</b> Tapping a row opens the edit sheet, which has Delete at the bottom; swipe-to-delete stays on touch. Undo toast unchanged. <i>This reverses an earlier choice of yours — skip it if you still prefer the visible bin, but then make it 44×44.</i></li>
+        <li><span class="ref">#1</span> Day headers at 12.5px.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>New entry and the keypad</h2>
+    <p class="sub">One field style, an amount that looks like a field, and one primary button per sheet.</p>
+    <div class="row">
+      <div class="col"><span class="tag after">Entry sheet</span>
+        <div class="phone" style="background:var(--surface-3)">
+          <div style="height:40px"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="between"><b style="font-size:19px">New Entry</b><span class="ico">✕</span></div>
+            <div class="seg" style="margin-top:10px"><span class="on">Expense</span><span>Income</span></div>
+            <label class="l">Amount</label>
+            <div class="field" style="min-height:64px;justify-content:center;font-size:32px;font-weight:600;color:var(--ink-3);border-width:1.5px">$0.00</div>
+            <label class="l">Category</label>
+            <div class="cats"><div class="on"><i></i>F &amp; B</div><div><i></i>Transport</div><div><i></i>Shopping</div><div><i></i>Fun</div><div><i></i>Travel</div></div>
+            <label class="l">Description <span style="color:var(--ink-3);font-weight:400">· optional</span></label>
+            <div class="field ph">F &amp; B</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div><label class="l">Date</label><div class="field">Today, 16 Nov</div></div>
+              <div><label class="l">Account</label><div class="field">● DBS ▾</div></div>
+            </div>
+            <div class="field between" style="margin-top:12px"><span>Paid back by friends</span><span class="meta">None ›</span></div>
+            <div class="field between" style="margin-top:8px"><span>Repeat monthly</span><span style="width:44px;height:26px;border-radius:13px;background:var(--surface-3)"></span></div>
+            <div class="btn off" style="margin-top:14px">Enter an amount</div>
+          </div>
+        </div>
+      </div>
+      <div class="col"><span class="tag after">Keypad</span>
+        <div class="phone" style="background:var(--surface-3)">
+          <div style="height:40px"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="between"><b style="font-size:19px">Amount</b><span class="ico">✕</span></div>
+            <div style="text-align:right;font-size:36px;font-weight:600;padding:14px 4px 0">$12.50</div>
+            <div class="meta" style="text-align:right;padding:0 4px">8 + 4.50</div>
+            <div class="keys">
+              <span class="w2">C</span><span>⌫</span><span class="op">÷</span>
+              <span>7</span><span>8</span><span>9</span><span class="op">×</span>
+              <span>4</span><span>5</span><span>6</span><span class="op">−</span>
+              <span>1</span><span>2</span><span>3</span><span class="op">+</span>
+              <span class="w2">0</span><span>.</span><span class="op">=</span>
+            </div>
+            <div class="btn pri">Use $12.50</div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li><span class="ref">#10</span> <b>Amount is a bordered field</b> with a label, so it reads as the first thing to tap.</li>
+        <li><span class="ref">#9</span> <b>Every control uses the same outlined field</b>: description, date, account, paid back, repeat.</li>
+        <li><span class="ref">#13</span> <b>Visible labels</b> on description, date and account. The date shows "Today, 16 Nov" and opens the picker on tap, instead of the raw <code>16/11/2026</code>.</li>
+        <li><span class="ref">#11</span> <b>The submit button is visibly off</b> and says why, until an amount is entered. Then it becomes "Add Expense".</li>
+        <li><span class="ref">#12</span> <b>Keypad: one primary.</b> "=" becomes an ordinary operator key; the solid button is "Use $12.50" and carries the figure. Cancel is the ✕. The sheet is titled "Amount".</li>
+        <li><span class="ref">#12</span> Keys in the UI font, not monospace, and 48px tall.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Tracker calendar</h2>
+    <p class="sub">A 39px cell cannot hold a legible amount. Show the verdict in the cell and the amount on selection.</p>
+    <div class="row">
+      <div class="col"><span class="tag">Now</span>
+        <div class="phone"><div class="pad">
+          <div class="cal">
+            <span class="h old">S</span><span class="h old">M</span><span class="h old">T</span><span class="h old">W</span><span class="h old">T</span><span class="h old">F</span><span class="h old">S</span>
+            <span class="d" style="min-height:39px;font-size:11px">1<small class="old">$0.00</small></span><span class="d" style="min-height:39px;font-size:11px">2<small class="old">$7.52</small></span><span class="d" style="min-height:39px;font-size:11px">3<small class="old">$10.20</small></span><span class="d" style="min-height:39px;font-size:11px">4<small class="old">$12.36</small></span><span class="d" style="min-height:39px;font-size:11px">5<small class="old">$0.00</small></span><span class="d" style="min-height:39px;font-size:11px">6<small class="old">$25.99</small></span><span class="d" style="min-height:39px;font-size:11px">7<small class="old">$8.79</small></span>
+            <span class="d o" style="min-height:39px;font-size:11px">8<small class="old">$39.80</small></span><span class="d" style="min-height:39px;font-size:11px">9<small class="old">$0.00</small></span>
+          </div>
+        </div></div>
+      </div>
+      <div class="col"><span class="tag after">Target</span>
+        <div class="phone"><div class="pad">
+          <div class="between"><b>Daily Spending</b><div class="seg" style="width:120px"><span class="on">▦</span><span>▥</span></div></div>
+          <div class="cal" style="margin-top:10px">
+            <span class="h">S</span><span class="h">M</span><span class="h">T</span><span class="h">W</span><span class="h">T</span><span class="h">F</span><span class="h">S</span>
+            <span class="d">1<u></u></span><span class="d">2</span><span class="d">3</span><span class="d">4</span><span class="d">5</span><span class="d">6</span><span class="d">7</span>
+            <span class="d o" style="outline-width:2.5px">8</span><span class="d">9</span><span class="d">10</span><span class="d">11</span><span class="d">12</span><span class="d">13</span><span class="d">14</span>
+            <span class="d">15<u></u></span><span class="d t">16</span><span class="d f">17</span><span class="d f">18</span><span class="d f">19</span><span class="d f">20</span><span class="d f">21</span>
+          </div>
+          <div class="card" style="margin-top:12px;padding:12px 14px">
+            <div class="between"><b>Sun 8 Nov</b><span class="neg" style="font-weight:600">$39.80</span></div>
+            <div class="cap">$7.15 over that day's $32.65 budget · 3 entries ›</div>
+          </div>
+          <div class="meta" style="margin-top:10px">■ Within budget &nbsp; <span class="neg">■</span> Over budget &nbsp; ● Income</div>
+        </div></div>
+      </div>
+      <ul class="notes">
+        <li><span class="ref">#1</span> <b>Amounts leave the cells.</b> The date is 14px; colour and ring carry the verdict. Selecting a day shows its amount, budget and entry count in a strip below; tapping the strip opens today's day sheet.</li>
+        <li><span class="ref">#2</span> <b>Cells are 44px tall</b>, the view toggle 44px.</li>
+        <li><span class="ref">#1</span> Weekday letters and legend at 12px. The 8px "NOV" tag goes; the card header already names the month.</li>
+        <li>Applies to the Stats calendar too — same component.</li>
+        <li><i>Trade-off: you lose every amount at a glance. If that matters more than legibility, keep amounts but only at ≥11px with cells widened to full bleed.</i></li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Friends, empty</h2>
+    <div class="row">
+      <div class="col"><span class="tag after">Target</span>
+        <div class="phone" style="height:380px">
+          <div class="pad">
+            <div style="font-size:27px;font-weight:600;letter-spacing:-.025em">Friends</div>
+            <div class="meta">All-time savings rate · up to 31 Oct</div>
+            <div class="card" style="text-align:center;padding:24px 16px">
+              <div style="font-size:36px;font-weight:600" class="pos">66%</div>
+              <div class="cap">Your savings rate so far</div>
+              <div class="cap" style="margin:10px 0 14px">Add a friend to see how it compares.</div>
+              <div class="btn pri">Find a Friend</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li><span class="ref">#8</span> <b>No one-row leaderboard.</b> With no friends, show your own rate and one clear action that focuses the search field.</li>
+        <li><span class="ref">#8</span> The wrapping "Find someone ›" link is gone, which removes the stray chevron.</li>
+        <li>The leaderboard returns unchanged once there is at least one friend.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Smaller changes, no mockup needed</h2>
+    <ul class="notes" style="max-width:70ch">
+      <li><span class="ref">#7</span> <b>Stats bar chart</b>: cap its height at about 180px so the calendar and breakdown are reachable.</li>
+      <li><span class="ref">#16</span> <b>Plan card titles in title case</b>: "What If I Buy…", "Pace &amp; Forecast", and "Goal ↔ daily cap" becomes "Savings Goal or Daily Cap".</li>
+      <li><span class="ref">#17</span> <b>Bottom clearance</b>: the last element of every page clears the tab bar by at least 24px.</li>
+      <li><span class="ref">#2</span> <b>More</b>: Light/Dark switch and "Delete Account" at 44px.</li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>
