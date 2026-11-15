@@ -123,12 +123,6 @@ category.
   (`StreakCard`) may compare against `"inactive"`. If it is deliberate, delete
   the test instead.
 
-## Not a code bug
-
-The README's API table and Features still call the demo a "shared read-only
-demo account". It is now a private sandbox per visitor that resets on sign-out.
-Update the README (and HANDOFF.md §9) to match.
-
 ## Already fixed (2026-11-16)
 
 Home said "Nothing Logged Yet" on the 1st of a month in term mode, and in days
@@ -142,6 +136,9 @@ Pinned by `frontend/src/blackbox/homeMonthStart.blackbox.test.jsx`.
 
 ## Before pushing
 
+- `backup/local-main-2026-11-16` is a local-only branch holding five older
+  refactor commits that the remote had already redone differently. Delete it
+  once you are sure nothing in it is wanted.
 - Work against local Mongo only.
 - Pushing to `main` redeploys Vercel and Cloud Run. Get an explicit OK first.
 - Vercel lands before Cloud Run; confirm the backend revision before calling a
