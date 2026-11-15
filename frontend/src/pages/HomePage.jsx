@@ -42,28 +42,43 @@ export default function HomePage() {
   // Whether anything has ever been spent — the setup's last step. The list
   // below only keeps four, so it's read off the full fetch here.
   const [hasExpense, setHasExpense] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(true);
+  const loading = statsLoading || listLoading;
 
   useEffect(() => {
-    Promise.all([
-      fetchHomeStats(localToday()),
-      // The list endpoint sorts newest-first and takes no limit, so slice
-      // client-side. A failure here costs the Recent block, not the page.
-      fetchTransactions().catch(() => []),
-    ])
-      .then(([s, txns]) => {
-        setStats(s);
-        const list = Array.isArray(txns) ? txns : [];
-        setRecent(list.slice(0, RECENT_COUNT));
-        setHasExpense(list.some((t) => t.type === "expense"));
-      })
+    fetchHomeStats(localToday())
+      .then(setStats)
       .catch(() => {
         setStats(null);
         toast.error("Couldn't load your stats. Please try again.");
       })
-      .finally(() => setLoading(false));
+      .finally(() => setStatsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Recent entries come from the window the user is budgeting in, not from the
+  // calendar month. Asking the list endpoint for no range means "this calendar
+  // month", which on the 1st is empty for a period that began last month and
+  // for a term whose new cycle has only just opened — and an empty list used to
+  // read as "nothing logged". A term reaches back to its own start, so the
+  // first day of a cycle still shows the entries before it.
+  const listStart = period.term?.start ?? period.current?.start;
+  const listEnd = period.current?.end;
+  useEffect(() => {
+    if (period.loading) return;
+    // The list endpoint sorts newest-first and takes no limit, so slice
+    // client-side. A failure here costs the Recent block, not the page.
+    const range = listStart && listEnd ? { start: listStart, end: listEnd } : undefined;
+    fetchTransactions(range)
+      .catch(() => [])
+      .then((txns) => {
+        const list = Array.isArray(txns) ? txns : [];
+        setRecent(list.slice(0, RECENT_COUNT));
+        setHasExpense(list.some((t) => t.type === "expense"));
+      })
+      .finally(() => setListLoading(false));
+  }, [period.loading, listStart, listEnd]);
 
   // The server resolves which period is active; a null one means days mode
   // with nothing running, and the hero becomes a prompt to start the next.
@@ -72,7 +87,14 @@ export default function HomePage() {
   // Nothing has ever been logged. Every figure on this page derives from the
   // ledger, so with an empty ledger they'd all read zero — which says "you have
   // no money", not "you haven't told me anything yet".
-  const nothingLogged = !loading && recent.length === 0;
+  // The list alone can't say that: it is empty on the first day of a funded
+  // term cycle, and when its request fails. Money in the stats means the
+  // ledger isn't empty, whatever the list came back with.
+  const hasMoney =
+    (stats?.periodIncome ?? 0) > 0 ||
+    (stats?.periodExpenses ?? 0) > 0 ||
+    (stats?.periodFunding ?? 0) > 0;
+  const nothingLogged = !loading && recent.length === 0 && !hasMoney;
   const daysLeft = activePeriod?.daysLeft ?? 0;
   const noun = period.noun;
   // Month mode's window is the calendar, so there is always one. The other two
