@@ -188,16 +188,45 @@ tab bar by at least 24px. Pages already use `--dock-clear` (`index.css`);
 check Tracker ("Compare with Friends"), Stats, Plan and More at the bottom of
 their scroll.
 
-## Not reviewed — look at these too
+## Not reviewed — cover these too
 
+The review judged seven pages in month mode and measured four of them. Apply
+the two global rules to everything below, and report anything else found
+rather than silently redesigning it.
+
+**Screens never opened**
 - The login page.
 - Every sheet under More: Budget Period, Savings Target, Bank Accounts,
   Categories, Repeating Entries, Notifications, App Icon, Tours.
 - The empty/new-user states and the setup checklist.
-- Days mode and term mode (the review used month mode).
+- Days mode and term mode.
 
-Apply the two global rules to all of them, and report anything else found
-rather than silently redesigning it.
+**Measured by eye only.** Font sizes and tap targets were measured on Home,
+Transactions, Tracker and More. Plan, Stats, Friends and every sheet still need
+the same measurement script.
+
+**Dark-mode contrast.** Only light mode was measured (it passed everywhere).
+Run the same 4.5:1 check with the dark theme on.
+
+**Accessibility beyond contrast and size**
+- Screen reader pass (VoiceOver on iOS): every control has a name, charts have
+  a text equivalent, the calendar announces each day's verdict.
+- Keyboard: tab order matches the visual order; nothing is reachable only by
+  touch.
+- Sheets: focus moves in on open, is trapped while open, and returns to the
+  opener on close.
+- Text zoom to 200% and iOS larger text: nothing overlaps or is cut off.
+
+**Tablet and desktop widths.** The app is capped at a phone-width column;
+check 768px and 1280px for stretched or stranded elements.
+
+**Performance.** The main bundle is 427 kB (143 kB gzipped). Not profiled:
+first load on a slow connection, scroll smoothness on the ledger and calendar,
+and whether Recharts can be loaded only on the pages that draw a chart.
+
+**Blank bands while scrolling.** On Home and More, some preview-pane
+screenshots showed content cut off above the tab bar mid-scroll. Possibly a
+preview artefact — check on a real iPhone.
 
 ## How to see the real app
 

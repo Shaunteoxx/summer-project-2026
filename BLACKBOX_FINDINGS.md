@@ -123,6 +123,84 @@ category.
   (`StreakCard`) may compare against `"inactive"`. If it is deliberate, delete
   the test instead.
 
+## Noticed but not pinned by a test
+
+Seen during the pass and left out of the list above. None has a failing test
+yet. For each: **confirm it first** (reproduce, or read the code), write a test
+that fails, then fix. Items marked *ask* are product calls — raise them with
+Shaun rather than deciding.
+
+### 11. A rate-limit response looks like being logged out
+When the API answers `429`, the app drops to the login screen with no message.
+Source: the saved "verifying UI" notes, not a test from this pass — reproduce
+it before fixing. Expected: stay signed in and say the server is busy; only a
+`401` should end the session. Likely place: `frontend/src/api/client.js` and
+`useAuth`.
+
+### 12. Transactions in term mode on the 1st reads as a new account
+With a funded term and no entries yet in the new cycle, the page says "Nothing
+Logged Yet. Your first entry takes about four taps." Same family as the Home
+bug already fixed. Expected: an empty-this-month message that does not treat
+the user as new. Reproduce with the `termOpts` fixture in
+`frontend/src/blackbox/pages.blackbox.test.jsx`.
+
+### 13. Month mode on the 1st greets an existing user as new — *ask*
+Home shows "Welcome" (not "Welcome back") and the "Nothing Logged Yet" state to
+someone with months of history. Shaun's report was limited to period mode, so
+this was left alone. Ask whether month mode should show last month's recent
+entries or a "new month" message instead.
+
+### 14. A one-month term starting on the 31st ends on the 27th — *ask*
+`termEnd("2026-01-31", 1)` is `2026-02-27`: 28 days, and the 28th is outside
+the term. It follows from "the day before the same date N months on" with the
+date clamped. The client mirrors the server, so both agree. Ask what the end
+should be before changing either `backend/lib/period.js` or
+`frontend/src/lib/period.js` — they must stay identical (a black-box test
+cross-checks them).
+
+### 15. Income logged late re-grades earlier days — *ask*
+The daily budget uses the whole period's income, whenever it was logged, so
+income added on the 20th can turn a broken day on the 5th into a win. This
+matches the README and is pinned by "uses the whole period's income, whenever
+in the period it was logged" in `budget.blackbox.test.js`. Do not change it
+without asking; changing it also breaks the month-mode equivalence suite.
+
+### 16. Ledger day labels drop the year
+An entry from a previous year is headed "31 Dec", identical to this year's.
+Expected: add the year when it differs from the current one, as
+`formatDayRange` already does. Likely place: `frontend/src/lib/ledger.js`.
+
+### 17. The username inside the login token goes stale
+`signToken` puts `username` in the JWT, so after a rename the token carries the
+old name for up to seven days. Check whether anything reads it from the token
+(`tokenUserId` only reads `id`). If nothing does, drop the claim.
+
+### 18. `spentAmount` ignores the entry type
+`spentAmount({ type: "income", amount: 100 })` returns `100`. Nothing calls it
+that way today — `sumEntries` branches on type first — but `incomeAmount` is
+type-aware and this one is not. Make it return `0` for income.
+
+### 19. Blank bands while scrolling — check on a real phone
+On Home and More, some preview-pane screenshots showed content cut off above
+the tab bar mid-scroll, then fine on the next scroll. Possibly an artefact of
+the preview pane. Check on an iPhone before spending time on it.
+
+## Not tested at all
+
+The black-box pass did not cover these. Add tests in the same style
+(`backend/test/blackbox/`, `frontend/src/blackbox/`), and report what they find
+rather than fixing silently.
+
+- Google sign-in and the `/auth/callback` page.
+- The service worker and the push settings screens (jsdom has no push service).
+- The tours and the setup checklist (`frontend/src/tour/`).
+- Double-tapping a save button: does it send two requests?
+- Demo account expiry and eviction (`sweepExpiredDemoUsers`,
+  `evictDemosToCap`, `POST /api/auth/demo/sample`).
+- The rate limiter itself, the security headers and the cross-origin rules.
+- A security review. Input validation and cross-user isolation were tested;
+  nothing beyond that.
+
 ## Already fixed (2026-11-16)
 
 Home said "Nothing Logged Yet" on the 1st of a month in term mode, and in days
